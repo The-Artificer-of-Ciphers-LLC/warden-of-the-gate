@@ -102,7 +102,8 @@ Every open PR and issue sits in exactly one known state, recorded on GitHub, so 
 - **Platform**: macOS launchd scheduler for v1 headless runs
 - **Security**: Fork PR code never checked out or executed; rules from base branch only; headless tool list restricted
 - **Portability**: Nothing GSD Core-specific hardcoded; GSD Core is just the first config (ADR 0005)
-- **Tech stack**: Script language for non-AI tooling (ledger, tiering, poster, runner, setup, Actions bookkeeping) to be chosen by stack research
+- **Tech stack**: TypeScript on Node ≥24.12 (ESM, esbuild, committed `dist/`); Claude Code ≥2.1.302 pinned; never `--bare`, `--dangerously-skip-permissions` or the Agent SDK
+- **GitHub platform**: No `pull_request_target`; App never gets `workflows` permission; no conditional PATCH, so the ledger relies on writer-owned sections and a re-read before every write
 
 ## Key Decisions
 
@@ -120,7 +121,15 @@ Every open PR and issue sits in exactly one known state, recorded on GitHub, so 
 | Schedule configurable, catch-up-on-wake primary | Machine hours unpredictable | — Pending |
 | v1 = all six rollout stages | Owner wants the full loop in the first milestone | — Pending |
 | v1 done = tagged v1.0.0 release, all six tasks live on GSD Core with gates passed, plus one second repo onboarded from docs in an afternoon | Proves both value and ADR 0005 portability | — Pending |
-| Script language left to stack research | Owner deferred | — Pending |
+| Script language: TypeScript (erasable syntax) on Node ≥24.12, ESM, esbuild-bundled committed `dist/`, one `warden-core` for runner + Actions | Research: one codebase, no runtime installs, portable date/JSON handling; Bash and Python rejected | — Pending |
+| Architecture rule: AI proposes, scripts dispose — sessions are read-only and return schema-validated result files; one poster holds the write token | Contains prompt injection and makes state deterministic | — Pending |
+| Fork-branch continuation (conflict 1) allowed only inside an active isolation backend; otherwise Implement restarts from base, reads the old diff as data, credits `Co-authored-by` | Owner choice "allow with sandbox"; resolves PRD req 12 vs req 18 | — Pending |
+| Triage (conflict 2): `/triage-review` text unchanged, invocation wrapped (`--issue N --dry-run`, read-only token, write-blocking hook, result adapter); defect and needs-repro lanes run headless, enhancement and feature lanes finish in `/warden gate`; mid-run merge never runs headless | Keeps ADR 0001 and "never merges" both true | — Pending |
+| Stale (conflict 3): custom Sweep in warden-core, not actions/stale; setup detects and asks to remove GSD Core `stale.yml`; ADR 0002 amendment needed | actions/stale measures idle time from `updated_at` and resets on the plugin's own activity | — Pending |
+| Intake (conflict 4): no `pull_request_target` anywhere; hourly Sweep polls GraphQL for new and pushed PRs; the runner also compares head vs `lastReviewedSha` | GitHub blocks `pull_request_target` by default from 2026-12-02 | — Pending |
+| Voice (conflict 5): amend ADR 0003 to "text the Warden writes never calls itself a bot"; honest App slug; header inserted by the poster, names the owner in backticks without @-mention | GitHub's `[bot]` badge on App comments can't be changed | — Pending |
+| Backlog buckets A–F (conflict 6): candidate set (never reviewed / waiting on author / waiting on maintainer / stale candidate / bot-authored / blocked), finalized in Phase 1 discussion | Undefined in source docs; Foundation gate depends on it | — Pending |
+| Isolation (conflict 7): pluggable `isolation.backend` (docker-sandbox default, devcontainer, apple-container, separate-user, claude-sandbox); advisory for Implement/Rework on base, required for fork-branch continuation; spike headless Docker Sandboxes under launchd in Phase 5 | Owner choice; Docker Sandboxes keep the subscription token on the host | — Pending |
 
 ## Evolution
 
