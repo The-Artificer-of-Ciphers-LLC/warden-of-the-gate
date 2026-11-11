@@ -1,0 +1,1 @@
+{"content":"launchd StartCalendarInterval jobs missed during sleep run on next wake, coalesced into one; StartInterval does not reliably catch up; jobs due while powered off are skipped (older Apple doc).","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-11-11T02:53:55.249Z","ttl":86400000,"kind":"web"}
