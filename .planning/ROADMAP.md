@@ -33,11 +33,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Unset config values come from `config/defaults.yml`. An invalid config stops every task with a readable error, `examples/gsd-core.yml` validates, an older `schemaVersion`/`ledgerVersion` migrates and a newer one is refused.
   4. On a sandbox repo, the reconcile run (hourly in Actions as the App, or on demand) leaves every open PR and issue with exactly one Warden state label. Labels change add-then-remove, and a maintainer's manual label move is kept. Each item's ledger comment is edited in place. A spoofed or corrupt ledger moves the item to `needs-human` and can be rebuilt from the App's review SHA markers. Concurrent Actions and runner writes never drop each other's sections.
   5. Interactive `/warden` and the launchd job (which fires on schedule and catches up on wake) refuse to start in three cases: an API-key route is present, `claude auth status` is not the subscription, or the kill switch (repo variable or local STOP file) is set. A `warden:hold` item is skipped. Workflows and sessions use separate App tokens (read-only for sessions, write for the poster only), and the App has no `workflows` permission.
-**Plans**: 11 plans
+**Plans**: 13 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Walking skeleton 1: scaffold, CI, installable plugin, `/warden` skill refusing API-key starts (wave 1)
+- [ ] 01-01-PLAN.md — Walking skeleton 1: scaffold, installable plugin, `/warden` skill refusing API-key starts through the committed bundle (wave 1)
+- [ ] 01-12-PLAN.md — Skeleton plumbing: argv-only exec seam, claude/gh/security fakes, fake GitHub, data dir, sandbox repo and test App (wave 1)
 - [ ] 01-02-PLAN.md — Walking skeleton 2: config → App tokens → one sandbox reconcile with one label and one in-place ledger (wave 2)
+- [ ] 01-13-PLAN.md — `claude auth status` subscription check, CI matrix with every CONF-06 gate, Biome/Vitest config, release consistency test (wave 2)
 - [ ] 01-03-PLAN.md — Config: full schema, defaults, readable errors, schema.json, migrations, GSD Core example (wave 3)
 - [ ] 01-04-PLAN.md — Preflight: kill switch (variable + STOP), full credential scan, version gate, run lock (wave 3)
 - [ ] 01-05-PLAN.md — Ledger: codec properties, numeric-id trust, rebuild from markers, concurrency-safe store, token separation (wave 3)

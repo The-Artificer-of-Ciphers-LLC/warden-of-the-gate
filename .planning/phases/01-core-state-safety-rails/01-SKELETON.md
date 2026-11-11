@@ -2,7 +2,7 @@
 
 **Phase:** 1
 **Generated:** 2026-11-10
-**Built by:** plans 01-01 (packaging and refusal path) and 01-02 (GitHub state path)
+**Built by:** plans 01-01 (packaging and refusal path) and 01-02 (GitHub state path), with supporting plumbing from 01-12 (exec seam, test fakes, sandbox and test App; wave 1) and 01-13 (`claude auth status` check, CI gates; wave 2)
 
 ## Capability Proven End-to-End
 
@@ -28,7 +28,7 @@ The maintainer installs the `warden` plugin, types `/warden` and is refused whil
 
 ## Stack Touched in Phase 1
 
-- [ ] Project scaffold: npm, tsconfig, Biome, Vitest, esbuild, CI matrix (01-01)
+- [ ] Project scaffold: npm, tsconfig, esbuild (01-01); Biome and Vitest config and the CI matrix (01-13)
 - [ ] Routing: `/warden` skill → bundle → verb dispatch (01-01)
 - [ ] Data layer: one real read (contents API config, labels, comments) and one real write (label add, ledger comment create and in-place edit) on the sandbox (01-02)
 - [ ] Interface: the `/warden` skill's fail-closed preflight and AskUserQuestion confirmation (01-01, 01-09)
