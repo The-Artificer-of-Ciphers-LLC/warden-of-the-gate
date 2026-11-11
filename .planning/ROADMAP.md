@@ -36,18 +36,31 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 13 plans
 
 Plans:
+**Wave 1**
 - [ ] 01-01-PLAN.md — Walking skeleton 1: scaffold, installable plugin, `/warden` skill refusing API-key starts through the committed bundle (wave 1)
 - [ ] 01-12-PLAN.md — Skeleton plumbing: argv-only exec seam, claude/gh/security fakes, fake GitHub, data dir, sandbox repo and test App (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — Walking skeleton 2: config → App tokens → one sandbox reconcile with one label and one in-place ledger (wave 2)
 - [ ] 01-13-PLAN.md — `claude auth status` subscription check, CI matrix with every CONF-06 gate, Biome/Vitest config, release consistency test (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 01-03-PLAN.md — Config: full schema, defaults, readable errors, schema.json, migrations, GSD Core example (wave 3)
 - [ ] 01-04-PLAN.md — Preflight: kill switch (variable + STOP), full credential scan, version gate, run lock (wave 3)
 - [ ] 01-05-PLAN.md — Ledger: codec properties, numeric-id trust, rebuild from markers, concurrency-safe store, token separation (wave 3)
 - [ ] 01-07-PLAN.md — Actions bookkeeping: reusable sweep workflow, node24 action, thin caller template (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 01-06-PLAN.md — State: whose-turn v0, buckets A–F, reconcile rules, add-then-remove, first-run dry-run (wave 4)
 - [ ] 01-08-PLAN.md — launchd schedule, stable launcher and `warden run` (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 01-09-PLAN.md — `/warden setup`: plan → confirm → apply, labels, callers, conflicts, first-run preview (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 01-10-PLAN.md — App manifest flow, keychain, `warden` environment, rulesets (wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
 - [ ] 01-11-PLAN.md — Release gate, changelog, tags, sandbox E2E of SC-1/4/5 (wave 7)
 
 ### Phase 2: Bookkeeping & Bucket Report
