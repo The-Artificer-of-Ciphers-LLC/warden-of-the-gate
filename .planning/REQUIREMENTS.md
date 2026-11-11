@@ -151,12 +151,86 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmapper) | | |
+| CONF-01 | Phase 1 | Pending |
+| CONF-02 | Phase 1 | Pending |
+| CONF-03 | Phase 1 | Pending |
+| CONF-04 | Phase 1 | Pending |
+| CONF-05 | Phase 1 | Pending |
+| CONF-06 | Phase 1 | Pending |
+| STATE-01 | Phase 1 | Pending |
+| STATE-02 | Phase 1 | Pending |
+| STATE-03 | Phase 1 | Pending |
+| STATE-04 | Phase 1 | Pending |
+| STATE-05 | Phase 3 | Pending |
+| STATE-06 | Phase 1 | Pending |
+| RUN-01 | Phase 1 | Pending |
+| RUN-02 | Phase 1 | Pending |
+| RUN-03 | Phase 1 | Pending |
+| RUN-04 | Phase 3 | Pending |
+| RUN-05 | Phase 3 | Pending |
+| RUN-06 | Phase 3 | Pending |
+| RUN-07 | Phase 3 | Pending |
+| RUN-08 | Phase 1 | Pending |
+| RUN-09 | Phase 2 | Pending |
+| POST-01 | Phase 1 | Pending |
+| POST-02 | Phase 1 | Pending |
+| POST-03 | Phase 3 | Pending |
+| POST-04 | Phase 2 | Pending |
+| POST-05 | Phase 3 | Pending |
+| POST-06 | Phase 2 | Pending |
+| INTK-01 | Phase 2 | Pending |
+| INTK-02 | Phase 2 | Pending |
+| INTK-03 | Phase 2 | Pending |
+| INTK-04 | Phase 2 | Pending |
+| SWP-01 | Phase 2 | Pending |
+| SWP-02 | Phase 4 | Pending |
+| SWP-03 | Phase 4 | Pending |
+| SWP-04 | Phase 2 | Pending |
+| SWP-05 | Phase 2 | Pending |
+| SWP-06 | Phase 2 | Pending |
+| SWP-07 | Phase 2 | Pending |
+| REV-01 | Phase 3 | Pending |
+| REV-02 | Phase 3 | Pending |
+| REV-03 | Phase 3 | Pending |
+| REV-04 | Phase 3 | Pending |
+| REV-05 | Phase 3 | Pending |
+| REV-06 | Phase 3 | Pending |
+| REV-07 | Phase 4 | Pending |
+| REV-08 | Phase 3 | Pending |
+| REV-09 | Phase 3 | Pending |
+| GATE-01 | Phase 4 | Pending |
+| GATE-02 | Phase 4 | Pending |
+| GATE-03 | Phase 4 | Pending |
+| GATE-04 | Phase 4 | Pending |
+| GATE-05 | Phase 2 | Pending |
+| GATE-06 | Phase 2 | Pending |
+| TRI-01 | Phase 5 | Pending |
+| TRI-02 | Phase 5 | Pending |
+| TRI-03 | Phase 5 | Pending |
+| TRI-04 | Phase 5 | Pending |
+| TRI-05 | Phase 5 | Pending |
+| IMPL-01 | Phase 6 | Pending |
+| IMPL-02 | Phase 6 | Pending |
+| IMPL-03 | Phase 6 | Pending |
+| IMPL-04 | Phase 6 | Pending |
+| IMPL-05 | Phase 6 | Pending |
+| ISO-01 | Phase 6 | Pending |
+| ISO-02 | Phase 6 | Pending |
+| ISO-03 | Phase 6 | Pending |
+| ISO-04 | Phase 6 | Pending |
+| RETRO-01 | Phase 7 | Pending |
+| ROLL-01 | Phase 2 | Pending |
+| ROLL-02 | Phase 3 | Pending |
+| ROLL-03 | Phase 4 | Pending |
+| ROLL-04 | Phase 5 | Pending |
+| ROLL-05 | Phase 6 | Pending |
+| ROLL-06 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 74 total
-- Mapped to phases: 0 (pending roadmap)
+- Mapped to phases: 74
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-11-10*
-*Last updated: 2026-11-10 after initial definition*
+*Last updated: 2026-11-10 after roadmap creation (traceability filled)*
