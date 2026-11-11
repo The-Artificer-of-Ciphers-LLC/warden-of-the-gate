@@ -519,20 +519,27 @@ Note: `setup` must skip the kill-switch, App-key and config parts of preflight, 
 | A10 | GitHub environment-creation body fields (deployment branch policy) | Pattern 6 | Setup apply fails; caught in the sandbox |
 | A11 | AI-reviewer detection heuristics (claude-code-action, coderabbit, copilot ruleset) | Pattern 6 | Missed warning only (D-17 says warn) |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All five questions were resolved on 2026-11-10. The owner decided Q1–Q3 through AskUserQuestion in the plan-phase session. Q4 and Q5 record the design the plans already adopt. The plans implement these resolutions and do not ask the owner again.
 
 1. **`warden:needs-human` vs "exactly one state label".**
-   - What we know: D-06 makes `warden:needs-human` a control label, and D-13 sends multi-label issues to it.
+   - Known: D-06 makes `warden:needs-human` a control label, and D-13 sends multi-label issues to it.
    - Unclear: whether such an item keeps two state labels, which breaks the invariant.
-   - Recommendation: the invariant is "exactly one state label, OR `warden:needs-human` present (frozen; reported; never auto-repaired)". Confirm with the owner.
+   - Recommendation: the invariant is "exactly one state label, OR `warden:needs-human` present (frozen; reported; never auto-repaired)".
+   - **RESOLVED (owner, 2026-11-10): exempt, frozen.** The invariant is "exactly one Warden state label OR `warden:needs-human` present". An item carrying `warden:needs-human` is frozen. Reconcile and Sweep report it and never auto-repair it, and the owner fixes it by hand. An explicit owner-run verb such as `warden ledger rebuild` counts as the owner's manual repair, not as auto-repair, and it never removes `warden:needs-human`. Implemented by plans 01-02 (tracer frozen path), 01-05 (untrusted, corrupt or newer ledgers go to needs-human), 01-06 (`decideState` freezes needs-human items) and 01-09 (the first-run change counts needs-human items as settled).
 2. **CONF-03 "older version migrates" when only v1 exists.**
-   - Recommendation: ship the migration framework, prove it with an injected synthetic v0→v1 in tests, and keep the real registry empty. Success criterion 3 is then met by the tested mechanism. Confirm with the owner.
+   - Recommendation: ship the migration framework, prove it with an injected synthetic v0→v1 in tests, and keep the real registry empty. Success criterion 3 is then met by the tested mechanism.
+   - **RESOLVED (owner, 2026-11-10): synthetic v0 in tests.** Phase 1 ships the migration framework with empty real registries (`CONFIG_MIGRATIONS = {}`, `LEDGER_MIGRATIONS = {}`). Tests inject a synthetic v0→v1 migration to prove the chain. Newer versions are refused in real code paths. Implemented by plans 01-03 (Task 3, config) and 01-05 (Task 2, ledger).
 3. **Ruleset "App pushes limited to `warden/**`" (D-18).**
-   - What we know: rulesets have no per-actor targeting. `bypass_actors` exempts actors, and `restrict creations/updates` apply to everyone else.
+   - Known: rulesets have no per-actor targeting. `bypass_actors` exempts actors, and `restrict creations/updates` apply to everyone else.
    - Option: a ruleset on `~ALL` excluding `refs/heads/warden/**` with `creation`/`update`/`deletion`, bypass `RepositoryRole` maintain/admin. It blocks the App, but also non-admin collaborators' branches. Plus a default-branch ruleset with `pull_request` (1 approval).
-   - Recommendation: the planner shows both rulesets in the setup plan and the owner confirms the collaborator impact `[ASSUMED design]`.
+   - Recommendation: the planner shows both rulesets in the setup plan and the owner confirms the collaborator impact.
+   - **RESOLVED (owner, 2026-11-10): the owner confirms at setup.** `/warden setup` always plans both rulesets: `warden-branch-guard` on `~ALL` excluding `refs/heads/warden/**`, with `creation`/`update`/`deletion` rules and bypass `RepositoryRole` maintain/admin; and `warden-review-gate` on `~DEFAULT_BRANCH` with `pull_request` (1 approval). The setup plan states the collaborator impact: non-admin collaborators can no longer create, update or delete branches outside `warden/**`. Nothing is applied until the owner gives the single D-16 setup confirmation. There is no per-repo opt-out key. Implemented by plans 01-09 (the Change `impact` text shown before the one confirmation) and 01-10 (`planRulesets()`).
 4. **Bucket A–F computation in Phase 1.** Buckets are defined here but displayed in Phase 2. Recommend that Phase 1 ship `classifyBucket()` plus tests, reusing whose-turn v0, so the D-10 dry-run can print them.
+   - **RESOLVED (adopted design, 2026-11-10):** Phase 1 ships `classifyBucket()` and `BUCKET_PRECEDENCE` with tests, built on the shared whose-turn function, so the D-10 first-run dry-run prints bucket counts. Phase 2 displays them in `/warden status` (GATE-05, ROLL-01). Implemented by plan 01-06.
 5. **`CLAUDE_CODE_OAUTH_TOKEN` acceptance.** Refused in Phase 1 (`oauth_token` is ambiguous with `ANTHROPIC_AUTH_TOKEN`). Phase 6 (ISO-03) revisits it with an explicit config opt-in.
+   - **RESOLVED (adopted design, 2026-11-10):** the Phase 1 runner preflight refuses a run when `CLAUDE_CODE_OAUTH_TOKEN` is set. Phase 6 (ISO-03) revisits it behind an explicit config opt-in. That work is out of scope for Phase 1. Implemented by plan 01-04 (`API_KEY_ROUTE_VARS` includes `CLAUDE_CODE_OAUTH_TOKEN`).
 
 ## Environment Availability
 
