@@ -33,7 +33,20 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Unset config values come from `config/defaults.yml`. An invalid config stops every task with a readable error, `examples/gsd-core.yml` validates, an older `schemaVersion`/`ledgerVersion` migrates and a newer one is refused.
   4. On a sandbox repo, the reconcile run (hourly in Actions as the App, or on demand) leaves every open PR and issue with exactly one Warden state label. Labels change add-then-remove, and a maintainer's manual label move is kept. Each item's ledger comment is edited in place. A spoofed or corrupt ledger moves the item to `needs-human` and can be rebuilt from the App's review SHA markers. Concurrent Actions and runner writes never drop each other's sections.
   5. Interactive `/warden` and the launchd job (which fires on schedule and catches up on wake) refuse to start in three cases: an API-key route is present, `claude auth status` is not the subscription, or the kill switch (repo variable or local STOP file) is set. A `warden:hold` item is skipped. Workflows and sessions use separate App tokens (read-only for sessions, write for the poster only), and the App has no `workflows` permission.
-**Plans**: TBD
+**Plans**: 11 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Walking skeleton 1: scaffold, CI, installable plugin, `/warden` skill refusing API-key starts (wave 1)
+- [ ] 01-02-PLAN.md — Walking skeleton 2: config → App tokens → one sandbox reconcile with one label and one in-place ledger (wave 2)
+- [ ] 01-03-PLAN.md — Config: full schema, defaults, readable errors, schema.json, migrations, GSD Core example (wave 3)
+- [ ] 01-04-PLAN.md — Preflight: kill switch (variable + STOP), full credential scan, version gate, run lock (wave 3)
+- [ ] 01-05-PLAN.md — Ledger: codec properties, numeric-id trust, rebuild from markers, concurrency-safe store, token separation (wave 3)
+- [ ] 01-07-PLAN.md — Actions bookkeeping: reusable sweep workflow, node24 action, thin caller template (wave 3)
+- [ ] 01-06-PLAN.md — State: whose-turn v0, buckets A–F, reconcile rules, add-then-remove, first-run dry-run (wave 4)
+- [ ] 01-08-PLAN.md — launchd schedule, stable launcher and `warden run` (wave 4)
+- [ ] 01-09-PLAN.md — `/warden setup`: plan → confirm → apply, labels, callers, conflicts, first-run preview (wave 5)
+- [ ] 01-10-PLAN.md — App manifest flow, keychain, `warden` environment, rulesets (wave 6)
+- [ ] 01-11-PLAN.md — Release gate, changelog, tags, sandbox E2E of SC-1/4/5 (wave 7)
 
 ### Phase 2: Bookkeeping & Bucket Report
 **Goal**: GitHub keeps new issues and PRs labelled and moves waiting-on-reporter issues along without any AI. The maintainer can see the whole backlog sorted into buckets A–F.
