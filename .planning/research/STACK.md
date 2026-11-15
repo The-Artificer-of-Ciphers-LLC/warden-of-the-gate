@@ -8,6 +8,33 @@
 
 ---
 
+## Open-Harness Pivot (2026-11-15) — read this before the Claude-specific sections below
+
+**The runtime is no longer pinned to Claude Code.** ADR 0004 was amended (2026-11-15, ratified as a POC) to run Warden in an **open harness on a local-first model pool**. See `.planning/research/OPEN-HARNESS.md` for the full analysis. The Claude-Code-specific sections further down (CLI pinning, `claude -p` flag profiles, plugin packaging) are **retained as the reference for what the original design used** and are progressively being replaced by per-harness **adapter profiles**.
+
+**What stays (harness-agnostic — still in force):** the Node ≥24.12 / TypeScript / esbuild-bundled `dist/` core; Octokit + `@octokit/auth-app`; `yaml`; Ajv 8 (JSON Schema 2020-12); TypeBox; Vitest/fast-check/Stryker; Biome/actionlint/zizmor; and the **launchd** LaunchAgent (catch-up-on-wake). None of this depends on Claude Code.
+
+**What changes — the `AgentRunner` adapter seam.** The runner spawns a session with fixed inputs (packet files) and consumes a **schema-validated** result; the harness differences are encapsulated in an adapter. Key flag translations:
+
+| Warden need | Claude Code (below, reference) | **opencode** (default batch adapter) | **pi** (secondary) |
+|---|---|---|---|
+| Headless one-shot | `claude -p` | `opencode run` / SDK `session.prompt` | `pi --print` / `--mode json` |
+| Structured output (R2) | `--output-format json --json-schema <file>` | SDK v2 `format:{type:"json_schema",schema}` (native) | JSONL stream → parse final, or LM Studio response-format |
+| Tool allowlist (P1) | `--tools` / `--disallowedTools "mcp__*"` | agent/tool config + server permissions | `--tools` allowlist, `--exclude-tools 'mcp__*'`, `--no-mcp` |
+| Turn cap (P9) | `--max-turns` | server config / SDK | extension or config |
+| Fresh session (R5) | `--session-id <uuid>` | `session.create` / `--session-id` | `--no-session` / `--session-id` |
+| Isolated settings (P1) | `--setting-sources`, `disableAllHooks` | config isolation on the server | `-na --no-approve`, `--offline` |
+| Local model, no key (R6) | n/a (subscription OAuth) | `providers.lmstudio` → `:1234/v1` (built-in discovery) | `models.json` → LM Studio/Ollama/llama.cpp router |
+| Auth guard (P3) | refuse if `ANTHROPIC_API_KEY` set | confirm active model is local; remote tier opt-in via config | `pi auth check --json`; same local-first guard |
+| Audit trail (R7) | `--output-format stream-json` events | SDK session events | JSONL / RPC events |
+| Skills (R8) | plugin `skills/` | agent skills + plugins | `--skill` (SKILL.md) |
+
+**Model layer:** local Mac MLX via **LM Studio core (`llmster`)** on `:1234` (OpenAI/Anthropic-compatible REST) is the free floor; a remote high-end **Nvidia** tier is opt-in for heavy tasks. The runner's preflight enforces local-by-default and never silently falls back to a paid/remote model.
+
+**POC scope:** prove the loop on one task (Review of a single PR) through the opencode adapter against a local MLX model, producing a schema-validated result the existing poster posts. The Claude-specific sections below remain valid reference until each is replaced by a tested adapter profile.
+
+---
+
 ## The deferred decision: script language and runtime
 
 **Decision: TypeScript (erasable-syntax only) on Node.js, as ESM, bundled with esbuild into committed single-file `dist/*.mjs` artifacts. One codebase serves the local CLI, the runner and the GitHub Actions bookkeeping (as JavaScript actions on the `node24` runtime).**
