@@ -200,6 +200,41 @@ Key patterns:
    - Stop the whole batch on a rate-limit or auth error.
    - `-p` shares the limits of interactive use, and that policy changed twice in 2026.
 
+### External validation: Tan, "All Code Is Slop (Except Mine)" (Nov 2026)
+
+Lauren Tan (poteto), Principal Engineer on SpaceXSI's Grok Bot team, published the strongest public articulation of how trust in agent-written code is actually built. Full analysis: [TALK-SLOP.md](TALK-SLOP.md); the operational framework derived from it: [FRAMEWORK-CORRECTIONS.md](FRAMEWORK-CORRECTIONS.md).
+
+- **The trust pyramid:** code itself (API design, architecture) and static checks (lint, types, tests) are the deterministic layers that "force agents to do the right thing by default"; verification (runtime + formal) supplies evidence about behavior and intent; prose (rules, skills, AGENTS.md) is the weakest layer, reserved for judgment. This validates Warden's ordering of deterministic gates before AI review.
+- **The correction principle:** every time an agent is corrected, the correction becomes a deterministic check — or the problem is eliminated categorically through better design. Before adding an instruction, ask if it can become a check; before adding a check, ask if better design removes the invalid choice. This is now Retro's decision procedure (design > lint > verification > prose).
+- **Comments are not enforceable:** agents use comments to justify workarounds, and the next agent copies the workaround as if it were established (Cursor's timer spread). Grok Bot bans 99% of comments; the replacement is lint rules whose error messages point at the root-cause fix. New pitfall P11 (PITFALLS.md) and a comment-restrictive policy for Implement/Rework prompts.
+- **The codebase is the agent's largest input:** workarounds, anti-patterns and deprecated code are weeds that agents copy. Warden's own bot PRs must not plant them; the repo lint (including Retro-added rules) runs in preflight, and a v1.x "garden" report tracks old pattern instances.
+- **Verification eats the token budget:** ~70% of daily tokens go to verification (Tan and a peer she cites). The verifier pass deserves the bulk of review session budget; decision cards should carry verification evidence (failing-first red run, test output).
+- **Foundations before factories:** "if your inner coding loop produces slop, then automating that loop just produces more slop." Tan's team ships 11,000 PRs/month at a ~0.5% revert rate and automerges fuzz fixes — an end state that rests on months of inner-loop investment. Warden v1 keeps the human merge gate for everything; the framework adds a config-driven "trust dial" (per-tier gate depth) as a v2+ consideration.
+
+### External validation: Hughes (2010), Lloyd (Nov 9, 2026), Kotyal (Nov 11, 2026)
+
+Three more sources researched 2026-11-14, each read in full (book sections / transcripts). Full analyses: [BOOK-SE-BEST-PRACTICES.md](BOOK-SE-BEST-PRACTICES.md), [TALK-FACTORY.md](TALK-FACTORY.md), [TALK-SPEC-BUGS.md](TALK-SPEC-BUGS.md).
+
+**Hughes, *Software Engineering Best Practices* (McGraw-Hill 2010)** — the quantitative backbone for the correction ladder, from ~13,000 measured projects:
+- **The ladder's ordering is measured, not intuited:** static analysis removes ~87% of coding defects and code inspections average >65% (up to 88%) — roughly twice the efficiency of testing (<35% per form, cumulative seldom >80%). "Testing, by itself, is insufficient to achieve professional levels of quality" (p. 618). Both are top-7 best practices in his 200-item ranking; **manual testing is *neutral*** (0.17) — automation is what counts.
+- **"Quality leads and productivity follows":** finding/fixing bugs is the most expensive activity; improving productivity without quality first "is ineffective" (p. 7). The economic citation for spending review budget on gates and verification, not raw throughput.
+- **Metrics malpractice:** LOC and cost-per-defect are ranked *unsafe* (−4.5 / −2.83) and "close to being professional malpractice" — they distort data so badly they *make quality worse* (Table 9-19). The "100× post-release fix cost" is debunked as an artifact of the broken metric (p. 18). Warden's reports must never use them (new Pitfall 12).
+- **Bad fixes:** ~7% of defect repairs inject new defects; tertiary bad fixes exist (p. 614) — empirical backing for the 3-round rework cap and post-repair preflight.
+- **Renovation / garden:** "structural decay always occurs" (p. 14); leaving error-prone modules in place is a *worst practice* (−6.83). Industrial precedent for the v1.x garden report.
+- **Specs rot:** "the original requirements and specifications usually lag" — business rules must be mined from code (p. 14). Supports spec-verification and REVIEW.md drift detection.
+
+**Lloyd, "How to Build a Software Factory That Improves Itself" (Warp, Nov 9)** — the self-improving loop at team scale:
+- **The loop:** store every agent run → LLM-as-judge scores ("online evals") → agents aggregate failure modes into patterns → **PRs to the factory definition** (example: "read matching repository skills before implementing — failed 37 times → fix via PR"). Validates Warden's Retro and adds two inputs it lacks: **Warden's own session traces** and **LLM-judged run scores** (v1.x; the human gate stays — Lloyd admits he hasn't added human grading).
+- **Factory defined in code, versioned** (workflows, skills, MCPs, run locations) → testable and updatable by agents. Validates ADR 0005 config-as-code: `warden.yml` + skills + prompts *are* the factory definition.
+- **Measurement first on your own data:** public benchmarks untrustworthy; replay past tasks against model configs → cost-vs-quality graph (93% @ $2 vs 95% @ 3×) → model routing. Warden analog (v1.x): benchmark replay of past tasks.
+- **Honest contrast:** Lloyd's factory is cloud-sandboxed (a compromised local agent "takes over the user"; per-user MCPs un-auditable). Warden is deliberately local (ADR 0004 cost) — and Lloyd concedes his platform "is just overkill for an individual… you're probably gonna want to use your Claude Code subscription." Warden answers the security half with sandbox/isolation (Pitfall 2) and the audit half with stored traces + ledger, locally.
+
+**Kotyal, "Your Spec Has Bugs. Catch Them Before Your Agent Codes." (AWS, Nov 11)** — spec verification as a pre-Implement gate:
+- **The problem:** specs handed to coding agents contain contradictions and gaps; unclear prompts drop accuracy 20–40%, "60–90% of valid code is still wrong after it writes it", ~2× regressions on deploy (his cited stats). Example: "place the order as a backorder" + "no order shall be placed as a backorder" — each rule reads fine alone; together they can't both hold.
+- **The process (Kiro specification analyzer):** LLM refines wording → formalize English to SMT formulas → SAT/SMT solver (valid/invalid) → on ambiguity, re-iterate; sample translations 7–10× and cluster by logical equivalence → accept / ask the human to disambiguate ("remove the record": delete vs hide) / **abstain from implementing**.
+- **The division of labor:** "there is no oracle for specification correctness other than the user… The LLM translates, the solver checks and the human decides." Same philosophy as "AI proposes, scripts dispose" + human gate. Matches Hughes: requirements defects are the one class only pre-code checking can catch (testing never finds them).
+- **For Warden:** new Pitfall 13 (spec contradictions flow into bot PRs). v1 minimal version = Implement prompt requires a *stated interpretation* of ambiguous rules; disagreement → open finding for the gate, never a silent guess. v1.x = formal check (SMT/solver) of the issue spec before Implement.
+
 ## Implications for Roadmap
 
 The six phases match the owner's six v1 rollout stages.
@@ -273,8 +308,8 @@ The six phases match the owner's six v1 rollout stages.
 - **Why here:** Retro needs the maintainer review comments that Phases 3–5 produce.
 - **Delivers:**
   - Collector of maintainer-only comments, filtered by numeric ID.
-  - Retro skill.
-  - Weekly PR to `REVIEW.md` or lint config, showing rule count and conflicts.
+  - Retro skill, applying the correction ladder (FRAMEWORK-CORRECTIONS.md): each recurring correction lands on the strongest rung it can express — design change > lint rule with root-cause error message > test/verification > `REVIEW.md` line.
+  - Weekly PR to `REVIEW.md` or lint config, showing which rung each rule landed on, the running rule count and conflicts.
   - Release: v1.0.0 tag, changelog with migration notes, adopter docs including separate-user isolation, an upgrade rehearsal, and a second repo onboarded from the docs in an afternoon.
 - **Avoids:** injection through learning from anyone's replies, `REVIEW.md` bloat, and breaking adopters on release.
 - **Gate:** the weekly rules PR lands, the second repo is onboarded, and v1.0.0 is tagged.
@@ -300,7 +335,8 @@ The six phases match the owner's six v1 rollout stages.
   - Claude Code sandbox configuration on macOS.
   - A LaunchAgent and OAuth running under a separate macOS user.
   - What DCO/CLA checks do with commits the App authors.
-- **Phases 1, 3 and 6 follow standard patterns:** Phase 1 only needs quick tests of TypeBox 1.x and the comment size limit.
+- **Phase 6 (Retro) has a defined decision procedure** in FRAMEWORK-CORRECTIONS.md; its open research is the Biome v2.6 JavaScript-plugin API (developer preview) for custom lint rules with root-cause error messages, and the two-severity trick (error for new code, warn on a legacy file list) in whatever linter the adopting repo uses.
+- **Phases 1 and 3 follow standard patterns:** Phase 1 only needs quick tests of TypeBox 1.x and the comment size limit.
 
 ## Confidence Assessment
 
@@ -325,6 +361,10 @@ The six phases match the owner's six v1 rollout stages.
 - How claims work for users outside the org (Phase 4).
 
 ## Sources
+- **Talk, read in full 2026-11-14 (HIGH for what it claims; team metrics self-reported):** Lauren Tan, "All Code Is Slop (Except Mine)", AI Engineer CODE 2026 — https://www.youtube.com/watch?v=ZZ19zhYnDKY (channel upload: https://www.youtube.com/watch?v=O_zcc6Xl12g; reading edition: https://ai.engineer/code/2026/talks/lauren-tan; transcript archived at sources/lauren-tan-slop-transcript.md). Tooling facts: Biome v2.6 JS plugins (https://biomejs.dev/blog/biome-v2-6), ESLint no-restricted-syntax, dependency-cruiser, antithesishq/bombadil.
+- **Book, sections read in full 2026-11-14 (HIGH for what it claims; data circa 2009–2010, pre-AI):** Bob Hughes, *Software Engineering Best Practices*, McGraw-Hill (2010) — user-provided PDF https://repo.darmajaya.ac.id/4704/1/Software%20Engineering%20Best%20Practices%20%28%20PDFDrive%20%29.pdf; analysis in BOOK-SE-BEST-PRACTICES.md.
+- **Talk, read in full 2026-11-14 (HIGH for what it claims; product numbers self-reported):** Zach Lloyd, "How to Build a Software Factory That Improves Itself", Warp — https://www.youtube.com/watch?v=nKjPBAw_N_0 (uploaded 2026-11-09; reading edition: https://ai.engineer/talks/nKjPBAw_N_0-build-software-factory-that-improves-itself; transcript archived at sources/lloyd-factory-transcript.md); analysis in TALK-FACTORY.md.
+- **Talk, read in full 2026-11-14 (HIGH for what it claims; motivating stats are his citations of "public research", not independently verified):** Rajath Mahendrappa Kotyal, "Your Spec Has Bugs. Catch Them Before Your Agent Codes.", AWS — https://www.youtube.com/watch?v=0EnLxIbAvYk (uploaded 2026-11-11; reading edition: https://ai.engineer/talks/0EnLxIbAvYk-your-spec-has-bugs-catch-them-before; transcript archived at sources/kotyal-spec-transcript.md); analysis in TALK-SPEC-BUGS.md.
 - **Primary (HIGH):**
   - Local CLI help and `auth status` for Claude Code 2.1.322.
   - `man launchd.plist`.

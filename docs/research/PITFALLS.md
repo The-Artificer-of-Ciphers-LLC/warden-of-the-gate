@@ -237,7 +237,7 @@ Research on 20 large projects found Stale bot cleared backlog but was followed b
 - Hard caps: N blocking findings and M total. Nits never go in contributor-facing output.
 - Every finding cites file, line and evidence. The verifier pass drops anything it can't re-derive.
 - Re-checked open findings are updated in place in the ledger and summarised as "still open (n)", not re-posted.
-- Retro feeds disagreements back into REVIEW.md.
+- Retro feeds disagreements back into REVIEW.md — and, per the correction ladder (FRAMEWORK-CORRECTIONS.md), a disagreement that recurs should be demoted off prose into a lint rule or design change, so the class of mistake stops reaching review at all (Tan: "eliminate a class of mistake instead of reviewing it forever").
 
 **Warning signs:**
 - Agreement dropping below 70%.
@@ -300,6 +300,79 @@ Research on 20 large projects found Stale bot cleared backlog but was followed b
 - **Voice:** reference the owner in backticks or without `@`, and word the header to own the badge: "AI-assisted review drafted by Claude under `trek-e`'s rules; trek-e is accountable." Accept that GitHub will display "bot".
 
 **Phase to address:** Foundation (App setup, workflows) → Review live (voice wording).
+
+---
+
+### Pitfall 11: Comments as permission slips — agent-justified workarounds spread (quality, from Tan's talk)
+
+**What goes wrong:**
+An Implement or Rework session hits a hard problem, takes the path of least resistance (a workaround), and writes a comment justifying it. The next agent — including the next Warden session, which reads the repo as its largest input — treats the commented workaround as intentional and established, and copies it. At bot velocity (one Implement per day, plus contributor PRs) the pattern spreads through the codebase and degrades exactly what the loop is supposed to protect: trust in merged code. Documented at scale by Tan (Grok Bot team, Nov 2026): Cursor's agents used imperative timers (`setTimeout`, `requestAnimationFrame`, `requestIdleCallback`) as quick fixes over an architecture clash, wrote comments justifying each one, and "before you know it, we had timers spreading everywhere" with real performance damage. (TALK-SLOP.md; MEDIUM — one team's reported experience, but the mechanism is general.)
+
+**Why it happens:**
+- Comments **go stale**, humans don't read them, and they give an agent "an escape hatch to justify not doing the right thing because it's hard".
+- The worst part: comments are **not enforceable**. "I'm going to tell the next agent not to do X" never becomes something you can trust — unlike a lint error, which the next agent physically hits.
+- Agents also **over-rotate** on small corrections and treat them as hard rules, so prose guidance (comments, REVIEW.md) is unreliable in both directions: ignored and over-applied.
+- Warden's own sessions are the vector: Implement reads untrusted issue text, writes code in a worktree, and its PRs land with the maintainer's "quick look" — a justified workaround in one bot PR becomes precedent for every later session.
+
+**How to avoid:**
+- **Comment-restrictive policy in Implement/Rework prompts:** do not add comments that justify a workaround; if the root cause cannot be fixed, stop and report it as an open finding for the human gate — never comment over it. Allowed: comments stating a non-obvious invariant or citing an issue/ADR (enforceable by convention, e.g. a lint rule for `TODO` without an issue link). Grok Bot's stronger version — ban 99% of comments — is the reference point.
+- **Replace justifications with lint rules whose error messages point at the root cause** ("fix the real problem, rather than just patch around it"): the six-step conversion procedure is in FRAMEWORK-CORRECTIONS.md (find pattern → structural rule → problem/why/fix-pointer message → delete the justifying comments → verify with a tempting fixture → record in Retro).
+- **Retro owns the demotion:** a finding that recurs across PRs or rounds is promoted off prose into the strongest rung it can express (design > lint > verification). The weekly rules PR shows which rung each rule landed on.
+- **Garden hygiene:** the repo lint (including Retro-added rules) runs in Implement/Rework preflight, so bot PRs cannot plant a pattern the repo has banned. A v1.x "garden" report lists remaining instances of deprecated patterns, oldest first — Tan: cleaning up old examples is part of improving future output.
+
+**Warning signs:**
+- The same workaround appearing in files no one connected touched, each with its own justifying comment.
+- Bot PRs that "fix" a finding by adding a comment or an `eslint-disable`/suppression rather than changing the code.
+- Performance or behavior regressions that trace to a pattern first introduced by a bot PR.
+
+**Phase to address:** Implement (prompt policy, blocking prerequisite alongside the sandbox) → Retro (ladder and garden report). The tempting-fixture verification generalizes the red-team suite: injection tests for safety, temptation tests for quality.
+
+---
+
+### Pitfall 12: Productivity/quality metrics that distort incentives — LOC and cost-per-defect (Hughes 2010)
+
+**What goes wrong:**
+The bucket report, Sweep metrics, or adopter-facing docs reach for the two most familiar software metrics — lines of code and cost per defect — to show "productivity" or "quality improvement." Both are measured to *reward the wrong behavior*: Hughes ranks them **unsafe** (−4.50 / −2.83 in his 200-item ranking) and calls their use for economic study "professional malpractice" (p. 17). His Table 9-19 shows them at the *bottom* of measured effect: as commonly used, they **make quality worse** (positive defect-prevention values = more defects) — cost-per-defect "penalizes quality and achieves its best results for the buggiest artifacts" (p. 35), and LOC "penalizes high-level languages" so terse, correct code looks *less* productive than verbose code. A 1994 controlled study (ten versions of one application in ten languages) found LOC "violated the standard assumptions of economic productivity so severely" that cross-language use was malpractice (p. 538). The usage data shows why this is a live trap: the three most-used "defect prevention" methods in U.S. projects are all harmful — uncertified reuse (90%), cost-per-defect (75%), LOC (72%) — while the effective ones are rare (certified reuse 1%, inspection participation 12%) (Table 9-21, pp. 607–608). Common ≠ good.
+
+**Why it happens:**
+- LOC and cost-per-defect are the only metrics most people know; they look objective.
+- The famous "100× post-release fix cost" claim is an *artifact* of the broken cost-per-defect metric, not a measured ratio: "Defect repairs before and after deployment take about the same amount of time. Bug repairs at both times range from 15 minutes to more than eight hours" (p. 18). It keeps getting quoted because it sounds like a quality argument.
+- Goodhart (see Minor Pitfalls): once a metric is reported, it gets optimized. A maintainer optimizing "cost per defect" will *stop fixing cheap defects*.
+
+**How to avoid:**
+- Warden's reports (bucket report, Sweep metrics, decision cards) use only: item counts by state, ages/times (median PR age, minutes per PR at the gate), agreement rate, re-review count, escaped defects, rounds-to-merge. Never LOC, never cost-per-defect.
+- If an adopter asks for a "productivity" number: completed items (or function points, if they already count them — Hughes's metric of record; IFPUG FP is his #1-ranked measurement, −30% defect potentials / +15% removal in Table 9-19). State plainly that LOC is not a productivity measure.
+- The "quality improved" claim in release notes should cite agreement rate, escaped defects, or defect *origin* distribution (Hughes: measuring defect origins is a top-10 practice, #28) — not dollars-per-bug.
+
+**Warning signs:**
+- Any Warden output containing "LOC", "KLOC", or "$/defect".
+- A maintainer asking why the bot "slowed down" while LOC-per-item fell (the metric is lying to them).
+
+**Phase to address:** Foundation (bucket report design) → Sweep metrics (Phase 2/4). One-line rule in adopter docs.
+
+---
+
+### Pitfall 13: Spec contradictions and gaps flow into bot PRs (Kotyal, AWS Nov 2026)
+
+**What goes wrong:**
+The issue that drives Implement is the *spec* — repro steps, expected behavior, acceptance criteria. Specs contain bugs: rules that contradict each other ("place the order as a backorder" + "no order shall be placed as a backorder" — each reads fine alone; together they can't both hold) and gaps (a case no rule covers, which the agent fills in by guessing). Kotyal's cited research: unclear prompts drop code accuracy **20–40%**; "**60–90% of valid code is still wrong** after it writes it"; ~2× regressions on deploy. An Implement session given a contradictory spec will silently pick one reading — and the bot PR arrives clean-looking, implementing the *wrong* thing. The maintainer's "quick look" gate is exactly where this should be caught, but only if the ambiguity is *surfaced*, not resolved.
+
+**Why it happens:**
+- LLMs are fluent spec *interpreters*: they produce plausible code for contradictory or underspecified rules without flagging the contradiction (Kotyal's whole point: "we need to make sure that we resolve this ambiguity").
+- Triage's root-cause analysis is Warden's de-facto spec for Implement; if it inherits the issue's ambiguity, Implement amplifies it into code.
+- Hughes (2010) measured the same class from the other direction: requirements defects are the one category **only pre-code checking can catch** — "requirements problems cannot be found and removed by testing" (p. 126). No downstream gate (lint, test, verifier) will ever find a spec contradiction in the code it produced.
+
+**How to avoid:**
+- **v1 (prompt-level, no solver):** the Implement prompt requires the agent to *state its interpretation* of each ambiguous rule in the issue spec. If two plausible readings exist, it reports the ambiguity as an **open finding for the human gate** (finding types: `spec-conflict`, `spec-gap`) and implements neither guess — the same "abstain rather than comment over it" discipline as P11. Cheap heuristic from the talk: ask for 3 restatements of a key rule; disagreement between samplings = ambiguity flag on the decision card.
+- **v1.x (formal):** a spec check in Implement preflight — SMT/solver-based contradiction and gap detection on the acceptance criteria (Kotyal's Kiro pipeline: LLM refines → formalize to SMT → SAT/SMT solver → sample 7–10×, cluster by logical equivalence → accept / human disambiguates / abstains). Spike before building: natural-language→SMT is immature ("thin evidence right now"); only rule-set-shaped specs are tractable.
+- **The division of labor stays Warden's:** "The LLM translates, the solver checks and the human decides" [07:18] — same as "AI proposes, scripts dispose." There is no oracle for spec correctness other than the maintainer; the tool's job is to make the ambiguity *visible*, never to resolve it.
+
+**Warning signs:**
+- A bot PR whose behavior matches one reading of the issue but not another; maintainer: "that's not what I asked for."
+- Implement sessions that "clarify" an ambiguous rule in a comment or doc instead of reporting it.
+- Repeated rework rounds on the same issue where each round implements a different reading.
+
+**Phase to address:** Implement (prompt policy, alongside P11) → v1.x formal check. Triage's root-cause output is the natural first place to run a self-consistency check.
 
 ---
 
@@ -461,6 +534,9 @@ Research on 20 large projects found Stale bot cleared backlog but was followed b
 | P10 App scope/recursion | Foundation | No recursive runs in a week of logs; App lacks `workflows` |
 | launchd quirks | Foundation | Sleep/wake/reboot checklist passes |
 | Config/release breakage | Foundation (versions) → v1.0.0 | Second-repo onboarding + an upgrade rehearsal |
+| P11 comment permission slips / pattern spread | Implement (prompt policy) → Retro (ladder, garden report) | Tempting-fixture test: agent hits the lint rule and fixes the root cause, not a comment or suppression |
+| P12 metrics that distort incentives (LOC, cost-per-defect) | Foundation (report design) → Sweep metrics | Bucket report and adopter docs contain only items/time/agreement/escaped-defect; no LOC or $/defect anywhere |
+| P13 spec contradictions/gaps into bot PRs | Implement (prompt policy) → v1.x formal check | Ambiguous spec rule → open `spec-conflict`/`spec-gap` finding at the gate, never a silent guess; 3-restatement heuristic flags ambiguity |
 
 ## Sources
 
