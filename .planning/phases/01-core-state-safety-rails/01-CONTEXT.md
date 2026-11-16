@@ -72,10 +72,10 @@ The planner and researcher decide these within the locked decisions:
 - `docs/adr/0005-releasable-and-configurable-per-repo.md` — one config file, versioned releases, schema publishing
 
 ### Research
-- `.planning/research/ARCHITECTURE.md` — state IDs, default labels, transition table (actor A/R/M), reconciler invariants (amended by D-11), ledger format and trust rule
-- `.planning/research/STACK.md` — TypeBox→JSON Schema→Ajv pipeline, `@octokit/auth-app` two-token minting, keychain storage, launchd plist rules, plugin packaging
-- `.planning/research/PITFALLS.md` — App key custody, App-event workflow recursion, spoofed ledgers
-- `.planning/research/SUMMARY.md` — conflict table and open gaps (comment size limit, TypeBox 1.x check)
+- `docs/research/ARCHITECTURE.md` — state IDs, default labels, transition table (actor A/R/M), reconciler invariants (amended by D-11), ledger format and trust rule
+- `docs/research/STACK.md` — TypeBox→JSON Schema→Ajv pipeline, `@octokit/auth-app` two-token minting, keychain storage, launchd plist rules, plugin packaging
+- `docs/research/PITFALLS.md` — App key custody, App-event workflow recursion, spoofed ledgers
+- `docs/research/SUMMARY.md` — conflict table and open gaps (comment size limit, TypeBox 1.x check)
 
 </canonical_refs>
 
