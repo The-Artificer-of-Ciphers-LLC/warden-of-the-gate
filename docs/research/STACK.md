@@ -10,7 +10,7 @@
 
 ## Open-Harness Pivot (2026-11-15) — read this before the Claude-specific sections below
 
-**The runtime is no longer pinned to Claude Code.** ADR 0004 was amended (2026-11-15, ratified as a POC) to run Warden in an **open harness on a local-first model pool**. See `.planning/research/OPEN-HARNESS.md` for the full analysis. The Claude-Code-specific sections further down (CLI pinning, `claude -p` flag profiles, plugin packaging) are **retained as the reference for what the original design used** and are progressively being replaced by per-harness **adapter profiles**.
+**The runtime is no longer pinned to Claude Code.** ADR 0004 was amended (2026-11-15, ratified as a POC) to run Warden in an **open harness on a local-first model pool**. See `docs/research/OPEN-HARNESS.md` for the full analysis. The Claude-Code-specific sections further down (CLI pinning, `claude -p` flag profiles, plugin packaging) are **retained as the reference for what the original design used** and are progressively being replaced by per-harness **adapter profiles**.
 
 **What stays (harness-agnostic — still in force):** the Node ≥24.12 / TypeScript / esbuild-bundled `dist/` core; Octokit + `@octokit/auth-app`; `yaml`; Ajv 8 (JSON Schema 2020-12); TypeBox; Vitest/fast-check/Stryker; Biome/actionlint/zizmor; and the **launchd** LaunchAgent (catch-up-on-wake). None of this depends on Claude Code.
 

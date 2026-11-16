@@ -21,7 +21,7 @@ The Warden of the Gate (repo `warden-of-the-gate`, command `/warden`, config `.g
 
 <!-- GSD:project-end -->
 
-<!-- GSD:stack-start source:research/STACK.md -->
+<!-- GSD:stack-start source:docs/research/STACK.md -->
 
 ## Technology Stack
 
