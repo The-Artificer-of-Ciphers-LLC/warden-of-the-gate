@@ -1,123 +1,399 @@
-# PRD: The Warden of the Gate, a self-maintaining software factory for any GitHub repo
+# PRD: The Warden of the Gate
 
-- **Status:** Draft
-- **Date:** 2026-11-16 (revised)
+- **Status:** Draft - owner product review complete; implementation proofs pending
+- **Date:** 2026-11-17
 - **Owner:** @trek-e
-- **Related ADRs:** [0001](../adr/0001-builtin-triage-task.md), [0002](../adr/0002-stale-clocks.md), [0003](../adr/0003-contributor-facing-voice.md), [0004](../adr/0004-local-first-open-harness-runtime.md), [0005](../adr/0005-releasable-and-configurable-per-repo.md), [0006](../adr/0006-agentrunner-adapter-seam.md), [0007](../adr/0007-local-first-model-pool.md), [0008](../adr/0008-tiered-autonomy-and-merge-gates.md), [0009](../adr/0009-factory-product-boundary.md)
+- **Supporting decisions:** [ADR index](../../README.md); all ADRs remain editable working drafts.
+- **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md).
+- **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
 
 ## TL;DR
 
-The Warden of the Gate (repo `warden-of-the-gate`) is a self-maintaining software factory for any GitHub repo: it triages new issues, reviews PRs, fixes unclaimed confirmed bugs, closes what has gone stale, and improves its own rules — with human oversight. It runs on open agent harnesses (opencode and pi for unattended batch; Bionic as the interactive surface) on a local-first model pool, so routine work costs electricity, not tokens. GitHub Actions does non-AI bookkeeping only. The first repo it runs against is GSD Core, the pilot repo; everything specific to a repo lives in one config file, so any maintainer can point it at their own.
+Warden is a self-maintaining software factory for GitHub repositories. It triages issues, reviews PRs, **fixes bugs and builds features and enhancements**, follows up with contributors, merges eligible changes, takes over abandoned work, and proposes improvements to its own rules under human oversight.
 
-## Problem
+The MVP proves the whole loop on GSD Core, the **pilot repo**. One instance governs one repository. A maintainer manually starts bounded, once-through AI scans on a Mac using OpenCode and a local inference service such as LM Studio. GitHub Actions performs deterministic housekeeping and serialized posting, never inference. Eligible auto-merge is a core capability, including contributor PRs; Warden never writes to contributor branches. Operational settings live in `.github/warden.yml`; declarative standing authority lives in `.github/ORDERS.yaml`.
 
-Busy repos rot: PRs pile up "constantly reviewed, never completed". A long review session over the whole queue fills its context by the sixth to eighth PR, waits on CI and on the maintainer mid-run, and keeps its queue and ledger only in the session — so every new run starts over and re-reviews what it already reviewed. Stale items pile up and the maintainer ends up managing the process by hand.
+## 1. Problem, users and outcomes
 
-The pilot repo shows this at scale: ~72 open PRs in that state, and no durable memory of what was already reviewed.
+Busy repositories accumulate repeatedly reviewed but unfinished PRs, unanswered issues, abandoned claims, and undocumented maintainer decisions. A long-lived session loses focus, waits for humans or CI, and forgets prior work when it restarts. The pilot backlog motivating this design had approximately 72 open PRs; that is context, not a fixed acceptance baseline.
 
-## Goals
+The primary user is a solo or small-team maintainer. Contributors need clear expectations, attributable feedback and fair ownership. Other maintainers must be able to adopt the same factory through configuration rather than repository-specific task code.
 
-- Every open PR and issue is in exactly one known state, visible on GitHub, so any run can pick up cold.
-- No head commit is ever reviewed twice.
-- The factory acts with tiered autonomy: low-risk work merges on its own; high-risk escalates to a short decision card. The maintainer spends fewer minutes per PR than today (ADR 0008).
-- Issues flow from intake to triage to a fix PR without the maintainer, unless a decision is theirs.
-- Stale PRs and issues close on published, predictable clocks (ADR 0002).
-- Routine AI work costs no per-token spend: local models by default (ADR 0007).
-- Ships as one package any maintainer can install and configure for their repo in an afternoon, on a machine, a Docker container or a Kubernetes pod (ADR 0005).
+Required outcomes:
 
-## Non-goals
+- Every adopted open item has one durable, visible workflow state and a clear next action or blocker.
+- Completed reviews are reused for unchanged inputs; new code receives appropriate delta review.
+- Confirmed bugs and approved features/enhancements progress through implementation, verification, review and eligible merge.
+- Human intervention concentrates on product decisions, risk, authority changes, exceptions and genuine uncertainty.
+- Missed commitments lead to predictable takeover without losing the underlying issue or useful contribution.
+- Cold starts, outages, retries and stops preserve accepted decisions and recoverable work.
+- Routine inference has no cloud token charges; local hardware, energy and model-context costs still matter.
 
-- The factory never writes to a contributor's branch — review of their PRs is report-only; findings go back to the author.
-- Review never edits code — on factory-generated branches it reports and routes findings to the fixing engine; it merges, nothing else.
-- No model inference in CI/Actions (v1) — Actions does non-AI bookkeeping only.
-- The factory never executes a maintained repo's own development workflow — products are maintained, not run as factory machinery (ADR 0009).
-- No hosted multi-tenant service in v1 — local-first: the factory runs on the maintainer's machine, a Docker container or a Kubernetes pod, all self-operated.
+## 2. MVP boundary
 
-## Users
+### Included
 
-- **Primary:** a solo or small-team maintainer of a busy repo who runs open agent harnesses on their own machine (or container) and is the oversight gate.
-- **Secondary:** contributors, who see AI-assisted reviews, nudges and triage comments signed by the configured posting account (ADR 0003).
-- **Tertiary:** other maintainers adopting the factory for their own repos.
+All eight tasks are required: **Intake, Triage, Claim, Implement, Review, Rework, Sweep, Retro**. The first release is narrow in deployment and throughput, not a review-only substitute for the factory.
 
-## Scope: the loop
+- One repository per instance; instances may share a host and local model service but not authority or mutable item state.
+- Maintainer-operated Mac, OpenCode adapter first, LM Studio/local OpenAI-compatible inference. API compatibility does not mean requests go to OpenAI's cloud.
+- Local-only inference, checking the actual resolved provider/model, not merely a configured default. No silent remote fallback.
+- Manually triggered AI scans only: bounded queue snapshot, serial items, fresh sessions, report and exit. Do not wait inside a session for CI or a human.
+- An initial configurable limit of one open factory implementation PR. Serial review/triage of other items remains possible.
+- Deterministic Actions intake, claims, deadline/staleness handling, reconciliation and serialized posting can continue while the Mac is off.
+- Optional lightweight Discord/credential control helper while the Mac is awake. Recording a decision does not start AI work.
+- Versioned Mac CLI/npm distribution, quickstart and tested runtime/harness/model matrix. Harness, model service and execution isolation are explicit prerequisites.
+- Code lookup, static-first verification, durable decision retrieval, and an evidence-based graph-integration evaluation.
 
-Eight tasks, each handling one item and then ending:
+### Deferred, not hidden MVP requirements
 
-| Task | Runs where | Does |
+| Area | Later direction |
+|---|---|
+| AI pickup | GitHub webhooks/event-driven pickup and scheduled AI operation after MVP validation; no recurring local polling in MVP |
+| Harnesses/models | Pi adapter; remote per-task opt-in with budgets; orchestrator/worker model split after measurement |
+| Interactive surfaces | Bionic optional, not a required unattended engine; Teams/Slack after Discord |
+| Distribution | Warden Docker image and broader Linux deployment; Kubernetes/Helm after that. Containers may still provide MVP worker isolation. |
+| Enterprise | Management REST API, enterprise RBAC, dashboards, organizational tenancy, cross-repository orchestration and aggregate oversight |
+| Policy/storage | General executable DSL, general migration engine, mandatory graph database, model training on the decision corpus |
+
+The executable may remain `warden`, but the npm package must use an organization-owned scope: unscoped `warden` is an unrelated package. Confirm scope ownership and availability before publishing.
+
+## 3. Authority and trust boundaries
+
+Effective authority is the intersection of mandatory platform constraints, the operator-approved authority ceiling, and approved repository standing orders. A model recommendation never grants permission. Policy changes proposed in a PR do not authorize that PR.
+
+- GitHub App identity for repository effects; short-lived, operation/repository-scoped credentials. No root secrets or GitHub write tokens in agent sessions.
+- Factory built-ins own orchestration. Issues, PR text, repository agent instructions and standing orders cannot introduce arbitrary executable task programs.
+- Product agent/phase workflows are maintained as code, not executed as factory machinery. Trusted build, lint and test commands are allowed for verification.
+- Review gets prefetched inputs and restricted read-only tools. Implement/Rework may change only an isolated factory workspace within approved scope.
+- Running generated/contributor code, dependency installation scripts, build plugins, lint and tests requires a real OS/container boundary. A worktree alone is not isolation.
+- Exclude home credentials, unrelated files and unrestricted network access. Any allowed network/resource access is explicit and bounded. Do not run fetched code or repository plugins in privileged bookkeeping.
+- Missing isolation or unknown authorization blocks the affected action visibly. No unsafe fallback into the maintainer's login environment.
+- Structured-output validation is necessary, not sufficient: the deterministic core independently checks identity, scope, current inputs, evidence, policy and requested effects.
+
+### Eligible auto-merge
+
+Live auto-merge is the default for eligible contributor and factory PRs, including approved features/enhancements. It requires:
+
+1. Approved scope or applicable standing authority; valid current approvals where required.
+2. Current completed review and independently captured task-appropriate verification evidence.
+3. No unresolved findings enabled as merge gates.
+4. Required GitHub checks/reviews and repository rules satisfied; PR ready, not draft.
+5. Current head and applicable policy match the accepted evidence; current base context has been checked for material invalidation; no applicable hold or stop.
+6. Merge request bound to the reviewed head, followed by reconciliation of the actual outcome.
+
+Risk is separate from finding severity. Evaluate affected interfaces, sensitive paths, migrations, dependency effects and blast radius. Do not turn a clean diff, low severity, code-size percentage or model confidence score into authorization.
+
+High-risk or uncertain work and changes to workflows, standing orders, access/maintainer policy or Warden's own authority require a maintainer decision. Feature/enhancement scope and acceptance criteria require approval. `wontfix` decisions require maintainer authority. Blocker findings always stop merge; major, minor and nit findings also block by default, individually configurable.
+
+Verified automation-origin dependency/CVE fixes automatically approve and merge when within authorized scope and all gates pass. Verify origin and actual change; a security label is not sufficient. Breaking majors, migrations and high-impact/uncertain updates escalate unless that specific class is already authorized. Urgency does not bypass gates.
+
+An App cannot supply an independent approval of its own PR. A second local session is not a second GitHub identity. Preflight incompatible branch rules and explain the required legitimate approval path; never fabricate reviewer independence or bypass protections.
+
+## 4. Durable state and transitions
+
+### Canonical state and independent facets
+
+One Warden-owned ledger comment per issue/PR is authoritative. Configurable labels are a searchable projection, not a second competing database. An authorized maintainer override must pass through the same validated state writer.
+
+| Item | Canonical open workflow states | Terminal states |
 |---|---|---|
-| Intake | Actions, no AI | Template check, existing duplicate check, triage label |
-| Triage | Local batch | Factory built-in: root-causes the report, classifies severity, applies labels; confirmation rule is config (ADR 0001) |
-| Claim | Actions, no AI | Reporter who offered a fix gets a claim window; otherwise confirmed work becomes `ready-for-agent` |
-| Implement | Local batch | Branch off the base, failing-first test, fix, local preflight, PR with a Merge Danger summary; stops at "PR opened" |
-| Review | Local batch | Deterministic gates, then a risk-tiered review of only the delta since the last reviewed commit; reports findings (blocker/major/minor/nit) and merges on a successful review — never edits code |
-| Rework | Local batch | Fixes only the named findings on factory-generated PRs; at most 3 rounds, then the human gate |
-| Sweep | Actions, no AI | Nudges, stale closes, claim expiry, metrics (ADR 0002) |
-| Retro | Local batch, weekly | Turns the maintainer's review comments into repo rules or lint, as a PR |
+| Issue | `needs-triage`, `needs-info`, `needs-decision`, `ready`, `claimed`, `implementing`, `in-review`, `blocked` | `resolved`, `closed` |
+| PR | `needs-review`, `needs-author`, `needs-rework`, `needs-decision`, `waiting-checks`, `merge-ready`, `blocked` | `merged`, `closed` |
 
-## Requirements
+State names are semantic identifiers; displayed label names are configurable. Store blocker reason and intended resumption when blocked. Processing leases/attempts are separate from workflow state.
 
-### State and memory
+Independent facets include work kind (bug, feature, enhancement, dependency, documentation and configured categories), finding severity, change risk, ownership, and low-effort indicators. A quick win is not a mutually exclusive kind or workflow state.
 
-1. Each item carries exactly one state label; each PR carries one ledger comment, edited in place, with a hidden JSON block (`lastReviewedSha`, tier, rounds, findings with status, nudge times).
-2. A run whose head commit equals `lastReviewedSha` does nothing.
-3. On a new push, review reads `lastReviewedSha..head` plus open findings, re-checks each open finding, and looks for new ones only in the delta.
-4. A finding the maintainer marks won't-fix stays resolved unless the code around it changes.
+### Principal transitions
 
-### Oversight (ADR 0008)
+| Event | Required transition/effect |
+|---|---|
+| New/adopted issue | `needs-triage`; missing information routes to `needs-info` |
+| Confirmed unclaimed bug within authority | `ready` |
+| Feature/enhancement proposal | `needs-decision`; approved criteria/design allow `ready` |
+| Contributor volunteers | Assign immediately, record commitment window, enter `claimed`; not factory-ready |
+| Factory starts eligible work | Record factory ownership, enter `implementing` |
+| Complete linked PR submitted | Issue `in-review`, PR `needs-review`; preserve actual submission timestamp |
+| Review finds enabled blocking findings | Contributor PR `needs-author`; factory PR `needs-rework` |
+| Review clean, CI pending | `waiting-checks`; do not repeat model review |
+| All current gates pass | `merge-ready`, then reconcile merge outcome |
+| Missed delivery | Release claim; close unfinished PR, retain issue and takeover context; return eligible issue to `ready` |
+| Material scope/design change | `needs-decision`, not silent scope expansion |
+| Actual merge and satisfied linked work | PR `merged`; resolve linked issue according to repository linkage and verified scope |
 
-5. The factory may label, comment, post reviews, open its own PRs and push to its own branches.
-6. Tiered autonomy: risk tier plus verifier confidence decide whether the factory acts or escalates to a decision card; thresholds are per-repo config.
-7. Merge gate: a blocker finding always stops a merge; major, minor and nit block only when enabled in config (on by default — any nit can become a major with one change).
-8. It ends every escalated item at the human gate with a decision card: linked issue, Merge Danger, CI evidence, open findings, recommendation.
-9. Enhancement and feature approval, `wontfix`, approving a contributor PR beyond the gate, and changes to workflows, rules files or `MAINTAINERS` always need the maintainer.
+Closed PRs do not imply resolved issues. GitHub state changes made outside Warden must be reconciled, not overwritten blindly. Never reopen an intentionally closed item simply because a stale operation arrives.
 
-### Runtime (ADR 0004, ADR 0006)
+### Minimum ledger and operation records
 
-10. All AI work runs locally through an AgentRunner adapter on open harnesses: opencode and pi for unattended batch; Bionic as the interactive surface. No vendor-locked agent is a Warden platform.
-11. Local-first model pool: local models by default; an opt-in remote high-end tier for heavy tasks (v1.x); the runner's preflight never allows a silent paid fallback (ADR 0007).
-12. One runner process, two trigger modes: calendar-scheduled batches and event-triggered real-time pickup; execution mode is per-repo config, set when the repo is added. Kept alive by launchd locally, or run as a container/pod daemon.
-13. Each batch processes items one at a time in fresh sessions, with an item cap and a turn limit per task so it stops well inside the model's context. A batch that hits a limit ends cleanly; the next resumes from the ledger.
-14. Sessions get a restricted tool surface and read-only GitHub access. They write results to a file; the runner re-validates it against the result schema before anything is posted.
-15. Fork PR code is never checked out or run. Review rules are read from the base branch only.
-16. A kill switch variable is checked by every workflow and by the runner before each batch.
+Record item/repository identity, schema/revision, workflow state/facets, ownership, linked work, pending obligations/deadlines, holds, accepted review inputs/findings, evidence references, approval references, rework count and applied operation IDs. Issues have no PR head SHA.
 
-### Configuration and release (ADR 0005)
+Review identity includes PR head, relevant base context, effective policy and material evidence context; retain tool/model/check context needed to interpret evidence. Only accepted completed Review results advance the review marker. Intake, Implement and Rework never do.
 
-17. All repo specifics live in `.github/warden.yml`, validated against a published schema, with defaults for anything left out: label names, base branch, maintainers, voice (posting account), harness selection, execution mode, finding-severity merge gates, stale clocks, tier paths, throttles, batch size and schedule, kill switch name.
-18. One npm package `warden` (TypeScript/Node, bun-compatible) with committed `dist/*.mjs` and a container image; tagged releases with a changelog; the config carries a schema version so upgrades don't silently break a repo.
-19. `warden setup` writes a starter config and creates missing labels without any AI.
+Material new evidence can invalidate affected findings or verification even when the head is unchanged. Record the evidence and invalidation reason; an acknowledgement, ordinary CI completion or repeated unchanged finding is not a new review input. Base advancement requires a compatibility check, not an automatic full review of every unrelated commit or an assumption that all base changes are irrelevant.
 
-### Stale handling (ADR 0002)
+All Intake/Claim/Sweep and local-result effects share one serialized Actions posting path. The local runner submits validated intents; it does not race Actions to edit the same ledger.
 
-20. PRs: nudge at 48 and 72 hours of author silence, close at 5 days, only where the maintainer responded or a review was posted. Unanswered PRs go to the review queue instead.
-21. Reviewed defect PRs whose requested changes aren't addressed in 5 days are closed; the issue returns to `ready-for-agent`, and whoever picks it up continues from the author's branch with a `Co-authored-by` credit.
-22. Issues: `needs-reproduction` closes after 14 days, other waiting-on-reporter issues after 28; confirmed or approved issues never close for staleness.
+- Persist operation intents independently of bounded Actions concurrency queues.
+- Re-read current item, policy, approvals and stop controls before an effect.
+- Use durable operation identities, resumable application and reconciliation of uncertain outcomes. Enqueue/HTTP acceptance is not completion.
+- Recover from lost events, duplicate deliveries, interrupted writes and effect-applied/acknowledgement-lost cases without duplicate accepted work.
+- Retain a protected local recovery journal and the durable decision corpus. Accepted maintainer decisions are also recorded on GitHub.
+- Actions outage means visible pending operations, not an unsynchronized local write fallback.
+- CI/approval events may reevaluate gates against an already accepted current review and finalize an eligible merge without launching AI. They cannot replace missing review or authorize new scope.
+- A comment revision counter or local lease alone is not distributed compare-and-swap. No unqualified exactly-once transaction promise.
 
-## Rollout
+The concrete durable inbox and recovery protocol must pass a capability proof before live posting. Do not create a competing repository ledger file.
 
-0. **POC (two-track):** Bionic test runs — the Review task against pilot-repo PRs on a local model, validating prompts, packets and result contracts interactively — while the opencode adapter is built in parallel. Gate: a schema-validated Review result posted by the existing poster; then the pi adapter.
-1. **Foundation:** factory skeleton, config schema with the pilot repo as first config, labels, ledger and tier scripts, backlog buckets A to F, the two bookkeeping workflows, runner switched off. Gate: the bucket report matches the maintainer's sense of the backlog.
-2. **Review in shadow:** batched review writes only to a local report for two weeks. Gate: at least 7 in 10 blocking findings are ones the maintainer agrees with; no head commit is re-reviewed.
-3. **Review live:** posts comment reviews and labels. Gate: maintainer minutes per PR go down; contributors aren't confused.
-4. **Triage:** one issue per session, in batches. Gate: 9 in 10 labelled the way the maintainer would.
-5. **Implement:** one `ready-for-agent` issue a day, one open factory PR at a time. Gate: factory PRs merge after a quick look more often than they bounce.
-6. **Retro:** weekly rules PR.
+## 5. The eight task contracts
 
-## Success metrics
+Each task has bounded inputs, an explicit result, evidence, proposed effects and a next state. No model session is kept open to babysit another system.
 
-- Open PR count and median PR age (from the sweep's metrics).
-- Re-reviews of an already-reviewed head commit: zero.
-- Maintainer minutes per PR at the gate (on escalated items).
-- Rounds to merge for factory PRs.
-- Share of blocking findings the maintainer agrees with (shadow and live).
-- Escaped defects traced to PRs that went through the loop.
-- Auto-merge rate: share of factory-reviewed PRs merged with no human intervention.
-- Revert/escape rate on auto-merges: share of factory-auto-merged PRs later reverted or found to have escaped defects.
+### Intake - deterministic Actions
 
-## Open decisions
+Inspect metadata, template completeness and explicit routing rules; initialize adopted item state and labels. Possible similarity may flag a duplicate candidate but never establishes semantic duplication or silently closes it. Apply configured draft policy and queue semantic work. Do not claim root-cause analysis or mark any code reviewed.
 
-- **Which account posts (open):** a GitHub App, a machine user, or the maintainer's own account. The voice header names this configured account; fix PRs need a non-maintainer author so the maintainer's review counts as the second reviewer.
-- **Memtrace (open):** narrow it to `get_impact` and `recall_decision` on the full tier plus a `--diff` CI check, or drop it from the review path. Proposed test: replay 10 recent PRs with and without it.
-- **Stale details to confirm:** what counts as author activity (proposed: a push, comment or review reply; bot comments and CI runs don't count) and exemptions (maintainer-marked drafts, `keep-open`, PRs waiting on the maintainer).
-- **Execution mode and schedule per repo:** which hours the machine or container is usually on.
-- **Isolation:** whether runs on fork PRs use a separate OS user or container rather than the maintainer's main login.
+### Triage - local AI
+
+Investigate the report against current code, approved rules and relevant prior decisions. Confirm a bug only with suitable evidence; otherwise request precise information or escalate uncertainty. Classify kind, finding severity and change risk separately.
+
+For features/enhancements, propose scope, observable acceptance criteria, approach, affected areas, interfaces, migration implications, blast radius, alternatives and unresolved questions. Approval is required before implementation. Triage owns this proposal; a separate design task is unnecessary.
+
+Confirmed/approved items never stale-close. Rejected product directions remain binding unless a maintainer revises them.
+
+### Claim - deterministic Actions
+
+Assign a volunteering contributor immediately. A human or an authorized agent may confirm work and supply the explicit delivery commitment; the assignee remains accountable. An unrelated commenter cannot claim or extend on their behalf.
+
+Accept a claim only while the issue is eligible and unclaimed. The serialized writer checks current ownership before assigning; competing requests do not overwrite a contributor or factory owner. Explain a rejected/conflicting claim and never report assignment success before GitHub confirms it.
+
+**Default initial delivery: 48 elapsed hours from assignment.** Confirmation does not start another 48-hour allowance. A complete ready-for-review PR and verification evidence are required; a placeholder, draft or knowingly partial implementation is not delivery. An earlier explicit commitment remains binding. Longer windows/extensions need maintainer approval before expiry; explicit maintainer holds pause takeover.
+
+An explicit maintainer hold freezes the unexpired portion of the applicable delivery window. Record its reason, start and remaining time; on release publish the revised deadline. A material scope change needs a fresh approved commitment. Stopping Warden alone does not grant an extension or freeze contributor obligations.
+
+Record timely submission before semantic review so unavailable AI, maintainer review or delayed CI does not falsely expire a plausible completed delivery. Ambiguous completeness waits for assessment rather than being closed merely because the Mac is offline.
+
+An on-time, genuinely complete submission satisfies the initial obligation even if ordinary review finds defects. **A published blocking review starts a fresh 48-hour fix window; a subsequent substantive review round starts the next window.** Author acknowledgements, unrelated comments and placeholder pushes do not extend delivery deadlines. Waiting on the reviewer/CI does not count against the author. All durations are configurable and timestamps unambiguous.
+
+On missed commitment, release assignment, close unfinished PR with explanation, keep the original issue open, and retain partial-work references for takeover. Enforcement is on the next successful sweep.
+
+After three substantive contributor fix rounds, escalate to the maintainer if enabled blocking findings remain, even when each submission was timely. The maintainer decides whether to permit more rounds or arrange takeover. Do not automatically close an on-time PR solely for reaching this limit. Keep the counter with the claimed work across restarts/replacement PRs; waiting on that maintainer decision is not author inactivity.
+
+### Implement - local AI, factory-owned workspace
+
+Select an unclaimed confirmed bug within standing authority or an approved feature/enhancement. Respect active contributor ownership and the implementation-PR cap.
+
+Recheck the current code/design before work. Material scope, acceptance-criteria, interface, migration or blast-radius changes require renewed approval; ordinary implementation details do not.
+
+Start from trusted base on a factory branch. For takeover, read the abandoned diff as data, assess the approach, port sound contributions with credit, and complete the whole agreed solution. Never blindly execute its branch, hooks or installation scripts.
+
+Use the strongest appropriate reproducer, implement the approved change, and run trusted verification. Bug fixes normally need fail-before/pass-after; features need evidence against approved criteria. Preserve baseline failures separately. Submit the validated PR-opening intent with scope, approach, acceptance evidence, verification, prior-work attribution and a **Merge Danger** summary of risk/blast radius. Opening a PR is not review or merge.
+
+### Review - local read-only AI and deterministic gates
+
+Review candidate changes against relevant base context, approved requirements, rules and prior decisions. Gather symbol/reference/impact evidence, inspect verification and detect control weakening. Findings name severity, precise location, rationale and required correction.
+
+- Reuse accepted findings for unchanged review inputs.
+- On a new head, review the delta and revalidate unresolved findings; assess affected surrounding behavior.
+- Material base/policy changes can invalidate prior evidence.
+- Material new evidence invalidates affected review conclusions with an auditable reason, even without a new head; do not repeat already accepted review merely because a comment arrived.
+- CI/approval-only updates reevaluate gates without another model review.
+- Failed/interrupted attempts may retry and are auditable; they are not duplicate completed reviews.
+- Use independent verification of evidence; model self-reported success is not a trusted check result.
+
+Review never edits code. Route factory findings to Rework, contributor findings to the author, and genuine decisions to the maintainer. Record the completed review identity only after validation. If all gates pass, submit the merge intent; never report merged until GitHub confirms it.
+
+### Rework - local AI, factory branches only
+
+Address named current findings without unrelated scope expansion. Contributor branches are never edited. Run relevant verification and return the new head to Review; Rework cannot mark itself reviewed.
+
+Count completed rework cycles separately from failed launches, retries and reviews. After three cycles, escalate only if findings remain unresolved. Success on cycle three is success, not automatic escalation. Resource exhaustion checkpoints and reports unfinished work rather than manufacturing a pass.
+
+Persist counters across manual scans, process restarts and replacement PRs for the same factory work. A completed fix attempt that returns no progress still consumes a cycle; it cannot renew the allowance indefinitely. Failed launches do not consume rework cycles but have their own bounded, persistent retry accounting and an explicit exhausted/blocked outcome.
+
+### Sweep - deterministic Actions
+
+Reconcile ledgers, label projections, holds, claims, delivery obligations, stale response obligations and uncertain operations. Report last successful sweep and overdue work; schedules are not exact-deadline guarantees.
+
+| Obligation | Default | Clock/exemptions |
+|---|---|---|
+| Initial contributor delivery | 48 elapsed hours | From assignment; maintainer-approved exceptions |
+| Review fixes | 48 elapsed hours per substantive blocking review round | Waiting for review/CI is not author work owed |
+| PR response silence | Nudge at 48h and 72h; close at five days | Only while explicit author response/change is owed; author push/comment/review reply resets silence, not delivery |
+| Reproduction information | 14 days | Only requested reporter information |
+| Other reporter information | 28 days | Only requested reporter information |
+
+Never stale-close unreviewed PRs, confirmed/approved issues, `keep-open` items or items waiting on maintainers. Maintainer-designated drafts are exempt when drafts are enabled. Factory comments and CI do not reset author clocks. The five-day silence policy cannot override an earlier delivery deadline. All closure messages explain the reason, retained issue and return path.
+
+### Retro - local AI, manually invoked
+
+Review maintainer decisions, corrections, escapes and repeated failure patterns over the review window. Prefer design prevention, then static rules, behavioral checks, then prose. Propose justified improvements as a PR with examples, expected effects and validation.
+
+Maintain the decision corpus; propose narrowly scoped standing-authority expansions only with outcome evidence. Human approval is required before authority expands. Weekly retrospection is an operating cadence, not a hidden scheduled AI daemon. "No justified rule change" is valid; never invent a weekly rule quota.
+
+## 6. Drafts and backlog adoption
+
+Draft PRs are disallowed by default, explicitly configurable. Close newly opened drafts and PRs converted to draft while disabled, with explanation and a ready-for-review return path. Never silently mark unfinished work ready. Closing a draft alone does not revoke a valid delivery commitment. Enabled drafts still cannot merge.
+
+Before adopting existing backlog, show a dry-run inventory and require operator selection/approval. Initialize only approved items; imported commits are not reviewed automatically. Existing drafts require a deliberate adoption decision, not mass closure. Previously waiting items receive the full published notice/response window after adoption; never retroactively mass-close old work.
+
+Preserve existing contributor ownership and valid maintainer-approved commitments. When introducing a delivery obligation to an existing claim, publish its new window from adoption notice, not the historical assignment date. Adoption cannot manufacture an already-expired commitment.
+
+## 7. Quality and code intelligence
+
+### Static-first correction ladder
+
+1. Design away invalid choices where possible.
+2. Enforce structural requirements through types, compiler, lint and dependency-boundary rules.
+3. Verify runtime properties through appropriate behavioral/integration/recovery checks.
+4. Use prose for residual judgment, not as a substitute for enforceable constraints.
+
+Agent-authored test count and coverage are not correctness evidence. Structural fixes may use static fail-before/pass-after checks; behavioral defects require dynamic evidence. Races, timing, recovery and side effects cannot be established by lint alone.
+
+Protect verification controls: disabled lint rules, broadened exclusions, suppressions, skipped tests, weakened assertions and bypassed required checks cannot manufacture success. Weakening requires maintainer approval. Legitimate expectation changes still need review against approved requirements.
+
+The trusted executor captures command, inputs, exit status, output and artifacts independently of the model. Compare trusted baseline and candidate results. Do not fix unrelated baseline defects or describe them as passing. Auto-merge blocks without meaningful evidence unless an explicit scoped maintainer exception applies; required GitHub checks never bypass.
+
+### Lookup, graph analysis and SDK enforcement
+
+Robust code lookup is required, not silently replaced by text matching alone. Require definitions/references with verifiable locations; distinguish precise from heuristic answers. Associate evidence with repository, base/candidate revision or worktree content, compiler/SDK context, freshness and degradation. Assess callers, interfaces, package boundaries and diff impact.
+
+The [researched comparison](../research/CODE-INTELLIGENCE-OPTIONS.md) retains Omnigraph, GSD Atlas, SCIP/scip-typescript, CodeGraphContext and other alternatives. Omnigraph's MIT graph storage is not a ready-made source index. Atlas offers useful local lookup, but current SDK packs and enforcement hooks are not shipped.
+
+**Approved evaluation approach:** use compiler/language-service lookup as the baseline and evaluate pinned Atlas plus one viable graph/index alternative (SCIP or CodeGraphContext) alongside it. Keep Omnigraph as a possible storage layer, not a claimed source index. Measure graph-specific impact value, accuracy, citations, revision correctness, latency, memory and local token overhead before selecting a mandatory graph dependency. Keep the provider replaceable; no requirement to build a general graph platform. The exact graph provider follows the measured comparison rather than another speculative product commitment.
+
+SDK enforcement means checks against actual supported SDK/API versions and deployment targets, not simply that a model queried a graph. Use compiler/type/lint/compatibility tooling and deterministic authorization. Report unsupported checks explicitly. Retrieval never grants authority or establishes a successful verification gate. If an index is unavailable, an approved alternate lookup may continue; missing required evidence remains a blocker.
+
+Unshipped Atlas SDK packs are not an MVP prerequisite. This does not remove reliable lookup, graph evaluation or the SDK-enforcement objective from scope.
+
+Publish supported languages, compiler/SDK versions and verification coverage with the tested matrix. A portable factory core does not imply proven checks for every repository or language; unsupported mandatory checks block autonomous completion rather than becoming an implicit pass.
+
+## 8. Maintainer decisions and learning
+
+The durable decision corpus stores approvals, denials, original reasoning, scope, evidence, policy context and subsequent outcomes. Distinguish maintainer rulings from agent suggestions; scope by repository and authorized identity. MVP learning is retrieval, not model training.
+
+Compare proposals with applicable prior denials. A denial is effective even without a reason; request the reason for future learning. Material new evidence may justify an explicit reconsideration request linking the old ruling and explaining what changed, alternatives and mitigations. Never silently ignore a final ruling. Conflicting maintainer decisions escalate.
+
+Historical agreement may improve recommendations and identify classes suitable for standing pre-approval. Only an approved standing-order change authorizes new scope; do not silently transfer authority between maintainers or repositories.
+
+### Decision cards and channels
+
+Discord is the first quick-approval channel using outbound Gateway connectivity; no public approval ingress is required. Explicitly map Discord user IDs to authorized maintainers. A guild role/display name alone is insufficient.
+
+Cards show linked work, proposal/revision, applicable policy, risk/blast radius, verification/CI evidence, open findings, recommendation and precise approve/deny meaning. Persist the accepted decision on GitHub before acting. Stale clicks, silence, duplication and unauthorized identities do not grant permission.
+
+One-time action cards expire after 24 hours by default, configurable, and may invalidate earlier with changed revision/policy/evidence. Approved feature scope/design persists until materially changed; daily reapproval is not required.
+
+Retain a GitHub-native decision path when Discord/helper/local AI is unavailable. Only approved non-sensitive summaries go to Discord, not source code or private transcripts. A recorded approval does not start an AI scan or override GitHub-required approvals.
+
+## 9. Runtime, containment and recovery
+
+Preflight repository identity, supported harness/model, local provider resolution, configuration, policy, isolation, credential status and finite budgets. Reject malformed or unsupported effective configuration explicitly.
+
+Each manual scan snapshots eligible work, processes actionable items serially in fresh sessions, checkpoints at limits, reports completed/pending/blocked/deferred work and exits. New arrivals and newly actionable AI work wait for a later scan. Do not spend a session waiting on CI or approval.
+
+Use explicit priority and age-based fairness, not model-selected queue order: authorized urgent/security work first, review/rework that finishes existing PRs next, then other actionable review/triage and new implementation. Configure capacity/aging so approved features cannot be permanently starved by incoming bugs. Skip blocked items, retain their age, and report deferred counts/reasons. Urgency never bypasses authority, verification or the implementation-PR cap.
+
+Enforce finite item, model-turn, wall-time, context/resource and operation-retry budgets. Pilot values must be published with the tested hardware/model matrix before live activation. Distinguish retries from rework cycles and task completion.
+
+### Stop and failure containment
+
+Check global and instance stop controls before every task and external effect. Unknown control state does not authorize effects. On stop, block new effects, gracefully cancel active model/verification work, preserve recoverable state and require explicit resume. Status and recovery remain usable.
+
+Already accepted external requests cannot be recalled; reconcile their real result rather than promising instantaneous rollback. A critical escape or unauthorized effect pauses the affected autonomous scope, preserves evidence and alerts the maintainer. Independent safe work may continue. Resume affected scope only after explicit review.
+
+Propose targeted remediation/revert with current-state analysis; never blindly undo unrelated later changes.
+
+### Credentials
+
+The trusted credential controller automates issuance, renewal, rotation and recovery by default within the operator-approved ceiling; explicit operator opt-out is available. Model helpers may diagnose/request, not grant permissions or bypass deliberate revocation.
+
+Renew proactively with bounded retries/backoff. Log lifecycle metadata, not secrets. Never ship a shared App private key or silently fall back to a broader PAT.
+
+If issuer/trust-root access fails, keep status, service and recoverable queue available; suspend only affected authenticated operations and alert. Resume automatically when valid delegated authority recovers. No system can mint valid credentials after all trust roots are revoked without provider-supported reauthorization; document that recovery path honestly.
+
+### Retention and privacy
+
+Protect local state and redact credentials. Retain decision history/reasons/outcomes until explicit removal. Raw local transcripts default to 30 days, configurable, with export/purge controls. Credential/security audit metadata has separate configurable retention and is not purged silently with transcripts. Expose pending/recovery state and storage failures; do not acknowledge durability that was not achieved.
+
+## 10. Configuration and operator surface
+
+| Canonical home | Contents |
+|---|---|
+| `.github/warden.yml` | Repository/base/label mappings, maintainer identities, voice, runtime/model/isolation settings, operational budgets and clocks, draft policy, severity gates, notification mapping, retention and stop-control names |
+| `.github/ORDERS.yaml` | Declarative authority for built-in tasks: scope/conditions, allow/deny, human gates, exclusions and escalation |
+| Protected operator credential/control store | Secrets, installation/trust-root details and maximum delegated authority; never model-controlled or distributed in the package |
+
+Publish versioned schemas for both YAML files and validate their effective combination. Each setting has one canonical home. Mandatory limits cannot be weakened; applicable denial or human-approval requirement prevails over allowance. Unresolved policy conflicts escalate. No executable expressions/programs or speculative general DSL.
+
+Pin effective defaults to the supported schema/package behavior; JSON Schema `default` alone does not populate values. Setup writes missing starter files without overwriting existing ones. Explicit operator setup may create missing labels; it is separate from task execution and backlog adoption.
+
+Provide a dry-run upgrade diff and compatibility/migration notes. No structurally compatible upgrade may silently expand authority, disable checks or change clocks through defaults. Policy-changing upgrades need approval.
+
+Required CLI operations (command names form the proposed MVP interface):
+
+| Command | Contract |
+|---|---|
+| `warden setup` | Validate prerequisites and existing config; create only approved missing starter configuration/labels; explain App/isolation/model setup |
+| `warden config validate` | Validate both files and effective constraints; report actionable errors |
+| `warden run [--task <name>] [--dry-run]` | One bounded manual scan or selected task; all repository effects still use the serialized writer |
+| `warden status` | Show states, ownership/deadlines, last sweep, pending operations, blockers, credential/stop status and evidence freshness without exposing secrets |
+| `warden stop` / `warden resume` | Apply documented stop/resume semantics; no implicit restart of AI |
+| `warden upgrade --dry-run` | Show configuration/behavior change before an explicitly approved upgrade |
+| `warden data export` / `warden data purge` | Scope/export/remove retained data with explicit selection and retention safeguards |
+
+No management REST service is required. Setup/quickstart must allow an operator on a supported prepared Mac to validate, inventory/adopt, run shadow, inspect results, stop/resume and recover without undocumented steps.
+
+## 11. Validation, activation and measurement
+
+### Shadow and dry-run
+
+AI shadow results remain local: no AI-generated posted reviews, labels, implementation PRs or merges. Independently and explicitly enabled deterministic Actions housekeeping may remain live. A global dry-run disables all repository mutations. Labeling independent housekeeping "live" is not permission for AI effects.
+
+### Pilot activation gate
+
+Use a maintainer-curated replay set with at least:
+
+- 20 representative PRs and 20 issues, expanded when coverage is thin.
+- 90% maintainer agreement on blocking findings and triage outcomes; report each denominator separately.
+- 10 blocking findings assessed and every known critical curated case detected.
+- Zero unauthorized effects, duplicate accepted reviews for unchanged inputs, or lost-state recovery failures.
+
+Cover bugs, approved features, contributor and factory PRs, dependency updates, authority-changing work, drafts, claims, deadlines, baseline failures and uncertainty. Report misses and disagreements, not only aggregate scores. These are provisional pilot acceptance thresholds, not a statistical guarantee of safety.
+
+The maintainer explicitly enables live actions after reviewing evidence. Do not turn elapsed shadow days or benchmark completion into implicit approval.
+
+### Required functional/recovery evidence
+
+1. End-to-end bug and approved-feature paths, including eligible auto-merge and high-risk escalation.
+2. No contributor-branch edits; takeover preserves issue and attribution while replacing unsuitable approaches.
+3. Initial/review 48-hour obligations, approved extensions, held/resumed deadlines, response-clock separation, delayed review/CI and safe backlog adoption without retroactive expiry.
+4. Current review reuse/delta invalidation, material new evidence and base-context changes; Implement/Rework cannot advance review markers.
+5. Static-first verification, appropriate runtime evidence, and detected gate weakening.
+6. Crash before/after effect, lost acknowledgement, duplicate/out-of-order trigger, queue overflow and Actions outage recovery.
+7. Head/base/policy/approval changes between review and effect rejected or reevaluated.
+8. Stop during a task/effect, uncertain external outcome and explicit resume.
+9. Credential expiry/issuer outage/revocation with no unauthorized fallback.
+10. Discord outage/stale click/unauthorized identity and GitHub fallback.
+11. Local-model failure and no remote fallback; missing sandbox blocks execution.
+12. Code-intelligence freshness/unsupported-result handling and SDK-check limitations.
+13. Competing claims and contributor/factory ownership races, with one confirmed owner and no duplicate implementation.
+14. Rework/retry exhaustion across cold starts, no-progress attempts and replacement PRs; no counter reset that silently defeats the limits.
+15. Timely contributor fix rounds reach the three-round maintainer gate without automatic closure; blocked/urgent queue entries cannot silently starve approved features.
+
+Track state counts and age; assignment-to-ready, active execution, review wait, CI wait and fix time separately; claim/takeover/extension outcomes; auto-merge and human-escalation rates; maintainer effort; blocking-finding agreement and escapes/reverts; duplicate review attempts versus accepted duplicates; operation recovery; local tokens/time/resource usage; code-lookup quality and overhead.
+
+## 12. Implementation prerequisites and proof gates
+
+The owner confirmed the shared product understanding on November 17, 2026. The PRD review is complete and ready for MVP implementation planning. The following technical choices and proofs must be resolved or demonstrated before claiming a live-ready MVP:
+
+| Item | Required outcome |
+|---|---|
+| Code-intelligence implementation | Prove compiler-backed baseline lookup, then the approved bounded comparison including Atlas and SCIP or CodeGraphContext. Select any graph dependency from results. Memtrace remains an optional unidentified candidate until its exact source/license is established; it is not a blocker to the approved evaluation. |
+| Durable operation inbox | Concrete mechanism plus crash/overflow/reconciliation proof; Actions queue alone is insufficient |
+| Harness and isolation | Pin a supported OpenCode version and prove effective permissions, structured results, cancellation, local-model resolution and real execution boundary |
+| Pilot defaults | Publish tested Mac/OS/runtime/model/compiler/SDK matrix and finite operational budgets; configure audit retention and trust-root recovery |
+| Release identity | Confirm owned npm scope; no installation command for the unrelated unscoped package |
+| Activation | Curated benchmark evidence and explicit maintainer live authorization |
+
+These are explicit readiness gates, not permission to pretend unsupported capabilities exist. This document and the ADRs remain editable design drafts; product-review confirmation does not freeze them or authorize live activation. No software implementation or provider benchmark is claimed by this documentation work.

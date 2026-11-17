@@ -1,19 +1,25 @@
-# The factory acts with tiered autonomy; the merge gate is severity-based and configurable
+# Tiered autonomy with independent risk, evidence and severity gates
 
-- **Status:** Accepted
+- **Status:** Draft
 - **Date:** 2026-11-16
 - **Decided by:** @trek-e
 
 ## Context
 
-The first design never merged: every PR ended at a human gate. The owner redefined the factory's role: merging and approving is what a software factory does, with human oversight. That oversight must be mechanical — risk tier plus verifier confidence decide what the factory may do alone.
+The first design never merged: every PR ended at a human gate. The owner redefined the factory's role: merging and approving is what a software factory does, with human oversight. Authority must be grounded in explicit scope, change risk and verified evidence, not a model's confidence score.
 
 ## Decision
 
-- **Tiered autonomy:** risk tier plus verifier confidence decide whether the factory acts (e.g., merges) or escalates to a decision card. Thresholds are per-repo config.
+- **Tiered autonomy:** explicit scope/impact rules and independent verification determine eligibility. Severity and change risk are separate; uncertainty escalates. A clean diff or self-rated confidence cannot override risk or authority restrictions.
+- **Auto-merge is the live default for eligible work**, including contributor PRs and factory-authored PRs. Shadow mode performs no GitHub writes; live actions are enabled through rollout gates. Warden never writes to a contributor's branch.
 - **Merge gate:** a blocker finding always stops a merge — not configurable. Major, minor and nit block only when enabled in config; all three are on by default (any nit can become a major with one change).
-- "Successful review" = CI green + verifier pass + zero enabled findings. The factory merges on success; everything else escalates to the decision card (linked issue, Merge Danger, CI evidence, open findings, recommendation).
-- Enhancement and feature approval, `wontfix`, approving a contributor PR beyond the gate, and changes to workflows or `MAINTAINERS` always need the maintainer.
+- Merge additionally requires current accepted review inputs, task-appropriate evidence, authorized scope, valid approvals, all GitHub-required checks/reviews, non-draft status and no stop/hold. Expected-head protection and outcome reconciliation prevent treating enqueue as merge.
+- Findings route to contributor correction or factory Rework. Waiting CI does not consume an AI session or necessarily require a human decision; only actual uncertainty/approval needs escalate.
+- Enhancement and feature scope and acceptance criteria, `wontfix`, high-risk work, and changes to workflows, standing orders, access policy, `MAINTAINERS`, or Warden's own authority need the maintainer.
+- The decision corpus informs proposals for expanding narrowly scoped standing authority. A maintainer approves each expansion before it takes effect; historical agreement alone never grants new permissions.
+- Discord can carry revision-bound approval decisions from explicitly authorized maintainer identities. Record them on GitHub before acting. A Warden approval does not bypass repository-required reviews or checks.
+- One-time action approvals expire after 24 hours by default, configurable, or earlier on invalidated inputs. Approved design/scope persists until materially changed; silence and expiry never grant consent.
+- Routine verified automation-origin dependency/CVE fixes auto-approve/merge within authority. Breaking, migration and high-impact changes escalate unless specifically preauthorized.
 
 ## Consequences
 

@@ -1,6 +1,6 @@
 # Triage is a factory built-in task; no repo-supplied commands
 
-- **Status:** Accepted
+- **Status:** Draft
 - **Date:** 2026-11-16 (revised from 2026-11-11)
 - **Decided by:** @trek-e
 
@@ -10,12 +10,14 @@ The first design wrapped a command the pilot repo already had, which coupled the
 
 ## Decision
 
-- Triage is a factory built-in task: it root-causes the report, classifies severity and applies labels. Its behavior was adapted from what works on the pilot repo, but it is Warden's own and documented in our terms.
-- No task accepts a repo-supplied command. Repos configure behavior (labels, thresholds, voice) — never task logic.
-- The confirmation rule is configuration: root-causing a defect applies `confirmed-bug` (on by default for the pilot repo). Enhancement and feature approval stays with the maintainer.
+- Triage is a local AI factory built-in: investigate reports against current code, confirm defects with evidence, and classify kind, severity and change risk separately. Deterministic Actions Intake only routes metadata and explicit rules.
+- Repositories configure built-in behavior, never executable task orchestration. Trusted, maintainer-authorized build/lint/test commands are permitted for isolated verification, not as substitute task programs.
+- Features and enhancements receive a design proposal with scope, observable acceptance criteria, affected areas, blast radius, alternatives and uncertainty. Maintainer approval is required before implementation. Material design changes require renewed approval.
+- Triage proposes validated state/label intents through the shared serialized writer. It never advances a completed-review marker.
 
 ## Consequences
 
-- Faster flow from report to `ready-for-agent`; implement still writes a failing-first test before fixing, so a test exists before any fix merges.
-- Confirmation quality depends on the built-in triage; misconfirmations surface at the human gate and in retro.
+- Confirmed unclaimed bugs within authority can become implementation-ready; an active contributor claim does not.
+- Implementation requires appropriate fail-before/pass-after evidence: static checks for structural defects, dynamic reproduction for behavioral defects. Test count is not proof of correctness.
+- Confirmation quality is measured in replay and live outcomes; uncertainty escalates rather than becoming an unsupported confirmation.
 - The factory's task surface is closed: what it does is known, reviewed and versioned with the package.

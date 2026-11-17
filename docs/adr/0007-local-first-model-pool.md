@@ -1,6 +1,6 @@
 # Local-first model pool: local is the default floor, remote is opt-in, never a silent fallback
 
-- **Status:** Accepted
+- **Status:** Draft
 - **Date:** 2026-11-16
 - **Decided by:** @trek-e
 
@@ -10,8 +10,8 @@ The original constraint was "no API-key calls" (a subscription agent). The open-
 
 ## Decision
 
-- The model pool has a floor and a ceiling: local models (Mac MLX via LM Studio) are the default for all tasks; a remote high-end tier is opt-in config, enabled per task class only where the measured quality delta justifies it.
-- The runner's preflight confirms (1) the default tier is local, (2) any remote use is explicitly configured, and (3) no silent fallback to a paid or remote model exists. A batch that cannot run local ends cleanly rather than escalating silently.
+- MVP inference is local-only, initially Mac with LM Studio or an explicitly configured local compatible service. Remote per-task opt-in with budgets is deferred, not an MVP fallback.
+- Preflight the actual resolved provider/model, not only defaults. Reject unapproved remote routing, preserve pending work and report local unavailability. OpenAI-compatible API syntax does not imply use of OpenAI's hosted service.
 - An orchestrator/worker split (a strong model used lightly to plan, route and verify; local models do the token-heavy work) is v1.x, gated by benchmark replay of Warden's own past tasks.
 
 ## Consequences

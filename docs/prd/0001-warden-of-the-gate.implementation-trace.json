@@ -1,0 +1,197 @@
+{
+  "adr": "Warden PRD 0001 and draft ADRs 0001-0012, owner-reviewed 2026-11-17",
+  "plan": "0001-warden-of-the-gate.implementation-plan.md",
+  "status": "Proposed delivery ownership; planning coverage is not implementation proof",
+  "decisions": [
+    {"id": "PROOF-inbox", "title": "Prove durable admission, serialization, recovery, ownership races and cross-host stop controls", "source": "PRD 4,12; ADR 0012", "user_facing": false},
+    {"id": "PROOF-runtime", "title": "Pin OpenCode and prove effective restrictions, local routing, cancellation and real isolation", "source": "PRD 3,9,12; ADR 0004,0006,0007,0009", "user_facing": false},
+    {"id": "PROOF-lookup", "title": "Prove compiler-backed lookup and supported SDK feasibility; identify a viable comparison candidate", "source": "PRD 7,12", "user_facing": false},
+    {"id": "CORE-instances", "title": "One repository per instance with separate mutable state and authority on shared hosts", "source": "PRD 2,8; ADR 0005,0009", "user_facing": false},
+    {"id": "CORE-config", "title": "Two versioned YAML schemas, canonical setting homes, explicit defaults and combined validation", "source": "PRD 10; ADR 0005,0010", "user_facing": false},
+    {"id": "CORE-authority", "title": "Closed built-ins, operator ceiling, deny/human precedence and no self-authorizing policy or task code", "source": "PRD 3,10; ADR 0001,0009,0010", "user_facing": false},
+    {"id": "CORE-state", "title": "Typed semantic states, facets, blockers, leases, ownership, links and review/evidence/operation identities", "source": "PRD 4; ADR 0005,0012", "user_facing": false},
+    {"id": "CORE-writer", "title": "One authoritative comment per item, projected labels, durable intents/journal and shared serialized Actions effects", "source": "PRD 4; ADR 0003,0012", "user_facing": false},
+    {"id": "CORE-credentials", "title": "Bounded automatic scoped App credential lifecycle, protected roots, opt-out and honest recovery", "source": "PRD 3,9; ADR 0011", "user_facing": false},
+    {"id": "CORE-stop", "title": "Global/instance stop, cancellation, explicit resume, unknown-control denial and uncertain-effect recovery", "source": "PRD 9; ADR 0012", "user_facing": false},
+    {"id": "CORE-approvals", "title": "Authorized GitHub-native decisions persisted before effect; revision-bound 24-hour action approvals and durable design approval", "source": "PRD 3,8; ADR 0008,0010,0012", "user_facing": false},
+    {"id": "CORE-storage", "title": "Protected/redacted state with actual durability checks and transcript/audit/decision retention separated from first write", "source": "PRD 4,9", "user_facing": false},
+    {"id": "UX-setup", "title": "Operator can run warden setup without overwriting config, adopting backlog or enabling live AI", "source": "PRD 10; ADR 0005", "user_facing": true},
+    {"id": "UX-config", "title": "Operator can run warden config validate for effective constraints and actionable errors", "source": "PRD 10; ADR 0010", "user_facing": true},
+    {"id": "UX-status", "title": "Operator can run warden status without inference, including pending work, recovery and freshness", "source": "PRD 9,10", "user_facing": true},
+    {"id": "UX-stop", "title": "Operator can run warden stop and distinguish local cancellation from confirmed shared stop", "source": "PRD 9,10", "user_facing": true},
+    {"id": "UX-resume", "title": "Operator can run warden resume without launching AI or resetting authority/counters", "source": "PRD 9,10", "user_facing": true},
+    {"id": "OPS-intake", "title": "Deterministic metadata/template/rule routing without semantic duplicate decisions or review markers", "source": "PRD 5 Intake; ADR 0001", "user_facing": false},
+    {"id": "OPS-claims", "title": "Immediate eligible claims, accountable assignee, confirmed assignment and conflict-safe ownership", "source": "PRD 5 Claim; ADR 0002,0012", "user_facing": false},
+    {"id": "OPS-deadlines", "title": "48-hour initial/substantive-fix obligations, timely delivery assessment, approved extensions and frozen unexpired holds", "source": "PRD 5 Claim; ADR 0002", "user_facing": false},
+    {"id": "OPS-sweep", "title": "48/72-hour nudges, five-day silence, 14/28-day reporter clocks, exemptions and explained takeover eligibility", "source": "PRD 5 Sweep; ADR 0002", "user_facing": false},
+    {"id": "OPS-drafts", "title": "Default-disabled new/converted drafts, optional exemptions and deliberate existing-draft adoption", "source": "PRD 6; ADR 0002", "user_facing": false},
+    {"id": "OPS-adoption", "title": "Explicit inventory/selection, preserved ownership/commitments and nonretroactive notice-based clocks", "source": "PRD 6,10; ADR 0005", "user_facing": false},
+    {"id": "OPS-attribution", "title": "Configurable App-attributed voice distinguishes automated and AI output without impersonation or hardcoded vendor", "source": "PRD 5; ADR 0003", "user_facing": false},
+    {"id": "OPS-external", "title": "Reconcile source timestamps and outside GitHub changes without reopening closed work or treating stop as an extension", "source": "PRD 4,5,9; ADR 0012", "user_facing": false},
+    {"id": "UX-intake", "title": "Operator/event handlers can invoke deterministic Intake through the shared writer", "source": "PRD 5,10; ADR 0001,0004", "user_facing": true},
+    {"id": "UX-claim", "title": "Contributors can volunteer through the registered claim handler and see confirmed assignment or conflict", "source": "PRD 5 Claim; ADR 0002", "user_facing": true},
+    {"id": "UX-sweep", "title": "Scheduled Actions and the CLI can invoke Sweep while the Mac/model are offline", "source": "PRD 5 Sweep,10; ADR 0002,0004", "user_facing": true},
+    {"id": "UX-adopt", "title": "Operator can inventory and explicitly adopt selected backlog separately from setup", "source": "PRD 6,10; proposed command spelling in plan P2", "user_facing": true},
+    {"id": "AI-adapter", "title": "Thin AgentRunner with fixed inputs/tools, Ajv-revalidated structured output and deterministic semantic validation", "source": "PRD 3,5; ADR 0006", "user_facing": false},
+    {"id": "AI-local", "title": "Actual resolved local provider/model and permissions enforced, with no silent remote fallback", "source": "PRD 2,9; ADR 0004,0006,0007", "user_facing": false},
+    {"id": "AI-scans", "title": "Manual bounded snapshot scans, fresh serial sessions, persistent retry/resource limits, checkpoint/report/exit", "source": "PRD 9; ADR 0004,0005,0007", "user_facing": false},
+    {"id": "AI-queue", "title": "Explicit urgency/finish-work priority with age/capacity fairness, preserved blocked age and no feature starvation", "source": "PRD 9", "user_facing": false},
+    {"id": "AI-triage", "title": "Evidence-backed bugs, separate facets and approved feature/enhancement design with uncertainty/wontfix escalation", "source": "PRD 5 Triage; ADR 0001", "user_facing": false},
+    {"id": "AI-review", "title": "Read-only precise findings, accepted review identity, delta/material invalidation, unchanged reuse and CI-only gate reevaluation", "source": "PRD 4,5 Review; ADR 0006,0008", "user_facing": false},
+    {"id": "AI-verification", "title": "Independent trusted baseline/candidate evidence, static-first ladder, behavioral checks and control-weakening detection", "source": "PRD 3,7; ADR 0001,0009", "user_facing": false},
+    {"id": "AI-lookup", "title": "Compiler-backed definitions/references/impact with verifiable revision/context/freshness and explicit degradation", "source": "PRD 7,12", "user_facing": false},
+    {"id": "AI-graph", "title": "Measured baseline versus pinned Atlas and SCIP or CodeGraphContext comparison before mandatory graph selection", "source": "PRD 7,12", "user_facing": false},
+    {"id": "AI-sdk", "title": "Actual supported SDK/API/deployment-target enforcement separate from retrieval with unsupported checks visible", "source": "PRD 7,12", "user_facing": false},
+    {"id": "AI-decisions", "title": "Scoped retrieval preserves denials, reasoning and conflicts; evidence-linked reconsideration without authority transfer", "source": "PRD 8; ADR 0010", "user_facing": false},
+    {"id": "UX-run", "title": "Operator can run bounded warden run with task selection and distinguish shadow from global dry-run", "source": "PRD 9,10,11; ADR 0004", "user_facing": true},
+    {"id": "UX-triage", "title": "Operator can invoke Triage and inspect local shadow proposals and blockers", "source": "PRD 5 Triage,10; ADR 0001", "user_facing": true},
+    {"id": "UX-review", "title": "Operator can invoke Review and inspect precise accepted/current versus stale findings without branch edits", "source": "PRD 5 Review,10; ADR 0008", "user_facing": true},
+    {"id": "FACTORY-implement", "title": "Factory-owned bug/approved-feature implementation with scope recheck, cap, evidence and Merge Danger", "source": "PRD 5 Implement; ADR 0005,0008,0009", "user_facing": false},
+    {"id": "FACTORY-takeover", "title": "Trusted-base takeover evaluates abandoned work as data, preserves issue and credits sound contributions", "source": "PRD 5 Implement; ADR 0002,0009", "user_facing": false},
+    {"id": "FACTORY-rework", "title": "Factory-only corrections with persistent three-cycle/no-progress/retry accounting and timely contributor-round escalation", "source": "PRD 5 Claim/Rework; ADR 0002,0008", "user_facing": false},
+    {"id": "FACTORY-merge", "title": "Eligible contributor/factory auto-merge checks all current platform/evidence/authority/approval gates and reconciles actual outcome", "source": "PRD 3,4,5 Review; ADR 0008,0012", "user_facing": false},
+    {"id": "FACTORY-risk", "title": "Independent risk/severity gates, high-risk/authority changes, verified dependency origin and legitimate approval independence", "source": "PRD 3; ADR 0008,0010", "user_facing": false},
+    {"id": "FACTORY-containment", "title": "Critical-escape scope pause, evidence/alerting and current-state-aware targeted remediation with reviewed resume", "source": "PRD 9", "user_facing": false},
+    {"id": "UX-implement", "title": "Operator can invoke Implement for bugs and approved features and inspect PR evidence or escalation", "source": "PRD 5 Implement,10", "user_facing": true},
+    {"id": "UX-rework", "title": "Operator can invoke Rework only on factory branches and inspect cycle/verification outcomes", "source": "PRD 5 Rework,10", "user_facing": true},
+    {"id": "HUMAN-discord", "title": "Outbound Gateway approval cards use authorized user IDs, non-sensitive summaries and GitHub-first persistence/fallback", "source": "PRD 8; ADR 0008", "user_facing": false},
+    {"id": "HUMAN-retro", "title": "Manual evidence-backed Retro proposals improve design/static/runtime/rules without quotas, training or automatic authority expansion", "source": "PRD 5 Retro,8; ADR 0008,0010", "user_facing": false},
+    {"id": "HUMAN-data", "title": "Scoped export/purge, configurable transcript expiry and separate decision/audit/recovery safeguards", "source": "PRD 9,10", "user_facing": false},
+    {"id": "HUMAN-helper", "title": "Optional Discord/credential helper stays available without initiating inference", "source": "PRD 2,8,9; ADR 0004,0011", "user_facing": false},
+    {"id": "UX-discord", "title": "Authorized maintainer can use precise approve/deny buttons without a public ingress or required-review bypass", "source": "PRD 8; ADR 0008", "user_facing": true},
+    {"id": "UX-retro", "title": "Operator can invoke warden run --task retro and inspect a justified improvement PR or no-change result", "source": "PRD 5 Retro,10", "user_facing": true},
+    {"id": "UX-export", "title": "Operator can invoke warden data export with explicit scoped selection and redaction", "source": "PRD 9,10", "user_facing": true},
+    {"id": "UX-purge", "title": "Operator can invoke warden data purge with explicit scope/confirmation and retention/recovery safeguards", "source": "PRD 9,10", "user_facing": true},
+    {"id": "SHIP-package", "title": "Versioned scoped TypeScript/Node npm/CLI candidate with owned publish identity, schemas, changelog and compatibility", "source": "PRD 2,10,12; ADR 0005", "user_facing": false},
+    {"id": "SHIP-upgrade", "title": "Dry-run schema/config/behavior diff and approved upgrade without silent changes to authority, checks or clocks", "source": "PRD 10; ADR 0005,0010", "user_facing": false},
+    {"id": "SHIP-docs", "title": "Prepared-Mac quickstart, tested prerequisites/recovery and configuration-only adoption with no pilot-specific task code", "source": "PRD 2,9,10,12; ADR 0005,0009,0011", "user_facing": false},
+    {"id": "UX-install", "title": "Operator can install the scoped candidate and reach every promised task and management command", "source": "PRD 2,10; ADR 0005", "user_facing": true},
+    {"id": "UX-upgrade", "title": "Operator can run warden upgrade --dry-run before an explicitly approved upgrade", "source": "PRD 10; ADR 0005", "user_facing": true},
+    {"id": "QUAL-replay", "title": "Curated 20-PR/20-issue replay, separate 90% agreement, 10 blocking findings and every critical case detected", "source": "PRD 11", "user_facing": false},
+    {"id": "QUAL-recovery", "title": "Final installed-candidate functional/recovery matrix with zero unauthorized effects, duplicate accepted reviews or lost state", "source": "PRD 11 required evidence 1-15", "user_facing": false},
+    {"id": "QUAL-metrics", "title": "Publish tested hardware/runtime/harness/model/compiler/SDK matrix, finite pilot budgets and outcome/wait/resource/lookup metrics", "source": "PRD 11,12", "user_facing": false},
+    {"id": "QUAL-activation", "title": "Explicit evidence-reviewed maintainer live authorization, eligible auto-merge default and separately authorized publication", "source": "PRD 3,11,12; ADR 0008", "user_facing": false},
+    {"id": "UX-activate", "title": "Operator can explicitly enable selected qualified live scope through a distinct setup step and inspect its receipt", "source": "PRD 10,11; proposed activation setup surface in plan P7", "user_facing": true}
+  ],
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Capability proofs",
+      "depends_on": [],
+      "owns": ["PROOF-inbox", "PROOF-runtime", "PROOF-lookup"],
+      "accepts": [
+        "Documented proof commands demonstrate a concrete durable inbox and shared writer under queue overflow, crashes, uncertain effects, ownership races and cross-host stop controls.",
+        "Pinned OpenCode proves fresh structured sessions, effective restrictions, resolved local routing, cancellation and real containment without home credentials, unrelated files or unrestricted network.",
+        "A compiler-backed lookup/SDK feasibility case identifies supported checks and a viable SCIP or CodeGraphContext comparison candidate."
+      ],
+      "defers": [{"to": "P1", "what": "CORE-writer"}, {"to": "P1", "what": "CORE-credentials"}, {"to": "P1", "what": "CORE-stop"}, {"to": "P3", "what": "AI-graph"}, {"to": "P3", "what": "AI-sdk"}]
+    },
+    {
+      "id": "P1",
+      "name": "Secure walking skeleton",
+      "depends_on": ["P0"],
+      "owns": ["CORE-instances", "CORE-config", "CORE-authority", "CORE-state", "CORE-writer", "CORE-credentials", "CORE-stop", "CORE-approvals", "CORE-storage", "UX-setup", "UX-config", "UX-status", "UX-stop", "UX-resume"],
+      "accepts": [
+        "Separate instances preserve repository-specific state/authority; typed states/facets and two validated versioned YAML schemas enforce canonical homes, explicit defaults, deny/human precedence and approved operator ceilings.",
+        "User can run warden setup, warden config validate and warden run --task intake --dry-run through the real core; setup creates approved missing files/labels only and never adopts or activates.",
+        "User can run warden status without a model to inspect deadlines, last sweep, pending/uncertain operations, blockers, credential/stop status and evidence freshness.",
+        "User can run warden stop and warden resume with local-versus-confirmed-remote acknowledgements, cancellation, fail-closed unknown controls, preserved counters and no implicit inference; shared writer operating modes enforce global dry-run against all sources and queued effects.",
+        "The proven inbox, journal and serialized Actions writer persist/reconcile all effects and projections without a competing ledger or local write fallback.",
+        "Scoped App credentials renew/rotate/recover automatically with bounded redacted audit, opt-out and no broader-PAT or revocation bypass; roots/write tokens stay outside workers.",
+        "The GitHub-native authorized decision handler records approvals/denials before action, enforces 24-hour revision/policy/evidence-bound action expiry and durable design approval, and protects/redacts retained state from first write."
+      ],
+      "defers": [{"to": "P2", "what": "OPS-intake"}, {"to": "P2", "what": "UX-adopt"}, {"to": "P3", "what": "UX-run"}, {"to": "P5", "what": "UX-export"}, {"to": "P5", "what": "UX-purge"}, {"to": "P6", "what": "UX-install"}, {"to": "P6", "what": "UX-upgrade"}]
+    },
+    {
+      "id": "P2",
+      "name": "Deterministic housekeeping and adoption",
+      "depends_on": ["P1"],
+      "owns": ["OPS-intake", "OPS-claims", "OPS-deadlines", "OPS-sweep", "OPS-drafts", "OPS-adoption", "OPS-attribution", "OPS-external", "UX-intake", "UX-claim", "UX-sweep", "UX-adopt"],
+      "accepts": [
+        "User can run warden run --task intake, --task claim and --task sweep; registered event/scheduled handlers use the same writer while the Mac/model are offline.",
+        "The registered volunteering handler confirms one eligible owner after GitHub assignment; conflicting/unauthorized claims and factory races cannot overwrite ownership.",
+        "48-hour delivery/substantive-fix windows, earlier commitments, pre-expiry approved extensions, holds/release and actual timely submission timestamps survive delayed review, CI and stop; placeholder pushes/comments never renew delivery.",
+        "Sweep handles separate 48/72-hour nudges, five-day response closure, 14/28-day reporter clocks, exemptions, explained closure/released assignment and retained issue/work references.",
+        "Draft policy covers opened and converted drafts with valid claims retained; source-state reconciliation never reopens intentionally closed work and author/CI observations do not start AI.",
+        "User can invoke the separately exposed adoption CLI for dry-run inventory and explicit selected-item confirmation; settle proposed warden adopt syntax in the PRD before implementation, preserve ownership and publish nonretroactive notice clocks.",
+        "Contributor-facing messages use configured App/voice, distinguish AI assistance from deterministic housekeeping, and do not impersonate a maintainer; optional live housekeeping requires explicit separate authorization."
+      ],
+      "defers": []
+    },
+    {
+      "id": "P3",
+      "name": "Bounded local Triage and Review",
+      "depends_on": ["P2"],
+      "owns": ["AI-adapter", "AI-local", "AI-scans", "AI-queue", "AI-triage", "AI-review", "AI-verification", "AI-lookup", "AI-graph", "AI-sdk", "AI-decisions", "UX-run", "UX-triage", "UX-review"],
+      "accepts": [
+        "User can run warden run [--task <name>] [--dry-run], warden run --task triage and warden run --task review through fresh serial pinned OpenCode sessions with no inference daemon; global dry-run confirms writer-wide mutation prohibition including housekeeping/queued effects or reports unconfirmed protection, unlike AI-only shadow.",
+        "Ajv and deterministic semantic validation reject malformed/unsafe results; actual local routing/tool permissions are checked each execution and failures preserve work without remote fallback.",
+        "Snapshot selection, urgent/finish-work priority, age/capacity fairness, cap-aware deferral and persistent finite item/turn/time/context/resource/retry budgets report and exit without waiting on humans/CI.",
+        "Triage returns evidence-backed bug classifications or uncertainty and complete feature/design proposals requiring approval; read-only Review emits precise findings and alone advances accepted markers.",
+        "Unchanged reviews are reused, delta/material base/policy/evidence changes revalidate affected conclusions, and CI/approval-only updates perform no inference.",
+        "Trusted isolated verification captures baseline/candidate commands, inputs, output and artifacts independently of the model, detects weakening and requires appropriate static versus behavioral evidence.",
+        "Compiler-backed lookup provides revision/context/freshness-bound definitions/references; pinned Atlas and SCIP or CodeGraphContext are compared with accuracy/citations/impact/latency/memory/token evidence before graph selection.",
+        "Actual SDK/API/deployment-target checks publish supported/unsupported coverage and block missing mandatory evidence; scoped decision retrieval honors denials/conflicts and requires evidence-linked reconsideration."
+      ],
+      "defers": [{"to": "P4", "what": "UX-implement"}, {"to": "P4", "what": "UX-rework"}, {"to": "P4", "what": "FACTORY-merge"}, {"to": "P5", "what": "UX-discord"}, {"to": "P5", "what": "UX-retro"}, {"to": "P5", "what": "UX-export"}, {"to": "P5", "what": "UX-purge"}, {"to": "P7", "what": "QUAL-metrics"}, {"to": "P7", "what": "QUAL-replay"}]
+    },
+    {
+      "id": "P4",
+      "name": "Complete factory and merge loop",
+      "depends_on": ["P3"],
+      "owns": ["FACTORY-implement", "FACTORY-takeover", "FACTORY-rework", "FACTORY-merge", "FACTORY-risk", "FACTORY-containment", "UX-implement", "UX-rework"],
+      "accepts": [
+        "User can run warden run --task implement and warden run --task rework on factory workspaces; bug and approved-feature paths produce independently verified PRs with Merge Danger and no premature review marker.",
+        "Factory ownership/cap and approved scope are rechecked; credited trusted-base takeover never edits or blindly executes contributor branches.",
+        "Three factory cycles, no-progress completion, separate retry exhaustion and three timely contributor fix rounds persist across cold starts/replacement PRs; third-cycle success completes and unresolved timely work escalates without automatic closure.",
+        "Both contributor and factory PRs can merge only with current authorized scope, severity/risk gates, independent evidence, required genuine reviews/checks, expected head and refreshed base/policy/approval/hold/stop context.",
+        "Verified automation-origin dependency/CVE fixes remain within authority; high-risk/uncertain/breaking/migration and self-authority changes escalate; an App cannot approve its own PR as an independent identity.",
+        "Lost replies, duplicate/stale delivery and already-accepted external effects reconcile without duplicate accepted work; linked issues resolve only for actual satisfied merged scope.",
+        "A critical escape pauses affected scope with evidence/alerting and targeted current-state-aware remediation; reviewed explicit resume is required. All integration mutations remain disposable-repository-only."
+      ],
+      "defers": []
+    },
+    {
+      "id": "P5",
+      "name": "Discord, Retro and data controls",
+      "depends_on": ["P4"],
+      "owns": ["HUMAN-discord", "HUMAN-retro", "HUMAN-data", "HUMAN-helper", "UX-discord", "UX-retro", "UX-export", "UX-purge"],
+      "accepts": [
+        "Authorized maintainers can use Discord approve/deny buttons with explicit user-ID mapping, precise revision/policy/risk/evidence context and non-sensitive summaries via outbound Gateway.",
+        "Decisions persist through the GitHub writer before action; stale/duplicate/unauthorized clicks grant nothing and the GitHub-native path remains usable through Discord/helper/model outages.",
+        "The optional standalone helper starts without public ingress or model invocation and preserves bounded credential-controller authority.",
+        "User can run warden run --task retro to inspect an evidence-backed improvement PR or justified no-change result; history informs proposals but never silently expands authority or trains a model.",
+        "User can run warden data export and warden data purge with explicit scoped selection/confirmation, redaction, real durability/error receipts and pending-recovery safeguards.",
+        "Transcript expiry defaults to 30 days while decisions remain until explicit removal and configurable security-audit retention stays separate."
+      ],
+      "defers": []
+    },
+    {
+      "id": "P6",
+      "name": "Release candidate and upgrade path",
+      "depends_on": ["P5"],
+      "owns": ["SHIP-package", "SHIP-upgrade", "SHIP-docs", "UX-install", "UX-upgrade"],
+      "accepts": [
+        "User can install the packed scoped npm/TypeScript/Node CLI candidate on a supported prepared Mac and invoke all eight tasks and promised management commands outside the source tree.",
+        "Owned scope/availability is confirmed before publication; schemas/orders/changelog and tested prerequisites/recovery/compatibility notes ship without secrets, personal paths or a prototype production dashboard.",
+        "User can run warden upgrade --dry-run to inspect schema/config/default/behavior differences; applying an explicit approved upgrade never silently expands authority or weakens checks/clocks.",
+        "The quickstart covers setup, separate adoption, shadow/dry-run, independent housekeeping, approvals, stop/resume, recovery and data controls without undocumented steps, and a second repository works by configuration alone."
+      ],
+      "defers": [{"to": "P7", "what": "QUAL-replay"}, {"to": "P7", "what": "QUAL-metrics"}, {"to": "P7", "what": "QUAL-activation"}]
+    },
+    {
+      "id": "P7",
+      "name": "Qualification and explicit activation",
+      "depends_on": ["P6"],
+      "owns": ["QUAL-replay", "QUAL-recovery", "QUAL-metrics", "QUAL-activation", "UX-activate"],
+      "accepts": [
+        "Maintainer-curated replay covers at least 20 PRs and 20 issues, at least 10 blocking findings, separate at-least-90-percent blocking-finding/triage agreement denominators and every curated critical case, with misses reported.",
+        "The final installed candidate passes all 15 PRD functional/recovery evidence rows with zero unauthorized effects, duplicate accepted unchanged reviews or lost-state recovery failures.",
+        "Published measured finite budgets and hardware/OS/runtime/harness/model/isolation/compiler/SDK matrix accompany status/run-report state/age/wait/outcome/recovery/token/resource/lookup metrics.",
+        "User can run the warden setup CLI and explicitly enable selected qualified live scope through a distinct activation step, then inspect its protected receipt in warden status; ordinary setup, repository defaults, replay success and elapsed time cannot activate.",
+        "Maintainer reviews the evidence and separately authorizes live scope and any publication/tagging; eligible auto-merge becomes default only inside that authorization, with stop/incident recovery available."
+      ],
+      "defers": []
+    }
+  ]
+}

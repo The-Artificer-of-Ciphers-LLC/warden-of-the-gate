@@ -1,6 +1,6 @@
 # Harness differences live in AgentRunner adapters; the core is harness-agnostic
 
-- **Status:** Accepted
+- **Status:** Draft
 - **Date:** 2026-11-16
 - **Decided by:** @trek-e
 
@@ -12,10 +12,12 @@ Warden must run on open harnesses (opencode, pi; Bionic interactive), and each d
 
 - A thin `AgentRunner` interface is the only seam between warden-core and a harness: an adapter launches a session with fixed inputs (packet files, tool surface, result schema) and returns a structured result plus transcript path.
 - The runner re-validates every `structuredOutput` with Ajv regardless of which harness produced it. Harness differences (how structured output is obtained, how tools are pinned) live inside each adapter.
-- v1 adapters: opencode (official SDK, in-process; native JSON-schema output) and pi (official SDK; structured output via prompt-level or model-layer schema enforcement). Bionic is an interactive surface, not a batch adapter — it has no headless session control (verified).
+- The MVP validates one OpenCode adapter first. Pi follows against the same contract; Bionic is an optional interactive surface, not a required batch adapter. Select and pin the supported harness version through a capability spike rather than copying historical SDK examples.
+- Harness defaults are not Warden policy. Validate effective tool permissions, resolved models, and policy behavior against Warden's own contracts, including no silent remote fallback and restrictive standing-order precedence.
 - warden-core (state machine, ledger, gates, poster, sweep) is untouched by harness choice.
 
 ## Consequences
 
 - Adding a harness means adding an adapter plus its preflight; the core, config schema and result contracts stay stable.
-- The Ajv-validation invariant is what makes "any open harness" safe: a hostile or malformed result fails validation and never reaches the poster.
+- Ajv rejects malformed results, but valid JSON is not evidence of safe intent. The deterministic core also validates scope, identities, current revisions/policy, evidence and approvals before submitting any effect.
+- Effective tool permissions, actual local provider resolution, cancellation, isolation and protected verification results require capability tests against the pinned harness. Adapter availability alone does not establish safety.

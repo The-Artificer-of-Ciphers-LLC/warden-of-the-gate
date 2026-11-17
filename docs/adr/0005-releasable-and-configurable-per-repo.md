@@ -1,6 +1,6 @@
 # Ship as one package, tailored for the pilot repo first and configurable per repo
 
-- **Status:** Accepted
+- **Status:** Draft
 - **Date:** 2026-11-16 (revised from 2026-11-11)
 - **Decided by:** @trek-e
 
@@ -10,11 +10,14 @@ The maintainer wants this as "a releasable solution", tailored for the pilot rep
 
 ## Decision
 
-- One npm package `warden` (TypeScript/Node, bun-compatible): warden-core plus the opencode and pi adapters, esbuild-bundled into committed `dist/*.mjs`, no runtime dependencies.
-- **Core** (same for every repo): state machine, ledger format, one-item-per-session batches, delta review, specialists, verifier, gate cards, guardrails, stale logic, runner and schedule.
-- **Per repo** (`.github/warden.yml`): label names, base branch, maintainers, voice and posting account, harness selection, execution mode, finding-severity merge gates, stale clocks, tier paths, throttles, batch size and schedule, kill switch name.
-- Distribution: npm plus tagged releases with a changelog; the config carries a schema version so upgrades don't silently break a repo. A container image covers Docker and Kubernetes deployment (still self-operated — local-first applies).
-- `warden setup` writes a starter config and creates missing labels without any AI.
+- Ship a versioned TypeScript/Node CLI/npm bundle for a maintainer-operated Mac, with the OpenCode adapter first. Pi and Warden Docker distribution follow MVP validation; Helm is not MVP.
+- Keep the executable name `warden`, but use an operator-owned npm scope: the unrelated unscoped package is already occupied. Confirm the exact publish identity before release.
+- **Core:** built-in eight-task loop, semantic state/facets, durable ledgers/intents, review identity/deltas, evidence gates, decisions, stop/recovery and bounded scans. No repository-specific task code.
+- **Operational configuration:** `.github/warden.yml` owns identities, label mappings, local runtime, finite budgets, clocks, draft/severity policy, notifications and retention.
+- **Standing authority:** `.github/ORDERS.yaml` owns declarative task scopes, restrictions and human gates. Publish and jointly validate versioned schemas with one canonical home per setting.
+- Tagged releases include a changelog, Mac quickstart and tested runtime/harness/model/isolation matrix. No untested promise of zero dependencies or universal harness compatibility.
+- `warden setup` creates approved missing starter files/labels without AI and never overwrites existing configuration. Existing backlog requires separate dry-run inventory and explicit adoption.
+- Upgrades show a dry-run behavior/configuration diff. New defaults cannot silently change authority, checks or clocks; policy changes require approval.
 
 ## Consequences
 
