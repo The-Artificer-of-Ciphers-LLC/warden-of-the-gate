@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Warden workflow prototype</title>
+  <style>
+    :root { color-scheme: light; --ink: #172433; --muted: #526170; --line: #d7dfe7; --blue: #245cbd; --soft: #edf3fd; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7f9; color: var(--ink); font: 15px/1.55 system-ui, sans-serif; }
+    main { max-width: 1240px; margin: auto; padding: 38px 28px 60px; }
+    h1 { font-size: clamp(29px, 4vw, 43px); letter-spacing: -.04em; line-height: 1.15; margin: 12px 0; }
+    h2 { font-size: 19px; margin: 0 0 14px; letter-spacing: -.02em; }
+    h3 { font-size: 14px; margin: 0 0 10px; }
+    p { margin: 8px 0 16px; }
+    .eyebrow { color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    .intro { max-width: 870px; color: var(--muted); font-size: 16px; }
+    .warning { background: white; border: 1px solid var(--line); padding: 12px 16px; border-left: 3px solid var(--blue); margin: 20px 0; }
+    .toolbar, .buttons, .tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .toolbar { justify-content: space-between; margin: 22px 0 15px; }
+    button { font: inherit; font-size: 13px; font-weight: 580; background: white; border: 1px solid #bac7d4; color: var(--ink); padding: 8px 12px; border-radius: 6px; cursor: pointer; text-align: left; }
+    button:hover { border-color: var(--blue); background: var(--soft); }
+    button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    .primary, button[aria-selected="true"] { background: var(--blue); color: white; border-color: var(--blue); }
+    .primary:hover, button[aria-selected="true"]:hover { background: #17488f; color: white; }
+    .clock { font-variant-numeric: tabular-nums; font-weight: 650; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .panel, .card { background: white; border: 1px solid var(--line); border-radius: 9px; padding: 19px; }
+    .card h2 { font-size: 14px; color: var(--muted); }
+    .big { font-size: 21px; font-weight: 720; margin-bottom: 12px; overflow-wrap: anywhere; }
+    dl { margin: 0; }
+    .field { border-top: 1px solid #edf0f3; padding: 7px 0; }
+    dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+    #notice { position: sticky; top: 8px; z-index: 2; padding: 13px 16px; border-radius: 7px; background: var(--soft); border: 1px solid #c6d8fa; margin: 14px 0 24px; min-height: 50px; }
+    #notice[data-blocked="true"] { background: #fff5f4; border-color: #e6bab5; color: #81382f; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+    .stack { display: grid; gap: 18px; }
+    .small, .hint { color: var(--muted); font-size: 13px; }
+    .tabs { align-items: stretch; margin-bottom: 16px; }
+    .tabs button { font-size: 12px; flex: 1 1 110px; }
+    #steps { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 7px; }
+    #steps button { width: 100%; }
+    #steps .done { color: var(--muted); background: #f6f8fa; }
+    .step-number { display: inline-block; width: 24px; font-variant-numeric: tabular-nums; }
+    .action-group { padding: 14px 0; border-top: 1px solid var(--line); }
+    .action-group:first-child { padding-top: 0; border: 0; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    label { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+    input { accent-color: var(--blue); width: 16px; height: 16px; flex-shrink: 0; }
+    #gates { padding-left: 19px; font-size: 13px; }
+    #log { padding-left: 20px; font-size: 12px; max-height: 290px; overflow: auto; }
+    #log li { margin-bottom: 9px; }
+    details { margin-top: 18px; }
+    summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; max-height: 360px; overflow: auto; background: #f4f6f8; padding: 14px; }
+    footer { color: var(--muted); font-size: 12px; margin-top: 26px; }
+    @media (max-width: 1000px) { .cards { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 550px) { main { padding: 24px 14px; } .cards, .controls { grid-template-columns: 1fr; } .toolbar { align-items: start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Warden of the Gate / throwaway logic prototype</div>
+    <h1>The factory, one decision at a time.</h1>
+    <p class="intro">Can a bug or approved feature move through the eight-task loop without stealing a claim, losing a deadline, repeating an accepted review, or merging stale work? Explore the rules before building the real factory.</p>
+    <div class="warning"><strong>Offline simulation only.</strong> No GitHub, model, credentials, network requests or saved data. Refreshing wipes everything. Buttons simulate outcomes; they do not prove model quality, SDK enforcement, durable storage or execution isolation.</div>
+  </header>
+
+  <div class="toolbar">
+    <div><div class="eyebrow">Simulated clock / elapsed hours</div><div class="clock" id="clock"></div></div>
+    <div class="buttons">
+      <button data-time="12">+12 hours</button><button data-time="24">+24 hours</button><button data-time="48">+48 hours</button>
+      <button id="new-bug">New bug</button><button id="new-feature">New feature</button>
+    </div>
+  </div>
+  <section class="cards" id="state-cards" aria-label="Current simulated state"></section>
+  <div id="notice" role="status" aria-live="polite"></div>
+
+  <div class="layout">
+    <div class="stack">
+      <section class="panel" aria-labelledby="walkthrough-title">
+        <h2 id="walkthrough-title">Guided walkthroughs</h2>
+        <p class="small">Choose a tab to reset to a known starting point. Press each step in order. A deliberately blocked action is part of the lesson, not a broken button.</p>
+        <div class="tabs" id="tabs" role="tablist" aria-label="Workflow scenarios"></div>
+        <div id="walkthrough" role="tabpanel" aria-labelledby="scenario-0">
+          <h3 id="scenario-title"></h3><p class="small" id="scenario-description"></p>
+          <div class="buttons"><button id="restart">Restart this walkthrough</button><span class="hint" id="progress"></span></div>
+          <ol id="steps"></ol>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="play-title">
+        <h2 id="play-title">Free play</h2>
+        <p class="small">Try actions in any order. Invalid actions explain why they cannot proceed. Each AI task represents a fresh manually started execution; no AI runs while the clock advances. Free play pauses guided steps until you restart.</p>
+        <div id="actions"></div>
+      </section>
+    </div>
+    <aside class="stack">
+      <section class="panel">
+        <h2>Environment &amp; authority</h2>
+        <p class="small">These are scenario switches, not real permissions. Author submissions and CI updates are external observations; they can arrive while factory work is stopped.</p>
+        <div class="controls" id="controls"></div>
+        <h3>Current merge gates</h3><ul id="gates"></ul>
+      </section>
+      <section class="panel"><h2>What changed</h2><p class="small">Newest first. Blocked attempts leave the protected work state unchanged.</p><ol id="log"></ol></section>
+    </aside>
+  </div>
+  <details class="panel"><summary>Full simulated state (including review identities and operation history)</summary><pre id="raw"></pre></details>
+  <footer>
+    Scope: one item and one PR at a time; all eight tasks are represented. The example uses complete submissions, new draft PRs, and explicitly material base changes.
+    Queue fairness, every backlog/staleness case, real policy evaluation, distributed locking, graph accuracy and model behavior are not implemented.
+    No production decision is validated merely because a walkthrough completes.
+  </footer>
+</main>
+
+<script id="workflow-model">
+const Workflow = (() => {
+  const controls = ["shadow", "stopped", "credentials", "actionsOnline", "localModel", "resolvedLocal", "highRisk"];
+  const ai = ["TRIAGE", "BUILD", "REVIEW", "REWORK", "RETRO"];
+  const writes = ["INTAKE", "TRIAGE", "CLAIM", "BUILD", "DRAFT", "REVIEW", "REWORK", "SWEEP", "RETRO", "APPROVE_SCOPE", "APPROVE_ACTION", "HOLD", "RESUME", "MORE_ROUNDS"];
+  const initial = (kind = "bug") => ({
+    now: 0, controls: {shadow: false, stopped: false, credentials: true, actionsOnline: true, localModel: true, resolvedLocal: true, highRisk: false},
+    issue: {kind, state: "not adopted", owner: null, approved: false, deadline: null, remaining: null, hold: false, window: null, responseAt: null, partial: false, credit: false, contributorRounds: 0, contributorLimit: 3},
+    pr: null, nextHead: 1, base: 1, policy: 1, evidence: 1, reviews: {}, reviewCount: 0, factoryRounds: 0, factoryLimit: 3,
+    approval: null, operation: null, nextOperation: 1, mergeEffects: 0, githubMerged: false, proposal: false, decisions: [],
+    notice: "Start with Intake or choose a walkthrough. All effects are simulated in this page.", blocked: false, log: []
+  });
+  const key = s => `${s.pr ? s.pr.head : "no-pr"}/base-${s.base}/policy-${s.policy}/evidence-${s.evidence}`;
+  const currentReview = s => s.pr && s.reviews[key(s)];
+  const overdue = s => s.issue.deadline !== null && s.now >= s.issue.deadline;
+  const approvalValid = s => s.approval && s.approval.key === key(s) && s.now < s.approval.until;
+  function gates(s) {
+    const r = currentReview(s);
+    return [
+      [Boolean(s.pr && s.pr.state !== "closed" && s.pr.state !== "merged" && s.pr.ready), "Open, ready-for-review PR"],
+      [s.issue.approved, "Confirmed bug authority / approved feature scope"],
+      [Boolean(r), "Accepted review matches code, base, policy and evidence"],
+      [Boolean(r && r.findings === 0), "No enabled blocking findings"],
+      [Boolean(s.pr && s.pr.verified), "Independent static + behavioral evidence (simulated)"],
+      [Boolean(s.pr && s.pr.ci === "passed"), "Required GitHub checks / reviews pass (simulated)"],
+      [!s.controls.highRisk || Boolean(approvalValid(s)), "Low risk or valid revision-bound human approval"],
+      [!s.issue.hold, "No maintainer hold"],
+      [!s.controls.stopped, "Stop control clear"],
+      [!s.controls.shadow, "Simulated live effects enabled"],
+      [s.controls.credentials, "Valid scoped credential available"],
+      [s.controls.actionsOnline, "Serialized Actions writer available"],
+      [!overdue(s), "No missed outstanding delivery obligation"]
+    ];
+  }
+  function finish(s, message, blocked = false) {
+    s.notice = message; s.blocked = blocked;
+    s.log.push({hour: s.now, outcome: blocked ? "blocked" : "recorded", message});
+    return s;
+  }
+  function route(s) {
+    if (!s.pr || ["closed", "merged"].includes(s.pr.state)) return;
+    const r = currentReview(s);
+    if (!r) { s.pr.state = "needs-review"; return; }
+    if (r.findings) {
+      const exhausted = s.pr.owner === "factory" ? s.factoryRounds >= s.factoryLimit : s.issue.contributorRounds >= s.issue.contributorLimit;
+      s.pr.state = exhausted ? "needs-decision" : s.pr.owner === "factory" ? "needs-rework" : "needs-author";
+      if (exhausted) { s.issue.deadline = null; s.issue.remaining = null; }
+    } else if (!s.issue.approved || (s.controls.highRisk && !approvalValid(s))) s.pr.state = "needs-decision";
+    else s.pr.state = gates(s).every(g => g[0]) ? "merge-ready" : "waiting-checks";
+  }
+  function newPR(s, owner, ready = true) {
+    return {owner, head: s.nextHead++, state: ready ? "needs-review" : "closed", ready, verified: false, ci: "pending", responseAt: s.now};
+  }
+  function nextHead(s) {
+    s.pr.head = s.nextHead++; s.pr.verified = false; s.pr.ci = "pending"; s.approval = null; s.pr.state = "needs-review";
+  }
+  function fixWindow(s) {
+    s.issue.window = "review fixes"; s.issue.responseAt = s.now;
+    s.issue.deadline = s.issue.hold ? null : s.now + 48; s.issue.remaining = s.issue.hold ? 48 : null;
+  }
+  function delivery(s) {
+    if (overdue(s)) return "Submission arrived after the deadline; it does not cancel the overdue obligation. Sweep can release the claim.";
+    s.issue.deadline = null; s.issue.remaining = null; s.issue.window = null; s.issue.state = "in-review";
+    return "Complete submission recorded on time. Waiting for review or CI does not consume an author delivery window.";
+  }
+  function merged(s) {
+    s.pr.state = "merged"; s.issue.state = "resolved"; s.issue.deadline = null; s.issue.remaining = null;
+    s.operation.status = "confirmed";
+  }
+  function reduce(state, action) {
+    const s = structuredClone(state), t = action.type;
+    if (t === "CONTROL") {
+      if (!controls.includes(action.name)) return finish(s, "Unknown scenario switch.", true);
+      s.controls[action.name] = Boolean(action.value);
+      if (action.name === "highRisk") { s.evidence++; s.approval = null; }
+      route(s);
+      return finish(s, `Scenario switch: ${action.name} is ${s.controls[action.name] ? "on" : "off"}. No real permission changed.`);
+    }
+    if (t === "ADVANCE") {
+      if (![12, 24, 48].includes(action.hours)) return finish(s, "Choose a displayed time increment.", true);
+      s.now += action.hours; route(s);
+      return finish(s, `Clock advanced ${action.hours} hours. No AI ran. Expired obligations require a successful Sweep.`);
+    }
+    if (t === "RECONCILE") {
+      if (!s.operation) return finish(s, "No merge operation to reconcile.", true);
+      if (!s.githubMerged) return finish(s, "GitHub has not accepted a merge. The queued intent remains pending.");
+      merged(s);
+      return finish(s, "Read-only reconciliation confirms the already accepted merge. No second merge effect was sent, even if Warden is stopped.");
+    }
+    if (t === "COMMENT") {
+      if (s.issue.owner !== "contributor") return finish(s, "No contributor response to record.", true);
+      s.issue.responseAt = s.now;
+      return finish(s, "Author response observed. The silence clock resets; the delivery deadline does not. No factory task was started.");
+    }
+    if (["CI", "PUSH", "EVIDENCE", "BASE"].includes(t)) {
+      if (!s.pr || ["closed", "merged"].includes(s.pr.state)) return finish(s, "This observation needs an open PR.", true);
+      if (t === "CI") {
+        s.pr.ci = action.passed ? "passed" : "failed"; route(s);
+        return finish(s, "CI/repository-check status observed. No model review or factory effect was started, including while stopped.");
+      }
+      if (t === "PUSH") nextHead(s);
+      if (t === "EVIDENCE") s.evidence++;
+      if (t === "BASE") { s.base++; s.pr.verified = false; s.pr.ci = "pending"; }
+      s.approval = null; route(s);
+      return finish(s, "Material input change observed. Prior review/queued intent is stale; observing it does not restart AI or bypass stop.");
+    }
+    if (t === "SUBMIT") {
+      if (s.issue.owner !== "contributor" || (s.pr && s.pr.state !== "closed")) return finish(s, "An active contributor claim with no open PR is required.", true);
+      s.pr = newPR(s, "contributor"); s.issue.partial = true;
+      return finish(s, delivery(s));
+    }
+    if (t === "FIX") {
+      if (!s.pr || s.pr.owner !== "contributor" || ["closed", "merged", "needs-decision"].includes(s.pr.state) || s.issue.window !== "review fixes")
+        return finish(s, "An outstanding contributor fix obligation and an available allowance are required.", true);
+      if (overdue(s)) return finish(s, "Fix window elapsed. A late submission cannot extend it; Sweep will enforce the missed commitment.", true);
+      s.issue.contributorRounds++; nextHead(s); delivery(s); route(s);
+      return finish(s, "Complete contributor fix submitted on time. Waiting for the next review does not consume another delivery window, even while Warden is stopped.");
+    }
+    if (s.controls.stopped) return finish(s, "Stopped: no new task or effect. Clock and read-only reconciliation remain usable.", true);
+    if (ai.includes(t) && (!s.controls.localModel || !s.controls.resolvedLocal))
+      return finish(s, "Local AI unavailable or resolved provider is non-local. No remote fallback; work remains pending.", true);
+    if (writes.includes(t)) {
+      if (s.controls.shadow) return finish(s, "Shadow: a local proposal may be inspected, but no canonical item or posted review is changed.", true);
+      if (!s.controls.credentials || !s.controls.actionsOnline) return finish(s, "Posting unavailable. This demo leaves the action unapplied; the production factory must retain its durable intent.", true);
+    }
+    if (t === "INTAKE") {
+      if (s.issue.state !== "not adopted") return finish(s, "Already adopted; Intake does not re-review or reconfirm code.", true);
+      s.issue.state = "needs-triage";
+      return finish(s, "Intake applied metadata routing only. No semantic confirmation or review marker.");
+    }
+    if (t === "TRIAGE") {
+      if (s.issue.state !== "needs-triage") return finish(s, "Intake must first queue this item for triage.", true);
+      s.issue.approved = s.issue.kind === "bug"; s.issue.state = s.issue.approved ? "ready" : "needs-decision";
+      return finish(s, s.issue.approved ? "Bug confirmed with simulated evidence; standing scope allows implementation." : "Feature design and acceptance criteria proposed. A maintainer must approve before implementation.");
+    }
+    if (t === "APPROVE_SCOPE") {
+      if (s.issue.kind !== "feature" || s.issue.state !== "needs-decision") return finish(s, "There is no feature design awaiting approval.", true);
+      s.issue.approved = true; s.issue.state = "ready";
+      s.decisions.push({kind: "feature scope", hour: s.now, decision: "approved"});
+      return finish(s, "Maintainer approves feature scope and acceptance criteria. This approval does not expire daily.");
+    }
+    if (t === "APPROVE_ACTION") {
+      if (!s.issue.approved) return finish(s, "Approve the underlying work scope first.", true);
+      s.approval = {key: key(s), until: s.now + 24};
+      s.decisions.push({kind: "revision action", hour: s.now, key: key(s), decision: "approved"});
+      route(s); return finish(s, "Maintainer approves this revision/action for 24 hours. New inputs or expiry invalidate it.");
+    }
+    if (t === "CLAIM") {
+      if (s.issue.owner || s.issue.state !== "ready") return finish(s, "Claim rejected: work is not ready and unclaimed. Existing ownership is not overwritten.", true);
+      s.issue.owner = "contributor"; s.issue.state = "claimed"; s.issue.deadline = s.now + 48; s.issue.window = "initial submission"; s.issue.responseAt = s.now;
+      return finish(s, "Contributor assigned. Complete submission due in 48 hours from assignment, not from a later acknowledgement.");
+    }
+    if (t === "HOLD") {
+      if (s.issue.hold || s.issue.deadline === null || overdue(s)) return finish(s, "A hold needs an unexpired outstanding delivery window.", true);
+      s.issue.hold = true; s.issue.remaining = s.issue.deadline - s.now; s.issue.deadline = null;
+      route(s); return finish(s, `Maintainer hold freezes ${s.issue.remaining} remaining hours; it does not grant extra time.`);
+    }
+    if (t === "RESUME") {
+      if (!s.issue.hold) return finish(s, "There is no maintainer hold to release.", true);
+      s.issue.hold = false;
+      if (s.issue.remaining !== null) s.issue.deadline = s.now + s.issue.remaining;
+      s.issue.remaining = null; route(s);
+      return finish(s, "Hold released. The revised deadline uses the previously unexpired time.");
+    }
+    if (t === "BUILD") {
+      if (!s.issue.approved || s.issue.state !== "ready" || s.issue.owner || s.issue.hold)
+        return finish(s, "Implementation requires ready, approved, unclaimed work with no hold. Never write a contributor branch.", true);
+      if (s.controls.highRisk && !approvalValid(s)) return finish(s, "High-risk implementation requires the maintainer's current action approval.", true);
+      s.issue.owner = "factory"; s.issue.state = "in-review"; s.issue.credit = s.issue.partial;
+      s.pr = newPR(s, "factory");
+      return finish(s, s.issue.credit ? "Factory PR opened from trusted base. Sound partial contributions evaluated and credited; old branch not executed." : "Factory implementation PR opened. It is not reviewed or merged; checks and independent Review still follow.");
+    }
+    if (t === "DRAFT") {
+      if (s.issue.owner !== "contributor" || (s.pr && !["closed"].includes(s.pr.state))) return finish(s, "An active contributor claim with no open PR is required.", true);
+      s.pr = newPR(s, "contributor", false); s.issue.partial = true;
+      return finish(s, "Draft closed under the default policy. It is not delivery; the valid original claim/deadline remains.");
+    }
+    if (t === "SWEEP") {
+      if (s.issue.hold) return finish(s, "Sweep respects the maintainer hold. No deadline or claim expires while its clock is frozen.");
+      if (!overdue(s)) return finish(s, "Sweep found no missed delivery. Unreviewed work and waiting-on-maintainer items stay open.");
+      if (s.pr && s.pr.state !== "merged") s.pr.state = "closed";
+      s.issue.owner = null; s.issue.state = s.issue.approved ? "ready" : "needs-decision";
+      s.issue.deadline = null; s.issue.window = null; s.issue.remaining = null;
+      return finish(s, "Missed delivery: claim released and unfinished PR closed. Original issue remains open; sound partial work can be assessed for takeover.");
+    }
+    if (t === "RETRO") {
+      if (!s.pr || s.pr.state !== "merged") return finish(s, "Finish a run first so Retro has an outcome to inspect.", true);
+      s.proposal = true;
+      return finish(s, "Retro proposes a stronger lint/design rule for human review. No standing authority was expanded automatically.");
+    }
+    if (t === "SEND" && s.operation && s.operation.status === "confirmed")
+      return finish(s, "Merge already confirmed. No additional effect sent; retrying does not duplicate it.");
+    if (!s.pr || ["closed", "merged"].includes(s.pr.state)) return finish(s, "This action needs an open PR.", true);
+    if (t === "VERIFY") {
+      s.pr.verified = action.passed; route(s);
+      return finish(s, action.passed ? "Independent static and behavioral evidence recorded for this head (simulated, not actual checks)." : "Verification failed. A clean model review cannot override failing checks.");
+    }
+    if (t === "REVIEW") {
+      if (s.pr.owner === "contributor" && overdue(s)) return finish(s, "Delivery is already overdue. A new review cannot silently renew an expired claim; Sweep or explicit maintainer resolution comes first.", true);
+      const old = currentReview(s);
+      if (old) { route(s); return finish(s, "Accepted review reused for unchanged inputs. Findings and review count did not change; gate status was reevaluated."); }
+      s.reviews[key(s)] = {findings: action.findings, head: s.pr.head, base: s.base, policy: s.policy, evidence: s.evidence};
+      s.reviewCount++;
+      const newWindow = action.findings && s.pr.owner === "contributor" && s.issue.window === null;
+      if (newWindow) fixWindow(s);
+      route(s);
+      return finish(s, s.pr.state === "needs-decision" && action.findings ? "Blocking findings remain after the round limit. Maintainer decides next; no automatic closure of timely work." : action.findings ? newWindow ? "Blocking review published. A fresh 48-hour contributor fix window starts now." : "Blocking findings remain. Factory work routes to Rework; an outstanding contributor deadline is not renewed by a placeholder push." : "Review found no enabled findings. Required evidence, checks, current authority and merge delivery are still separate gates.");
+    }
+    if (t === "REWORK") {
+      const r = currentReview(s);
+      if (!r || !r.findings || s.pr.state === "needs-decision") return finish(s, "Current named findings and an available fix allowance are required.", true);
+      if (s.pr.owner !== "factory") return finish(s, "Warden cannot edit a contributor branch. Route corrections to its author.", true);
+      s.factoryRounds++;
+      if (action.progress !== false) nextHead(s);
+      route(s);
+      return finish(s, action.progress === false ? "No-progress factory attempt consumed a cycle. It cannot reset the counter or claim a new review." : "Named findings addressed on a new head. This is not a completed review; verification and Review must run again.");
+    }
+    if (t === "MORE_ROUNDS") {
+      const r = currentReview(s);
+      if (s.pr.state !== "needs-decision" || !r || !r.findings) return finish(s, "No exhausted correction allowance is awaiting a decision.", true);
+      if (s.pr.owner === "factory") s.factoryLimit += 3;
+      else { s.issue.contributorLimit += 3; fixWindow(s); }
+      s.decisions.push({kind: "additional rounds", hour: s.now, decision: "three more approved"});
+      route(s); return finish(s, "Maintainer approves three extra rounds. Historical counts remain; they were not silently reset.");
+    }
+    if (t === "QUEUE_MERGE") {
+      const failures = gates(s).filter(g => !g[0]);
+      if (failures.length) return finish(s, "Merge blocked: " + failures.map(g => g[1]).join("; ") + ".", true);
+      if (s.operation && s.operation.key === key(s) && ["queued", "uncertain"].includes(s.operation.status)) return finish(s, "Existing merge intent reused. No duplicate queued effect.");
+      s.operation = {id: s.nextOperation++, key: key(s), status: "queued", head: s.pr.head};
+      return finish(s, "Merge intent queued with the reviewed revision. Queue acceptance is not a merged PR.");
+    }
+    if (t === "SEND") {
+      if (!s.operation || s.operation.status !== "queued") return finish(s, "No queued merge to send. Reconcile uncertain outcomes instead of duplicating them.", true);
+      if (s.operation.key !== key(s)) { s.operation.status = "stale"; return finish(s, "Stale intent rejected: reviewed inputs changed after queueing.", true); }
+      const failures = gates(s).filter(g => !g[0]);
+      if (failures.length) return finish(s, "Delivery paused; intent retained: " + failures.map(g => g[1]).join("; ") + ".", true);
+      if (!s.githubMerged) { s.githubMerged = true; s.mergeEffects++; }
+      if (action.loseReply) { s.operation.status = "uncertain"; return finish(s, "Simulated GitHub accepted the merge, but its reply was lost. Local state is uncertain, not successful. Reconcile before retrying."); }
+      merged(s); return finish(s, "Merge confirmed. The issue is resolved; exactly one simulated merge effect was applied.");
+    }
+    return finish(s, "Unknown action; no work state changed.", true);
+  }
+  return Object.freeze({initial, reduce, key, gates, currentReview, approvalValid});
+})();
+</script>
+<script id="prototype-ui">
+(() => {
+  const A = (type, extra = {}) => ({type, ...extra});
+  const S = (label, action) => ({label, action});
+  const intake = S("Intake: route the item", A("INTAKE"));
+  const triage = S("Triage: confirm bug / propose design", A("TRIAGE"));
+  const build = S("Implement: open the factory PR", A("BUILD"));
+  const checks = S("Record passing static + behavioral checks", A("VERIFY", {passed: true}));
+  const clean = S("Review: no enabled findings", A("REVIEW", {findings: 0}));
+  const finding = S("Review: blocking changes required", A("REVIEW", {findings: 1}));
+  const ci = S("Required GitHub checks pass", A("CI", {passed: true}));
+  const queue = S("Queue merge intent", A("QUEUE_MERGE"));
+  const send = S("Send and confirm merge", A("SEND"));
+  const claim = S("Claim: contributor volunteers", A("CLAIM"));
+  const submit = S("Contributor delivers complete ready PR", A("SUBMIT"));
+  const fix = S("Contributor submits a complete fix round", A("FIX"));
+  const rework = S("Rework: factory addresses findings", A("REWORK"));
+  const control = (name, value) => A("CONTROL", {name, value});
+  const scenarios = [
+    {name: "Factory bug", kind: "bug", text: "The happy path, with all eight tasks represented across the walkthrough set. A PR, a clean review, a queued merge and an actual merge are different milestones.", steps: [intake, triage, build, checks, clean, ci, queue, send, S("Retro: propose a stronger rule", A("RETRO"))]},
+    {name: "Feature scope", kind: "feature", text: "A feature needs approved design and acceptance criteria. Try implementation too early, then approve and complete it. Design approval is not a daily-expiring merge card.", steps: [intake, triage, S("Try implementation before scope approval (blocked)", A("BUILD")), S("Maintainer approves the proposed scope", A("APPROVE_SCOPE")), build, checks, clean, ci, queue, send]},
+    {name: "Hold & takeover", kind: "bug", text: "A closed draft is not delivery. A competing claim cannot steal ownership; a hold freezes time; a comment does not extend the delivery deadline. Takeover preserves the original issue and credit.", steps: [intake, triage, claim, S("Second contributor tries claiming (blocked)", A("CLAIM")), S("Contributor opens a draft: closed, claim retained", A("DRAFT")), S("24 hours elapse", A("ADVANCE", {hours: 24})), S("Maintainer holds the remaining 24 hours", A("HOLD")), S("48 hours elapse during hold", A("ADVANCE", {hours: 48})), S("Sweep must respect the hold", A("SWEEP")), S("Release hold; publish revised deadline", A("RESUME")), S("Remaining 24 hours elapse", A("ADVANCE", {hours: 24})), S("Author replies; delivery deadline does not move", A("COMMENT")), S("Sweep enforces missed delivery", A("SWEEP")), S("Factory takes over from trusted base, with credit", A("BUILD"))]},
+    {name: "Review reuse", kind: "bug", text: "Repeated review and CI updates reuse accepted findings. A code change after queueing makes the merge intent stale. Only a fresh current review can authorize the changed code.", steps: [intake, triage, build, checks, clean, S("Review unchanged inputs again: reuse", A("REVIEW", {findings: 0})), ci, S("Review after CI: still reuse", A("REVIEW", {findings: 0})), queue, S("A new code revision arrives", A("PUSH")), S("Try sending old merge intent (blocked)", A("SEND")), checks, clean, ci, queue, send]},
+    {name: "Third-round success", kind: "bug", text: "The factory gets three completed correction cycles, not three launches. Successful correction on cycle three must be allowed to finish; reaching the number is not itself a failure.", steps: [intake, triage, build, finding, rework, finding, rework, finding, rework, checks, clean, ci, queue, send]},
+    {name: "Contributor limit", kind: "bug", text: "A timely contributor is not automatically closed for needing multiple rounds. Three fix rounds with remaining findings create a maintainer decision; waiting for that decision is not abandonment.", steps: [intake, triage, claim, submit, finding, fix, finding, fix, finding, fix, finding, S("48 hours pass waiting on the maintainer", A("ADVANCE", {hours: 48})), S("Sweep must leave the timely PR open", A("SWEEP")), S("Maintainer permits three more rounds", A("MORE_ROUNDS"))]},
+    {name: "Approval expires", kind: "bug", text: "One-time high-risk approval binds to a revision and expires after 24 hours. A clean review and passing checks are not permission to ignore that expiry.", steps: [intake, triage, build, S("New evidence establishes high risk", control("highRisk", true)), checks, clean, ci, S("Maintainer approves this revision", A("APPROVE_ACTION")), S("24 hours elapse", A("ADVANCE", {hours: 24})), S("Try merge after approval expiry (blocked)", A("QUEUE_MERGE")), S("Maintainer renews explicit action approval", A("APPROVE_ACTION")), queue, send]},
+    {name: "Lost reply & stop", kind: "bug", text: "A credential outage retains the queued merge. If GitHub accepts it but the reply is lost, stopping Warden cannot recall the effect. Read-only reconciliation discovers it without a second merge.", steps: [intake, triage, build, checks, clean, ci, queue, S("Credential becomes unavailable", control("credentials", false)), S("Try delivery: retain queued intent", A("SEND")), S("Credential controller recovers", control("credentials", true)), S("Send merge, but lose the reply", A("SEND", {loseReply: true})), S("Activate stop control", control("stopped", true)), S("Reconcile already accepted outcome while stopped", A("RECONCILE")), S("Explicitly resume", control("stopped", false)), S("Retry sending: no duplicate effect", A("SEND"))]},
+    {name: "No unsafe fallback", kind: "bug", text: "Shadow mode cannot post item changes. A resolved remote model or unavailable local service cannot silently become an allowed fallback. Stop prevents new verification work.", steps: [S("Enable shadow mode", control("shadow", true)), S("Try Intake: no canonical mutation", A("INTAKE")), S("Enable simulated live mode", control("shadow", false)), intake, S("Resolved provider is non-local", control("resolvedLocal", false)), S("Try Triage: reject remote fallback", A("TRIAGE")), S("Restore local provider", control("resolvedLocal", true)), triage, S("Local service unavailable", control("localModel", false)), S("Try Implement: preserve work", A("BUILD")), S("Local service recovers", control("localModel", true)), build, S("Activate stop", control("stopped", true)), S("Try verification while stopped (blocked)", A("VERIFY", {passed: true})), S("Explicitly resume", control("stopped", false)), checks]}
+  ];
+  const groups = [
+    ["Intake & Triage", [intake, triage, S("Approve feature scope", A("APPROVE_SCOPE")), S("Approve current action for 24 h", A("APPROVE_ACTION"))]],
+    ["Claim & contributor delivery", [claim, submit, fix, S("Open draft PR (drafts disabled)", A("DRAFT")), S("Author acknowledgement", A("COMMENT")), S("Place maintainer hold", A("HOLD")), S("Release hold", A("RESUME")), S("Allow three more fix rounds", A("MORE_ROUNDS"))]],
+    ["Implement & Rework", [build, rework, S("Factory fix attempt makes no progress", A("REWORK", {progress: false}))]],
+    ["Review & evidence", [checks, S("Verification fails", A("VERIFY", {passed: false})), finding, clean, ci, S("Required CI fails", A("CI", {passed: false})), S("Observe new code revision", A("PUSH")), S("Material new evidence", A("EVIDENCE")), S("Material base-context change", A("BASE"))]],
+    ["Serialized merge delivery", [queue, send, S("Send merge but lose reply", A("SEND", {loseReply: true})), S("Reconcile actual outcome", A("RECONCILE"))]],
+    ["Sweep & Retro", [S("Sweep deadlines", A("SWEEP")), S("Retro: propose rule improvement", A("RETRO"))]]
+  ];
+  const controlNames = {shadow: "Shadow mode", stopped: "Stop active", credentials: "Credential valid", actionsOnline: "Actions writer online", localModel: "Local model available", resolvedLocal: "Resolved provider local", highRisk: "High-risk change"};
+  const stateLabel = value => ({"needs-triage": "Needs triage", "needs-review": "Needs review", "needs-author": "Author changes required", "needs-rework": "Factory correction required", "needs-decision": "Maintainer decision required", "waiting-checks": "Waiting for checks", "merge-ready": "Ready to merge", "in-review": "In review"})[value] || value.charAt(0).toUpperCase() + value.slice(1);
+  const $ = id => document.getElementById(id);
+  const element = (tag, text, className) => {const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e;};
+  let selected = 0, step = 0, detached = false, state = Workflow.initial();
+  function dispatch(action, guided = false) {
+    state = Workflow.reduce(state, action);
+    if (guided) step++; else detached = true;
+    render();
+  }
+  function choose(index) {
+    selected = index; step = 0; detached = false; state = Workflow.initial(scenarios[index].kind); render();
+  }
+  function card(title, big, fields) {
+    const c = element("div", undefined, "card"); c.append(element("h2", title), element("div", big, "big"));
+    const dl = element("dl");
+    for (const [label, value] of fields) {const f = element("div", undefined, "field"); f.append(element("dt", label), element("dd", String(value))); dl.append(f);}
+    c.append(dl); return c;
+  }
+  function render() {
+    const i = state.issue, p = state.pr, r = Workflow.currentReview(state);
+    $("clock").textContent = `Hour ${state.now} since this example started`;
+    const deadline = i.hold && i.remaining !== null ? `Paused: ${i.remaining} h remain` : i.deadline === null ? "No author delivery pending" : `Hour ${i.deadline} (${Math.max(0, i.deadline - state.now)} h remain${state.now >= i.deadline ? "; expired" : ""})`;
+    $("state-cards").replaceChildren(
+      card("Work item", `${i.kind === "bug" ? "Bug" : "Feature"} / ${stateLabel(i.state)}`, [["Owner", i.owner || "Unclaimed"], ["Scope / criteria", i.approved ? "Approved / confirmed" : "Not yet approved"], ["Delivery window", i.window || "None"], ["Deadline", deadline], ["Author last responded", i.responseAt === null ? "Not applicable" : `Hour ${i.responseAt}`], ["Prior contribution", i.credit ? "Evaluated portions credited" : i.partial ? "Retained for assessment" : "None"]]),
+      card("Pull request", p ? stateLabel(p.state) : "Not opened", [["Branch owner", p ? p.owner : "None"], ["Code / base revision", p ? `Head ${p.head} / base ${state.base}` : "No PR"], ["Current findings", r ? r.findings : "Not reviewed for current inputs"], ["Verification", p && p.verified ? "Passed (simulated)" : "Missing / failed"], ["Required GitHub checks", p ? p.ci : "Not run"], ["Model reviews accepted", state.reviewCount]]),
+      card("Authority & correction", state.controls.highRisk ? "Human action required" : "Standing scope", [["Current review", r ? "Fresh for current inputs" : "Missing / stale"], ["Action approval", Workflow.approvalValid(state) ? `Valid until hour ${state.approval.until}` : "Absent / expired / stale"], ["Factory fix cycles", `${state.factoryRounds} / ${state.factoryLimit}`], ["Contributor fix rounds", `${i.contributorRounds} / ${i.contributorLimit}`], ["Maintainer hold", i.hold ? "Active" : "None"], ["Policy / evidence context", `${state.policy} / ${state.evidence}`]]),
+      card("Posting & outcomes", state.operation ? state.operation.status : "No merge intent", [["Intent", state.operation ? `Operation ${state.operation.id}, head ${state.operation.head}` : "None"], ["Actual merge effects", state.mergeEffects], ["Mock GitHub accepted", state.githubMerged ? "Yes" : "No"], ["Raw task state", state.controls.stopped ? "Stopped; read-only recovery available" : "No task running"], ["Retro", state.proposal ? "Rule proposal; authority unchanged" : "Not proposed"], ["Human decisions retained", state.decisions.length]])
+    );
+    $("notice").textContent = (state.blocked ? "Blocked - " : "") + state.notice;
+    $("notice").dataset.blocked = String(state.blocked);
+    $("gates").replaceChildren(...Workflow.gates(state).map(([ok, label]) => element("li", `${ok ? "PASS" : "WAIT"} - ${label}`)));
+    $("controls").replaceChildren(...Object.entries(controlNames).map(([name, text]) => {
+      const label = element("label"), input = element("input"); input.type = "checkbox"; input.id = `control-${name}`; input.checked = state.controls[name];
+      input.addEventListener("change", () => {dispatch(control(name, input.checked)); $(`control-${name}`).focus({preventScroll: true});}); label.append(input, document.createTextNode(text)); return label;
+    }));
+    $("tabs").replaceChildren(...scenarios.map((scenario, index) => {
+      const b = element("button", scenario.name); b.id = `scenario-${index}`; b.setAttribute("role", "tab"); b.setAttribute("aria-controls", "walkthrough"); b.setAttribute("aria-selected", String(index === selected)); b.tabIndex = index === selected ? 0 : -1;
+      b.addEventListener("click", () => {choose(index); $(`scenario-${index}`).focus({preventScroll: true});});
+      b.addEventListener("keydown", event => {
+        let next;
+        if (event.key === "ArrowRight") next = (index + 1) % scenarios.length;
+        if (event.key === "ArrowLeft") next = (index + scenarios.length - 1) % scenarios.length;
+        if (event.key === "Home") next = 0;
+        if (event.key === "End") next = scenarios.length - 1;
+        if (next !== undefined) {event.preventDefault(); choose(next); $(`scenario-${next}`).focus();}
+      }); return b;
+    }));
+    const scenario = scenarios[selected];
+    $("walkthrough").setAttribute("aria-labelledby", `scenario-${selected}`);
+    $("scenario-title").textContent = scenario.name; $("scenario-description").textContent = scenario.text;
+    $("progress").textContent = detached ? "Free play active - restart to use guided steps." : step === scenario.steps.length ? "Walkthrough complete. Try free play or another tab." : `Step ${step + 1} of ${scenario.steps.length}`;
+    $("steps").replaceChildren(...scenario.steps.map((item, index) => {
+      const li = element("li"), b = element("button", `${index < step ? "Done" : index + 1}. ${item.label}`, index < step ? "done" : index === step && !detached ? "primary" : "");
+      b.disabled = detached || index !== step;
+      b.addEventListener("click", () => {dispatch(item.action, true); const next = $("steps").querySelector("button:not(:disabled)"); if (next) next.focus();});
+      li.append(b); return li;
+    }));
+    $("log").replaceChildren(...state.log.slice(-40).reverse().map(entry => element("li", `Hour ${entry.hour} / ${entry.outcome}: ${entry.message}`)));
+    $("raw").textContent = JSON.stringify(state, null, 2);
+  }
+  for (const [title, actions] of groups) {
+    const group = element("section", undefined, "action-group"), buttons = element("div", undefined, "buttons");
+    group.append(element("h3", title));
+    for (const item of actions) {const b = element("button", item.label); b.addEventListener("click", () => dispatch(item.action)); buttons.append(b);}
+    group.append(buttons); $("actions").append(group);
+  }
+  for (const b of document.querySelectorAll("[data-time]")) b.addEventListener("click", () => dispatch(A("ADVANCE", {hours: Number(b.dataset.time)})));
+  $("new-bug").addEventListener("click", () => choose(0));
+  $("new-feature").addEventListener("click", () => choose(1));
+  $("restart").addEventListener("click", () => choose(selected));
+  render();
+})();
+</script>
+</body>
+</html>
