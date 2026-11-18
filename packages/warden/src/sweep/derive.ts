@@ -20,6 +20,13 @@ export function authorActivity(comments: Comment[], author: string): string | un
   return mine.length ? mine.map((c) => c.createdAt).sort().at(-1) : undefined;
 }
 
+/** A ledger the writer created while REJECTING an early intent (stale, unauthorized...) is still fresh: only an accepted operation, an owner,
+ *  obligations, a non-initial state or an adoption mark means the item truly has Warden state. */
+export function isFresh(l: Ledger): boolean {
+  const initial = l.kind === 'issue' ? 'needs-triage' : 'needs-review';
+  return l.state === initial && !l.owner && l.obligations.length === 0 && !l.adoptedAt && !Object.values(l.ops).some((o) => o.decision === 'accept');
+}
+
 const CONFIRMED = ['ready', 'claimed', 'implementing', 'in-review'];
 
 /** Ledger + observations -> ClockItem. Satisfaction/holds are read from the obligation if present (nothing writes them yet). */
@@ -28,6 +35,7 @@ export function clockItemFrom(l: Ledger, o: SweepObs): ClockItem {
     kind: l.kind, keepOpen: o.keepOpen, draft: o.draft, pendingObservations: o.pendingObservations,
     confirmedOrApproved: l.kind === 'issue' && (CONFIRMED.includes(l.state) || Object.values(l.approvals).some((a) => a.status === 'approved')),
     maintainerWait: l.state === 'needs-decision',
+    draftKept: l.draftDecision === 'keep',
     unreviewed: l.kind === 'pr' && l.state === 'needs-review' && l.attempts.review === 0,
   };
   const ob = l.obligations.find((x) => x.type === 'response' || x.type === 'information');

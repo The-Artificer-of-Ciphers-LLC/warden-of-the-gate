@@ -56,6 +56,8 @@ export interface ClockItem {
   draft?: boolean;
   /** Maintainer-designated draft (exempt only while drafts are enabled). */
   designatedDraft?: boolean;
+  /** Adoption decided to keep this existing draft: policy closure does not apply. */
+  draftKept?: boolean;
   commitment?: Commitment;
   response?: ResponseOwed;
   /** Author observations (comment/push) seen by GitHub but not yet reconciled into the ledger. */
@@ -67,6 +69,7 @@ export type Due =
   | { kind: 'none'; why: string }
   | { kind: 'defer'; why: 'reconcile-observations' | 'completeness-unassessed' }
   | { kind: 'nudge'; hours: 48 | 72; clock: string; since: string }
+  | { kind: 'close-draft' }
   | { kind: 'close-silence'; clock: string; since: string }
   | { kind: 'close-information'; clock: string; since: string }
   | { kind: 'expire-commitment'; commitment: 'delivery' | 'fix-window'; dueAt: string };
@@ -112,6 +115,8 @@ export function evaluateClock(i: ClockItem, ctx: ClockCtx): Verdict {
   const ex = exempt(i, cfg); const exC = exemptCommitment(i, cfg);
   if (ex && exC) return done({ kind: 'none', why: ex });
 
+  // 0. Draft policy: drafts are disallowed unless configured; applies to newly opened AND converted-to-draft PRs. Never silently marks work ready.
+  if (i.kind === 'pr' && i.draft && !cfg.draftsEnabled && !i.draftKept && !exC && !i.pendingObservations) return done({ kind: 'close-draft' });
   // 1. Commitment expiry (delivery / fix window). Earlier than any silence closure by construction.
   const c = i.commitment; let expiry: Due | null = null;
   if (c && !exC && !c.satisfiedAt && !c.hold && now >= ms(c.dueAt)) {

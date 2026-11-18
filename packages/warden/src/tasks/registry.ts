@@ -4,9 +4,10 @@ import type { WardenConfig } from '../config/load.ts';
 import { readOnly } from '../github/store.ts';
 import type { Ledger } from '../state/model.ts';
 import { evaluateClock, type Due } from '../sweep/clocks.ts';
-import { authorActivity, clockConfigOf, clockItemFrom, type SweepObs } from '../sweep/derive.ts';
+import { authorActivity, clockConfigOf, clockItemFrom, isFresh, type SweepObs } from '../sweep/derive.ts';
 import { makeIntent } from '../writer/protocol.ts';
 import { submit } from '../writer/journal.ts';
+import type { Journal } from '../writer/journal.ts';
 import { iso } from '../util.ts';
 import { decideIntake } from './intake.ts';
 
@@ -67,31 +68,59 @@ const toProposal = (f: SweepFinding): Proposal => {
 };
 /** Submit live intake for EXPLICIT items only (the event handler passes the new item). Never scans the backlog: intake must not become
  *  blanket adoption of existing issues/PRs. Items that already have a ledger are skipped. */
-export async function submitIntake(rawStore: Store, cfg: WardenConfig, o: { submitStore: Store; inboxIssue: number; now: number; items: number[] }): Promise<{ submitted: number[]; skipped: Array<{ item: number; why: string }> }> {
+export async function submitIntake(rawStore: Store, cfg: WardenConfig, o: { submitStore: Store; inboxIssue: number; now: number; items: number[]; journal?: Journal | null }): Promise<{ submitted: number[]; skipped: Array<{ item: number; why: string }> }> {
   if (!o.items.length) throw new Error('live intake requires explicit item numbers; it never scans the backlog (adoption is a separate, deliberate flow)');
   const store = readOnly(rawStore); const submitted: number[] = []; const skipped: Array<{ item: number; why: string }> = [];
   for (const n of o.items) {
     const it = await store.getIssue(n);
     if (it.state !== 'open') { skipped.push({ item: n, why: 'closed' }); continue; }
     const cs = await store.listComments(n);
-    if (cs.some((c) => c.body.startsWith(LEDGER_MARK))) { skipped.push({ item: n, why: 'already-has-ledger' }); continue; }
+    const existing = cs.filter((c) => c.body.startsWith(LEDGER_MARK)).map((c) => parseLedger(c.body)).find(Boolean) as Ledger | undefined;
+    if (existing && !isFresh(existing)) { skipped.push({ item: n, why: 'already-has-ledger' }); continue; }
     const d = decideIntake(it, { draftsAllowed: cfg.drafts.allowed });
     const intent = makeIntent({ v: 1, kind: 'intake', repo: cfg.repository, item: n, itemKind: it.isPr ? 'pr' : 'issue', origin: 'deterministic',
       source: { kind: 'intake', id: `intake:${n}`, observedAt: iso(o.now) }, actor: o.submitStore.actor(), payload: { expect: d.to } });
-    await submit(o.submitStore, o.inboxIssue, intent, null); submitted.push(n);
+    await submit(o.submitStore, o.inboxIssue, intent, o.journal ?? null); submitted.push(n);
   }
   return { submitted, skipped };
 }
 
+/** Reconcile planning (read-only): ledger-bearing, non-terminal items whose GitHub state disagrees with the ledger. The writer re-validates
+ *  every one silently at decision time (`already-consistent` etc.), so an over-eager plan is harmless. */
+export async function planReconcile(rawStore: Store, cfg: WardenConfig, o: { skip?: Set<number> } = {}): Promise<Array<{ item: number; itemKind: 'issue' | 'pr'; why: string }>> {
+  const store = readOnly(rawStore); const skip = o.skip ?? new Set<number>(); const out: Array<{ item: number; itemKind: 'issue' | 'pr'; why: string }> = [];
+  const states = Object.values(cfg.labels.states);
+  for (const it of (await store.listIssues({ state: 'all' })).filter((i) => !skip.has(i.number))) {
+    const l = (await store.listComments(it.number)).filter((c) => c.body.startsWith(LEDGER_MARK)).map((c) => parseLedger(c.body)).find(Boolean) as Ledger | undefined;
+    if (!l || ['closed', 'merged', 'resolved'].includes(l.state)) continue;
+    const itemKind = it.isPr ? 'pr' : 'issue'; let why = '';
+    if (it.state === 'closed') why = itL(l, 'closed-outside-warden');
+    else if (l.kind === 'issue' && l.owner?.kind === 'contributor' && !it.assignees.includes(l.owner.id) && ['claimed', 'implementing'].includes(l.state)) why = 'owner-no-longer-assigned';
+    else if (cfg.labels.projection) { const want = cfg.labels.states[l.state]; if ((want && !it.labels.includes(want)) || it.labels.some((x) => states.includes(x) && x !== want)) why = 'label-projection-mismatch'; }
+    if (why) out.push({ item: it.number, itemKind, why });
+  }
+  return out;
+}
+const itL = (l: Ledger, why: string) => (l.kind === 'pr' ? 'pr-closed-merge-status-unknown' : why);
+export async function submitReconcile(found: Array<{ item: number; itemKind: 'issue' | 'pr'; why: string }>, o: { submitStore: Store; repo: string; inboxIssue: number; now: number; journal?: Journal | null }): Promise<number[]> {
+  const done: number[] = [];
+  for (const f of found) {
+    if (f.why === 'pr-closed-merge-status-unknown') continue;   // merged vs closed is not observable through Store: never guess
+    const intent = makeIntent({ v: 1, kind: 'reconcile', repo: o.repo, item: f.item, itemKind: f.itemKind, origin: 'deterministic', source: { kind: 'sweep', id: `reconcile:${f.item}:${f.why}:${iso(o.now).slice(0, 13)}`, observedAt: iso(o.now) }, actor: o.submitStore.actor(), payload: { why: f.why } });
+    await submit(o.submitStore, o.inboxIssue, intent, o.journal ?? null); done.push(f.item);
+  }
+  return done;
+}
+
 /** Submit enforceable findings as deterministic intents. `defer` verdicts are never submitted. Same finding => same opid (idempotent). */
-export async function submitSweep(findings: SweepFinding[], o: { submitStore: Store; repo: string; inboxIssue: number; now: number }): Promise<{ submitted: number[]; skipped: number[] }> {
+export async function submitSweep(findings: SweepFinding[], o: { submitStore: Store; repo: string; inboxIssue: number; now: number; journal?: Journal | null }): Promise<{ submitted: number[]; skipped: number[] }> {
   const submitted: number[] = []; const skipped: number[] = [];
   for (const f of findings) {
     if (f.due.kind === 'defer' || f.due.kind === 'none') { skipped.push(f.item); continue; }
     const expect = f.due.kind === 'nudge' ? { kind: 'nudge', hours: f.due.hours } : f.due.kind === 'expire-commitment' ? { kind: f.due.kind, commitment: f.due.commitment } : { kind: f.due.kind };
     const intent = makeIntent({ v: 1, kind: 'sweep-action', repo: o.repo, item: f.item, itemKind: f.itemKind, origin: 'deterministic',
       source: { kind: 'sweep', id: `sweep:${f.item}:${expect.kind}${'hours' in expect ? expect.hours : ''}:${whenOf(f.due)}`, observedAt: iso(o.now) }, actor: o.submitStore.actor(), payload: { expect, obs: f.obs } });
-    await submit(o.submitStore, o.inboxIssue, intent, null); submitted.push(f.item);
+    await submit(o.submitStore, o.inboxIssue, intent, o.journal ?? null); submitted.push(f.item);
   }
   return { submitted, skipped };
 }
@@ -104,7 +133,9 @@ export async function runTask(task: string, o: { dryRun: boolean; store: Store; 
   }
   if (task === 'sweep') {
     if (!o.dryRun) return { task, outcome: 'unsupported', reason: 'live sweep is submitted by the Actions handler (not built); use --dry-run. Enforcement exists only as writer intents (submitSweep) and is not scheduled', owner: 'P2' };
-    return { task, outcome: 'proposed', mode: 'dry-run', proposals: (await planSweep(o.store, o.cfg, { now: o.now ?? o.store.now(), items: o.items, skip: o.skip })).map(toProposal), mutations: 0 };
+    const clocks = (await planSweep(o.store, o.cfg, { now: o.now ?? o.store.now(), items: o.items, skip: o.skip })).map(toProposal);
+    const rec: Proposal[] = o.items?.length ? [] : (await planReconcile(o.store, o.cfg, { skip: o.skip })).map((f) => ({ item: f.item, kind: f.itemKind, adopted: true, from: null, to: null, labels: { add: [], remove: [] }, reasons: [`reconcile: ${f.why}`], effects: f.why === 'pr-closed-merge-status-unknown' ? ['not actionable: merged versus closed is not observable'] : ['reconcile ledger with GitHub (through the writer)'] }));
+    return { task, outcome: 'proposed', mode: 'dry-run', proposals: [...clocks, ...rec], mutations: 0 };
   }
   return { task, outcome: 'unsupported', reason: `task "${task}" is not implemented yet (owned by ${OWNER[task as Exclude<TaskName, 'intake'>]}); no result was fabricated`, owner: OWNER[task as Exclude<TaskName, 'intake'>] };
 }

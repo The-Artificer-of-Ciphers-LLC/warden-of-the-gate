@@ -11,7 +11,7 @@ export interface PolicySnapshot {
   maxAttempts: number; dedupeHorizon: number; maxIntentAgeMs: number; maxIntentBytes: number;
   draftsAllowed?: boolean;
   /** P2 sweep windows from approved config. Absent => sweep actions are rejected (fail closed). */
-  sweep?: { clocks: ClockConfig; keepOpenLabel: string; deliveryHours: number; fixWindowHours: number };
+  sweep?: { clocks: ClockConfig; keepOpenLabel: string; deliveryHours: number; fixWindowHours: number; contributorFixRounds: number };
 }
 export function buildPolicy(w: WardenConfig, o: Orders | null): PolicySnapshot {
   const orders: Orders = o ?? { schemaVersion: 1, programs: [] };
@@ -21,6 +21,6 @@ export function buildPolicy(w: WardenConfig, o: Orders | null): PolicySnapshot {
     labelStates: w.labels.projection ? w.labels.states : {}, projection: w.labels.projection, stopLabel: w.inbox.stopLabel,
     maxAttempts: w.runtime.budgets.maxOperationRetries, dedupeHorizon: w.inbox.dedupeHorizon, maxIntentAgeMs: w.inbox.maxIntentAgeHours * 3600_000, maxIntentBytes: w.inbox.maxIntentBytes,
     draftsAllowed: w.drafts.allowed,
-    sweep: { clocks: clockConfigOf(w), keepOpenLabel: w.labels.keepOpen, deliveryHours: w.clocks.initialDeliveryHours, fixWindowHours: w.clocks.fixWindowHours },
+    sweep: { clocks: clockConfigOf(w), keepOpenLabel: w.labels.keepOpen, deliveryHours: w.clocks.initialDeliveryHours, fixWindowHours: w.clocks.fixWindowHours, contributorFixRounds: w.clocks.contributorFixRounds },
   };
 }

@@ -5,6 +5,8 @@ import { runTask, TASK_NAMES } from '../tasks/registry.ts';
 import { loadConfigs, openBackend, openStorage, str } from './common.ts';
 import type { Ctx, Result } from './common.ts';
 import { buildPolicy } from '../config/snapshot.ts';
+import { planReconcile, planSweep, submitIntake, submitReconcile, submitSweep } from '../tasks/registry.ts';
+import { Journal } from '../writer/journal.ts';
 import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
 
 /** `warden run --task <name> [--dry-run]`. Preflight refuses when stopped (local or shared) or when control state is unknown (fail closed).
@@ -29,6 +31,23 @@ export async function run(c: Ctx): Promise<Result> {
   const abort = new AbortController(); const onTerm = () => abort.abort(); process.once('SIGTERM', onTerm);
   try {
     const skip = new Set<number>([cfg.inbox.inboxIssue, cfg.inbox.controlIssue, ...(cfg.inbox.globalControl?.repository === cfg.repository ? [cfg.inbox.globalControl.issue] : [])]);
+    if (!c.flags['dry-run'] && (task === 'intake' || task === 'sweep')) {
+      // Live deterministic housekeeping: SUBMITS intents only. The one serialized writer (`warden writer drain`) decides and applies; nothing is
+      // scheduled by this command, and no model or inference is used.
+      const sub = be.open('submit'); if (!sub) return { code: 4, data: { task, outcome: 'blocked', reason: be.unavailable }, text: `run blocked: ${be.unavailable}` };
+      let journal: Journal | null = null; try { journal = new Journal(st.journalPath); } catch { /* none */ }
+      const now = c.now(); const base = { submitStore: sub, inboxIssue: cfg.inbox.inboxIssue, now, journal };
+      if (task === 'intake') {
+        const items = str(c.flags, 'item') ? String(str(c.flags, 'item')).split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+        if (!items.length) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task intake (live) requires --item N[,N]: intake never scans the backlog; use `warden adopt` for existing items' };
+        const r = await submitIntake(store, cfg, { ...base, items });
+        return { code: 0, data: { task, outcome: 'submitted', ...r, aborted: abort.signal.aborted }, text: `task intake: ${r.submitted.length} submitted, ${r.skipped.length} skipped${r.skipped.map((x) => ` (#${x.item}: ${x.why})`).join('')}; run \`warden writer drain\` to apply` };
+      }
+      const findings = await planSweep(store, cfg, { now, skip });
+      const sw = await submitSweep(findings, { ...base, repo: cfg.repository });
+      const rec = await submitReconcile(await planReconcile(store, cfg, { skip }), { ...base, repo: cfg.repository });
+      return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred; run \`warden writer drain\` to apply` };
+    }
     const out = await runTask(task, { dryRun: !!c.flags['dry-run'], store, cfg, items: str(c.flags, 'item') ? String(str(c.flags, 'item')).split(',').map(Number) : undefined, skip });
     const protection = { readOnlyStoreEnforced: !!c.flags['dry-run'], globalDryRun: ctl.dryRun ? 'present' : ctl.unknown ? 'unknown' : 'absent', backend: be.name };
     const code = out.outcome === 'proposed' ? 0 : out.outcome === 'unsupported' ? 3 : out.outcome === 'blocked' ? 4 : 2;

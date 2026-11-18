@@ -192,13 +192,14 @@ export class Writer {
         if (dep.status !== 'applied') return this.finalizeReject(c, intent, l, 'causal-predecessor-' + dep.status, null);
       }
       expireApprovals(l, this.store.now());
-      if (iss.state === 'closed' && intent.kind !== 'note') return this.finalizeReject(c, intent, l, 'item-closed', null);
+      if (iss.state === 'closed' && intent.kind !== 'note' && intent.kind !== 'reconcile') return this.finalizeReject(c, intent, l, 'item-closed', null);
       let dec;
       if (intent.origin === 'ai' && pol.mode === 'shadow') dec = { accept: false, reason: 'shadow-mode-ai-effects-disabled', plan: [] as Effect[] };
       else {
         const sourceVerified = await this.verifySource(intent);
+        const linkedPr = intent.kind === 'submission' && typeof (intent.payload as { pr?: unknown }).pr === 'number' ? await this.store.getIssue((intent.payload as { pr: number }).pr).catch(() => undefined) : undefined;
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
-        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss });
+        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr });
       }
       const rec: OpRec = { status: 'applying', decision: dec.accept ? 'accept' : 'reject', reason: dec.reason, plan: dec.plan, step: 0, attempts: 0, epoch: this.lease.epoch, intentCommentId: c.id };
       dec.apply?.(l);
@@ -217,7 +218,7 @@ export class Writer {
   }
   /** Reconstruct maintainer authority from the target item's source comment, not the submitter's interpretation. */
   private async verifySource(i: Intent): Promise<boolean> {
-    if (i.kind !== 'approval-decision' && i.kind !== 'override') return true;
+    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release') return true;
     if (i.source.kind !== 'gh-comment') return false;
     const sc = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
     if (!sc || sc.author !== i.actor || sc.updatedAt !== sc.createdAt) return false;
