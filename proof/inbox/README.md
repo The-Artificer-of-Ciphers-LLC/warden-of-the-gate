@@ -70,6 +70,10 @@ The harness uploads a source-hashed copy of the P1 package to `.warden-p1-proof/
 
 `src/schedule-proof.ts --live` separately enables the original sandbox writer, waits at most 59 minutes for a successful **schedule-triggered** run, and disables it in cleanup. A manual dispatch does not satisfy this check. Neither proof implements the P2 Sweep task or authorizes production AI.
 
+After a failed, finished original observation and **separate owner approval**, `--live --off-peak` temporarily re-registers the same sandbox workflow at `7,22,37,52 * * * *` with the verified personal commit identity. It checks live disabled state before editing, observes for at most 56 minutes to reserve cleanup time, verifies the successful scheduled run's actual workflow revision, restores the exact original workflow, and confirms disabled state again. Cleanup waits boundedly for status/source propagation and refuses to overwrite a concurrent owner edit. The report's `registeredActor` records GitHub's linked commit author, not otherwise-unobservable internal scheduler attribution. Both timing and attribution change, so success cannot isolate either as the original cause.
+
+The original [failed observation](results/schedule-2026-11-18.json) remains failed; its [independent closeout](results/schedule-2026-11-18-closeout.json) records the verified disabled state after an immediate status-read discrepancy. The approved off-peak diagnostic writes its own report and never overwrites that evidence.
+
 ## Owner-approved trust-root recovery
 
 `src/p1-root-proof.ts` has two ordered modes, each taking the original and replacement key paths: `--validate-replacement` verifies both roots before revocation; `--recover` runs only after the owner-approved original-key revocation. Creating a replacement and deleting the original are separately authorized GitHub administrative actions, not actions performed by this script.

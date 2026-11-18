@@ -1,0 +1,11 @@
+{
+  "verifiedAt": "2026-11-18T19:17:11Z",
+  "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "workflowId": 422227724,
+  "observerReportSha256": "2a45d1897926d615155e0cf2a179582d07481bb7b45e5f989027ad00b20ffa50",
+  "scheduledExecutionVerified": false,
+  "disabled": true,
+  "state": "disabled_manually",
+  "workflowUpdatedAt": "2026-11-18T14:16:20-05:00",
+  "note": "The original report remains failed: no scheduled execution occurred, and its immediate post-disable read reported active. A subsequent disable request returned HTTP 403 because the workflow was already inactive; independent GET confirmed disabled_manually. The API's updated_at value was 2026-11-18T14:16:20-05:00, within the original 60-minute approval."
+}

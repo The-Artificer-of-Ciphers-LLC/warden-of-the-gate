@@ -1,0 +1,7 @@
+{
+  "startedAt": "2026-11-18T18:17:02.732Z",
+  "pass": false,
+  "error": "No successful schedule-triggered run observed within 59 minutes cleanup: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(report.disabled)\n",
+  "disabled": false,
+  "finishedAt": "2026-11-18T19:16:20.975Z"
+}
