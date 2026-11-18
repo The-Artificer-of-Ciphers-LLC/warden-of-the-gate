@@ -5,8 +5,11 @@ export interface IssueState { number: number; assignees: string[]; labels: strin
 export interface IssueEvent { id: number; event: string; actor: string; label?: string; createdAt: string }
 
 /** Read-only pull request snapshot input. `head` is the commit the review is bound to; `ci` is a coarse summary of checks on that head. */
+/** `headRef`: the head branch name (read-only), needed to update a factory branch. */
 export interface PullFile { path: string; status: string; patch?: string }
-export interface PullInfo { number: number; head: string; base: string; title: string; author: string; draft: boolean; state: 'open' | 'closed'; merged: boolean; /** logins whose latest review is an approval */ approvals: string[]; ci: 'passing' | 'failing' | 'pending' | 'none'; files: PullFile[] }
+export interface PullInfo { number: number; headRef?: string; head: string; base: string; title: string; author: string; draft: boolean; state: 'open' | 'closed'; merged: boolean; /** logins whose latest review is an approval */ approvals: string[]; ci: 'passing' | 'failing' | 'pending' | 'none'; files: PullFile[] }
+
+export interface PullCommit { sha: string; authorLogin: string; authorName: string; authorEmail: string; subject: string }
 
 export interface Store {
   readonly name: string;
@@ -39,6 +42,8 @@ export interface Store {
   mergePull(n: number, expectedHead: string): Promise<void>;
   /** Tip commit of a branch (read-only). The factory starts from the TRUSTED default-branch tip, never from a contributor branch. */
   getBranchHead(branch: string): Promise<string>;
+  /** Commits of a pull request (read-only): used to credit contributors whose work a takeover ports. */
+  listPullCommits(n: number): Promise<PullCommit[]>;
 }
 
 /** Write methods of Store; used by ReadOnlyStore and tests. */

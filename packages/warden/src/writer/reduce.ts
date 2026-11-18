@@ -299,7 +299,10 @@ function reviewRecord(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const sev = Array.isArray(pl.severities) ? (pl.severities as unknown[]) : null;
   if (!pl.head || !pl.base || !pl.verdict || !sev || sev.some((s) => !['blocker', 'major', 'minor', 'nit'].includes(String(s)))) return silent('review-record-malformed');
   if (c.item?.isPr !== true) return silent('review-record-unobserved');
-  return { accept: true, plan: [], apply: (led) => { led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sev as Array<'blocker' | 'major' | 'minor' | 'nit'>, policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; } };
+  const sevs = sev as Array<'blocker' | 'major' | 'minor' | 'nit'>; const gates = c.policy.merge?.gates; const gated = sevs.some((s) => s === 'blocker' || (gates ? gates[s] : true));
+  const from = l.state; const to: WorkflowState | null = !['needs-review', 'waiting-checks'].includes(from) ? null : gated ? (l.owner?.kind === 'factory' ? 'needs-rework' : null) : 'merge-ready';
+  const move = to && canTransition('pr', from, to).ok ? to : null;
+  return { accept: true, plan: move ? [...project(c.policy, from, move), ...(move === 'needs-rework' ? [note(`Review found ${sevs.filter((s) => s === 'blocker' || (gates ? gates[s] : true)).length} blocking finding(s); this factory pull request returns to rework (cycle accounting is persisted).`)] : [])] : [], apply: (led) => { if (move) moveTo(led, move, undefined, c.now); led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sev as Array<'blocker' | 'major' | 'minor' | 'nit'>, policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; } };
 }
 
 /** Merge request bound to the head the requester saw. Enqueueing is not merging: the effect re-reads, merges only that head, confirms with GitHub,
@@ -395,5 +398,6 @@ function linkPr(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   }
   if (!Number.isInteger(pl.issue)) return silent('link-needs-issue');
   if (l.linked.includes(pl.issue as number)) return silent('already-linked');
-  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; } };
+  const factory = (i.payload as { factory?: boolean }).factory === true;
+  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; } };
 }

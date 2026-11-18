@@ -7,6 +7,7 @@ import type { PrPublisher } from './slice.ts';
  *  explicit owner action. The branch is preserved so a maintainer (or the later GitHub publisher) can publish it. */
 export class LocalOutboxPublisher implements PrPublisher {
   dir: string; constructor(dir: string) { this.dir = dir; }
+  async update(o: { branch: string; sha: string; workspace: string }) { pushBranch(o.workspace, this.dir, o.branch); if (git(this.dir, ['rev-parse', `refs/heads/${o.branch}`]).trim() !== o.sha) throw new Error('local outbox did not record the update'); }
   async open(o: { branch: string; sha: string; workspace: string }) {
     if (!existsSync(this.dir)) { mkdirSync(this.dir, { recursive: true, mode: 0o700 }); git(null, ['init', '-q', '--bare', this.dir]); }
     pushBranch(o.workspace, this.dir, o.branch);
