@@ -22,6 +22,7 @@ export interface Issuer { issue(req: CredentialRequest): Promise<IssuedCredentia
 /** Operator-approved maximum delegated authority (protected operator store, never model-controlled). */
 export interface AuthorityCeiling {
   repositories: string[];
+  controlRepositories?: string[];
   maxPermissions: Permissions;
   /** Explicit operator opt-out of credential automation: nothing is issued. */
   automation: 'enabled' | 'opt-out';
@@ -37,6 +38,7 @@ export interface CredentialStatus {
 export interface CredentialProvider {
   token(req: CredentialRequest): Promise<string>;
   status(): CredentialStatus[];
+  reportUnauthorized?(req: CredentialRequest): void;
 }
 export class CredentialUnavailable extends Error {
   state: CredentialState;

@@ -40,6 +40,12 @@ export async function status(c: Ctx): Promise<Result> {
     for (const it of await store.listIssues({ state: 'open' })) {
       if ([cfg.inbox.inboxIssue, cfg.inbox.controlIssue].includes(it.number)) continue;
       const lc = (await store.listComments(it.number)).find((x) => x.body.startsWith(LEDGER_MARK)); const l = lc ? (parseLedger(lc.body) as Ledger | null) : null;
+      if (lc && (!l || l.repository !== cfg.repository || l.item !== it.number || l.kind !== (it.isPr ? 'pr' : 'issue')
+        || !l.approvals || typeof l.approvals !== 'object' || Array.isArray(l.approvals) || !l.evidence || typeof l.evidence !== 'object'
+        || Object.values(l.approvals).some((a) => !a || typeof a !== 'object' || typeof a.status !== 'string'))) {
+        items.push({ item: it.number, kind: it.isPr ? 'pr' : 'issue', state: 'invalid-ledger', blocker: { reason: 'ledger is malformed, unsupported or belongs to another instance; not adopted' } });
+        continue;
+      }
       if (!l) { items.push({ item: it.number, kind: it.isPr ? 'pr' : 'issue', state: 'not-adopted' }); continue; }
       const appr = Object.values(l.approvals).map((a) => ({ id: a.id, action: a.action, status: a.status === 'pending' && a.expiresAt && now >= Date.parse(a.expiresAt) ? 'expired' : a.status, expiresAt: a.expiresAt }));
       items.push({ item: it.number, kind: l.kind, state: l.state, owner: l.owner?.id ?? null, facets: l.facets, blocker: l.blocker ?? null, attempts: l.attempts, obligations: l.obligations, approvals: appr,

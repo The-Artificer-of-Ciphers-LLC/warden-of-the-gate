@@ -1,12 +1,68 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stringify } from 'yaml';
 import { cliEnv } from './cli-env.ts';
+import { loadWarden } from '../src/config/load.ts';
+import { InstanceStorage } from '../src/storage/instance.ts';
 
 const h = (s: string) => createHash('sha256').update(s).digest('hex');
 const worldHash = (e: { world: string }) => h(readFileSync(e.world, 'utf8'));
+
+test('status reports a legacy or foreign ledger explicitly without claiming GitHub is unreachable or adopting it', async (t) => {
+  const e = await cliEnv(); t.after(() => rmSync(e.dir, { recursive: true, force: true }));
+  await e.sim('sim', 'issue', '--title', 'Legacy P0 item');
+  assert.equal((await e.sim('sim', 'comment', '--issue', '3', '--as', 'warden-writer', '--body',
+    '<!-- warden-ledger:v1 -->\n```json\n{"v":1,"item":3,"state":"ready","owner":null,"ops":{},"order":[],"seq":1,"epoch":1}\n```')).code, 0);
+  const result = await e.json('status');
+  assert.equal(result.data.remote.reachable, true);
+  const legacy = result.data.remote.items.find((i: { item: number }) => i.item === 3);
+  assert.equal(legacy.state, 'invalid-ledger');
+  assert.match(legacy.blocker.reason, /unsupported|malformed|another instance/);
+});
+
+test('corrupt local stop state blocks runs and status explicitly', async (t) => {
+  const e = await cliEnv(); t.after(() => rmSync(e.dir, { recursive: true, force: true }));
+  const st = InstanceStorage.open(e.home, 'acme/widgets', { create: false });
+  for (const file of [st.stopPath, st.globalStopPath]) {
+    for (const contents of ['{', 'null', '{}', '{"stopped":"false"}']) {
+      writeFileSync(file, contents);
+      const run = await e.run('run', '--task', 'intake', '--dry-run');
+      assert.equal(run.code, 1, contents); assert.match(run.err, /STORAGE FAILURE/);
+      const status = await e.run('status');
+      assert.equal(status.code, 1, contents); assert.match(status.err, /STORAGE FAILURE/);
+    }
+    rmSync(file); mkdirSync(file);
+    const unreadable = await e.run('run', '--task', 'intake', '--dry-run');
+    assert.equal(unreadable.code, 1); assert.match(unreadable.err, /STORAGE FAILURE/);
+    rmSync(file, { recursive: true }); writeFileSync(file, '{"stopped":false}');
+  }
+});
+
+test('global stop persists local fallback and global resume preserves an independent instance stop', async (t) => {
+  const e = await cliEnv(); t.after(() => rmSync(e.dir, { recursive: true, force: true }));
+  await e.sim('sim', 'issue', '--title', 'Global control');
+  const cfg = loadWarden(e.repo).value!;
+  e.write('.github/warden.yml', stringify({ ...cfg, inbox: { ...cfg.inbox, globalControl: { repository: cfg.repository, issue: 3 } } }));
+  e.envVars.WARDEN_SIM_DOWN = '1';
+  const stopped = await e.json('stop', '--global');
+  assert.equal(stopped.code, 2); assert.equal(stopped.data.remote, 'unconfirmed');
+  e.envVars.WARDEN_SIM_DOWN = '0';
+  assert.equal((await e.run('run', '--task', 'intake', '--dry-run')).code, 4, 'local fallback survives failed propagation');
+  const instanceResume = await e.json('resume', '--confirm');
+  assert.equal(instanceResume.code, 1); assert.equal(instanceResume.data.local, 'stopped', 'instance resume cannot clear the global fallback');
+  assert.equal((await e.run('resume', '--global', '--confirm')).code, 0);
+  assert.equal((await e.run('run', '--task', 'intake', '--dry-run')).code, 0);
+  await e.run('stop');
+  await e.run('stop', '--global');
+  const resumed = await e.json('resume', '--global', '--confirm');
+  assert.equal(resumed.code, 1); assert.equal(resumed.data.local, 'stopped');
+  assert.equal((await e.run('run', '--task', 'intake', '--dry-run')).code, 4, 'global resume cannot clear an instance stop');
+  assert.equal((await e.run('resume', '--confirm')).code, 0);
+  assert.equal((await e.run('run', '--task', 'intake', '--dry-run')).code, 0);
+});
 
 test('setup: reports prerequisites, creates only explicitly approved missing starters, never overwrites, adopts nothing', async () => {
   const e = await cliEnv({ configure: false });

@@ -1,0 +1,339 @@
+{
+  "at": "2026-11-18T16:51:29.060Z",
+  "sourceCommit": "55f2dc0d41f1b8302d511a62f0d8771506cc8c28",
+  "appId": 5819526,
+  "installationId": 183378787,
+  "appLogin": "warden-p0-sandbox-app[bot]",
+  "checks": [
+    {
+      "name": "scoped installation tokens minted without persisting or printing their values",
+      "pass": true
+    },
+    {
+      "name": "installation token produces the distinct App bot author",
+      "pass": true,
+      "observed": {
+        "author": "warden-p0-sandbox-app[bot]",
+        "operator": "trek-e"
+      }
+    },
+    {
+      "name": "sandbox-only App token cannot read the other private control repository",
+      "pass": true
+    },
+    {
+      "name": "S02/S03/S10/S11 pass with real human and App identities (both scenario writers run locally)",
+      "pass": true
+    },
+    {
+      "name": "App removing the human operator stop cannot resume",
+      "pass": true,
+      "observed": {
+        "stopped": true,
+        "unknown": false,
+        "reasons": [
+          "ignored unlabeled by non-operator warden-p0-sandbox-app[bot]",
+          "instance: label removed by non-operator; operator stop still in force"
+        ],
+        "lastOperatorEvent": 36554679818
+      }
+    },
+    {
+      "name": "explicit human operator resume clears the stop",
+      "pass": true
+    },
+    {
+      "name": "Mac App token reads a stopped control in the other private repository",
+      "pass": true
+    }
+  ],
+  "credentials": [
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+      "expiresAt": "2026-11-18T17:51:30Z",
+      "permissions": {
+        "issues": "write",
+        "metadata": "read"
+      }
+    },
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-control",
+      "expiresAt": "2026-11-18T17:51:31Z",
+      "permissions": {
+        "issues": "read",
+        "metadata": "read"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S02",
+      "title": "Two claims for one issue, concurrent submitters, two concurrent writers (Mac + Actions)",
+      "covers": "two claims; serialization; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "exactly one accepted, one rejected",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "rejected": 1
+          }
+        },
+        {
+          "desc": "ledger has exactly one owner and it is the accepted op",
+          "pass": true,
+          "observed": {
+            "id": "factory",
+            "kind": "factory",
+            "opid": "op_68e285727287ebc90de7608e81e5355d"
+          }
+        },
+        {
+          "desc": "only one \"Claim accepted\" notice was ever posted",
+          "pass": true
+        },
+        {
+          "desc": "loser was told why (explanatory comment)",
+          "pass": true
+        },
+        {
+          "desc": "receipt epochs never decrease by receipt order (no overlapping writers)",
+          "pass": true,
+          "observed": [
+            183,
+            183
+          ]
+        },
+        {
+          "desc": "both writers ran without error; one processed, the other idle or sequential",
+          "pass": true,
+          "observed": [
+            {
+              "env": "mac",
+              "epoch": 183,
+              "n": 2
+            },
+            {
+              "env": "actions",
+              "epoch": 184,
+              "n": 0
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 30060
+    },
+    {
+      "id": "S03",
+      "title": "Contributor vs factory ownership race (repeated rounds)",
+      "covers": "contributor/factory ownership race",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "each of 3 rounds has exactly one confirmed owner, one notice, GitHub assignment consistent with ledger",
+          "pass": true,
+          "observed": [
+            {
+              "item": 196,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            },
+            {
+              "item": 197,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            },
+            {
+              "item": 198,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 88316
+    },
+    {
+      "id": "S10",
+      "title": "Stop: global/instance, before and during application, operator authority, fail closed",
+      "covers": "global/instance stop visibility; stop during effect; resume",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "non-operator unlabel check is exercised separately by the App/Actions proofs"
+      ],
+      "checks": [
+        {
+          "desc": "instance stop: writer halts before any effect, intent stays pending, stop-ack posted",
+          "pass": true,
+          "observed": "instance: stop label present"
+        },
+        {
+          "desc": "global stop (separate control scope) halts a running-instance writer",
+          "pass": true,
+          "observed": "global: stop label present"
+        },
+        {
+          "desc": "stop mid-plan: halted between effects; op remains applying (recoverable), no receipt",
+          "pass": true,
+          "observed": {
+            "halted": "stop",
+            "st": {
+              "attempts": 0,
+              "decision": "accept",
+              "epoch": 191,
+              "intentCommentId": 6985359367,
+              "plan": [
+                {
+                  "add": [
+                    "warden:claimed"
+                  ],
+                  "remove": [
+                    "warden:ready"
+                  ],
+                  "t": "label"
+                },
+                {
+                  "t": "comment",
+                  "text": "Claim accepted: contributor trek-e now owns this item."
+                }
+              ],
+              "status": "applying",
+              "step": 1
+            }
+          }
+        },
+        {
+          "desc": "explicit resume completes the interrupted op exactly once",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 6985359367,
+              "opid": "op_33e4b9f7e50cdd1eba0a72689988ab65",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "unreadable stop control => fail closed (no effects), reported as unknown",
+          "pass": true,
+          "observed": "instance: control state unreadable (Error: control unreadable) => fail closed"
+        }
+      ],
+      "pass": true,
+      "ms": 36616
+    },
+    {
+      "id": "S11",
+      "title": "Admission: authorization, edits, forged identity, oversize, malformed",
+      "covers": "request admission; authorization; payload limits; failure visibility",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "oversize intent rejected at the submission edge (never truncated)",
+          "pass": true
+        },
+        {
+          "desc": "forged identity, malformed, oversize, edited => all quarantined with a visible receipt (none silently ignored)",
+          "pass": true,
+          "observed": [
+            "identity-mismatch",
+            "malformed-json",
+            "payload-too-large",
+            "edited-after-admission"
+          ]
+        },
+        {
+          "desc": "the one valid intent still applied",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "quarantined": 4
+          }
+        },
+        {
+          "desc": "quarantined intents produced no ledger op",
+          "pass": true
+        },
+        {
+          "desc": "intent from a non-allow-listed author is quarantined, never applied",
+          "pass": true,
+          "observed": [
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:trek-e"
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 36598
+    }
+  ],
+  "actions": [],
+  "cleanupErrors": [
+    "disable sandbox writer schedule: Command failed: gh workflow disable p0-writer -R The-Artificer-of-Ciphers-LLC/warden-p0-sandbox\ncould not find any workflows named p0-writer\n"
+  ],
+  "error": "Command failed: gh api -X POST repos/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/actions/workflows/p0-app-proof.yml/dispatches --input -\ngh: Not Found (HTTP 404)\n",
+  "scheduleRuns": {
+    "total_count": 0,
+    "workflow_runs": []
+  },
+  "pass": false
+}

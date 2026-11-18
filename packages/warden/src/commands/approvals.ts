@@ -17,7 +17,7 @@ export async function approvals(c: Ctx, sub: string): Promise<Result> {
     const s = be.open('submit'); if (!s) return { code: 4, data: {}, text: `approvals: ${be.unavailable}` };
     const type = str(c.flags, 'type') === 'feature-design' ? 'feature-design' : 'action';
     const intent = makeIntent({ v: 1, kind: 'approval-request', repo: cfg.repository, item, itemKind: (str(c.flags, 'item-kind') as 'issue' | 'pr') ?? 'issue', origin: 'deterministic',
-      source: { kind: 'cli', id: `approval-request:${item}:${action}:${revision}:${str(c.flags, 'nonce') ?? ''}`, observedAt: new Date(c.now()).toISOString() }, actor: SUBMIT_LOGIN,
+      source: { kind: 'cli', id: `approval-request:${item}:${action}:${revision}:${str(c.flags, 'nonce') ?? ''}`, observedAt: new Date(c.now()).toISOString() }, actor: s.actor(),
       payload: { type, action, subjectAuthor: str(c.flags, 'subject-author'), binding: { revision, policyDigest: str(c.flags, 'policy-digest') ?? pol.digest, evidenceDigest: str(c.flags, 'evidence-digest') ?? '' } } });
     let j: Journal | null = null; try { j = new Journal(openStorage(c, cfg.repository).journalPath); } catch { /* no local state: Actions-side */ }
     const { commentId } = await submit(s, cfg.inbox.inboxIssue, intent, j, undefined, pol.maxIntentBytes);
@@ -27,7 +27,7 @@ export async function approvals(c: Ctx, sub: string): Promise<Result> {
   if (sub === 'revise') {
     const s = be.open('submit'); if (!s) return { code: 4, data: {}, text: `approvals: ${be.unavailable}` };
     const intent = makeIntent({ v: 1, kind: 'revision-update', repo: cfg.repository, item, itemKind: (str(c.flags, 'item-kind') as 'issue' | 'pr') ?? 'issue', origin: 'deterministic',
-      source: { kind: 'cli', id: `revision:${item}:${str(c.flags, 'revision') ?? ''}:${str(c.flags, 'evidence-digest') ?? ''}:${str(c.flags, 'criteria') ?? ''}`, observedAt: new Date(c.now()).toISOString() }, actor: SUBMIT_LOGIN,
+      source: { kind: 'cli', id: `revision:${item}:${str(c.flags, 'revision') ?? ''}:${str(c.flags, 'evidence-digest') ?? ''}:${str(c.flags, 'criteria') ?? ''}`, observedAt: new Date(c.now()).toISOString() }, actor: s.actor(),
       payload: { revision: str(c.flags, 'revision'), head: str(c.flags, 'head'), evidenceDigest: str(c.flags, 'evidence-digest'), criteriaDigest: str(c.flags, 'criteria') } });
     await submit(s, cfg.inbox.inboxIssue, intent, null, undefined, pol.maxIntentBytes);
     const drained = c.flags.drain ? (await writerDrain(c)).data : undefined;

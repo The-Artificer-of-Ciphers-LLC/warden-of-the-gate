@@ -44,7 +44,7 @@ export async function setup(c: Ctx): Promise<Result> {
       add('authority-ceiling', 'created', 'operator-approved ceiling written: issues:write, metadata:read on this repository only');
     } else if (st) add('authority-ceiling', existsSync(ceilingPath(st)) ? 'ok' : 'missing', existsSync(ceilingPath(st)) ? 'present (protected operator store)' : 're-run with --approve-ceiling to approve the narrow default ceiling (issues:write, metadata:read)');
     const be = openBackend(c, cfg); const store = be.open('operator');
-    add('credentials', be.name === 'sim' ? 'warn' : 'missing', be.name === 'sim' ? 'simulated backend (no real credentials involved)' : be.unavailable ?? 'unavailable');
+    add('credentials', be.name === 'sim' ? 'warn' : store ? 'ok' : 'missing', be.name === 'sim' ? 'simulated backend (no real credentials involved)' : store ? 'explicit credential provider configured (access checked below)' : be.unavailable ?? 'unavailable');
     if (store) {
       for (const [n, label] of [['inbox issue', cfg.inbox.inboxIssue], ['control issue', cfg.inbox.controlIssue]] as const) {
         const ok = await store.getIssue(label).then(() => true, () => false); add(n, ok ? 'ok' : 'missing', ok ? `#${label} exists` : `#${label} not found: create it and set its number in warden.yml (setup does not create issues)`);

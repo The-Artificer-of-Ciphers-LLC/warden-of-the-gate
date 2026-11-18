@@ -7,7 +7,7 @@ TypeScript with erasable syntax only, run directly by Node (22.18+; developed on
 ## Safety
 
 * `GithubStore` refuses every repository except `The-Artificer-of-Ciphers-LLC/warden-p0-sandbox` (hard-coded guard; `WARDEN_P0_REPO` cannot widen it).
-* Authority used: the operator's existing `gh` login (`gh auth token`) on the sandbox only, and the per-run `GITHUB_TOKEN` inside sandbox workflows. **No GitHub App, PAT or repository secret was created.**
+* Original proof authority: the operator's existing `gh` login (`gh auth token`) on the sandbox only, and the per-run `GITHUB_TOKEN` inside sandbox workflows. No GitHub App, PAT or repository secret was created during that original proof. The separately approved App proof below uses scoped installation tokens and one temporary Actions secret.
 * Fixtures are issues titled `[P0 proof] ...` / `warden-*`, closed when a run ends; labels named `warden-lock-epoch-*` are the lease and are garbage-collected.
 * The pilot repo is never referenced.
 
@@ -32,6 +32,51 @@ scripts/install-sandbox.sh                  # pushes src + workflows into the sa
 node src/cli.ts actions-proof --out results/live-actions.json
 node src/cli.ts status                      # pending, receipts, lease, stop state + which environments acked
 ```
+
+## Owner-approved App proof
+
+`src/app-live-proof.ts` is a separate, explicitly live proof for the approved `warden-p0-sandbox-app` installation. It is not the production credential issuer and does not enable the P1 CLI's GitHub backend.
+
+```bash
+node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem
+# Retry just the runner checks after separately recorded scenario results:
+node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem --actions-only
+```
+
+Requires explicit owner approval for both tokens and the temporary Actions resources:
+
+- The key stays outside the repository in the protected directory, mode 600; its contents are never printed or uploaded.
+- A sandbox-only installation token has Issues write and Metadata read. A separate control-repository-only token has Issues read and Metadata read. Tokens last at most one hour and remain in memory, except for the control-read token's approved temporary sandbox secret `WARDEN_P0_CONTROL_READ_TOKEN`.
+- S02/S03/S10/S11 use real human/App credentials instead of routing every actor through one login. Both scenario writers execute locally; their `env` names do not prove execution on an Actions runner. A supplemental check exercises non-operator App removal of an operator's stop.
+- The temporary, dispatch-only `p0-app-proof.yml` runs on a real Actions runner. It checks cross-repository control while stopped, after explicit resume, and after token revocation; verifies that `GITHUB_TOKEN` cannot read the control repository; rejects writes with the read-only App token; and confirms the writer's distinct `github-actions[bot]` author.
+- Cleanup revokes tokens, deletes the temporary secret and workflow file, closes fixtures, and disables the existing sandbox writer schedule. Any cleanup error fails the report. The approved App and its protected local key remain for subsequent work.
+
+The script writes non-secret evidence to `results/live-app-2026-11-18.json`, with its execution scope, source hashes, scenario checks, Actions run URLs and cleanup errors. Preserve an existing report under an attempt filename before retrying; the script refuses to overwrite it, an existing secret or an existing workflow. It waits for workflow registration, dispatches by workflow ID, and verifies disabled state during cleanup. It uses the P1 `HttpStore` with proof-supplied credentials; this is not a production issuer or full P1 live acceptance result.
+
+The November 18 run passed four live scenarios and three real Actions checks across separate attempts. The raw reports retain their failed assertions and orchestration/cleanup errors; the independent final-state verification and remaining gates are in [`live-app-2026-11-18-closeout.json`](results/live-app-2026-11-18-closeout.json) and [FINDINGS.md](FINDINGS.md). An Actions-only result never claims the scenarios were rerun.
+
+## Owner-approved production P1 acceptance
+
+The separate harness exercises the actual P1 CLI, issuer/controller and serialized writer, not the P0 writer:
+
+```bash
+# Repository root; requires the owner's specific live-token and temporary-resource approvals:
+node proof/inbox/src/p1-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem
+```
+
+Only the two disposable repositories are used. App installation tokens have a one-hour maximum and the same narrow repository/Issues scopes as above; the batch budget is 40, including preserved attempts. Tokens remain in memory except for the approved temporary submit/control-read Actions secrets. A third temporary secret is a random writer-only ledger HMAC key; the App private key is never uploaded. The temporary, dispatch-only workflow uses the explicitly selected runner token as the distinct writer identity.
+
+The harness uploads a source-hashed copy of the P1 package to `.warden-p1-proof/` in the sandbox, checks actual CLI setup/config/dry-run/status, proactive renewal, journal recovery, bound maintainer approval, global stop/resume, tamper rejection and revoked-control fail-closed behavior, then removes the code/workflow/secrets, revokes installation tokens and closes fixtures. Existing resources are not overwritten. Original lease-epoch metadata remains governed by the shared lease protocol; newly created projection labels are removed. A failure or cleanup error fails the report; old reports are never rewritten as successes.
+
+`src/schedule-proof.ts --live` separately enables the original sandbox writer, waits at most 59 minutes for a successful **schedule-triggered** run, and disables it in cleanup. A manual dispatch does not satisfy this check. Neither proof implements the P2 Sweep task or authorizes production AI.
+
+## Owner-approved trust-root recovery
+
+`src/p1-root-proof.ts` has two ordered modes, each taking the original and replacement key paths: `--validate-replacement` verifies both roots before revocation; `--recover` runs only after the owner-approved original-key revocation. Creating a replacement and deleting the original are separately authorized GitHub administrative actions, not actions performed by this script.
+
+The recovery proof uses the actual CLI, issuer/controller and HTTP store to check original-key HTTP 401, persisted revocation across cold starts, replacement configuration without implicit recovery, explicit operator acknowledgement, authorized reads, and installation-token revocation plus a second explicit acknowledgement. Read-only polling allows at most one minute for provider revocation propagation, without issuing a replacement token. Cleanup revokes all issued tokens and removes its unique temporary local profile. Public-key fingerprints, HTTP status observations and redacted lifecycle events are evidence; key/token values are never written to reports.
+
+The separate approval allowed six sandbox-only, one-hour Issues-write/Metadata-read tokens across validation and recovery attempts; five were issued and revoked. Reports are never overwritten, and prior root-proof reports count against that batch ceiling. The [results and preserved failed attempt](FINDINGS.md#trust-root-replacement-and-recovery-2026-11-18) are already recorded; rerunning is not implicitly authorized. The original key is now revoked; the `-replacement.pem` file is the only valid sandbox signing key.
 
 ## Scenario index
 

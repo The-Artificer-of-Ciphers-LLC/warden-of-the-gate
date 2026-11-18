@@ -16,13 +16,29 @@ async function requested(r: ReturnType<typeof rig>, n: number, extra: Record<str
   await submit(r.submitStore, r.inbox, i, null); await r.writer().drain(); return 'apr_' + i.opid.slice(3, 15);
 }
 async function decide(r: ReturnType<typeof rig>, n: number, id: string, as: string, decision: string, o: { bind?: string | null; itemKind?: 'issue' | 'pr'; forgeActor?: string } = {}) {
-  const cid = await r.comment(as, n, `/warden ${decision} ${id}`);
   const l = await led(r, n); const bind = o.bind === null ? undefined : o.bind ?? l.approvals[id]?.bindingDigest;
+  const cid = await r.comment(as, n, `/warden ${decision} ${id}${bind ? ` bind=${bind}` : ''}`);
   const i = r.intent({ kind: 'approval-decision', item: n, itemKind: o.itemKind ?? 'pr', origin: 'maintainer', actor: o.forgeActor ?? as, source: { kind: 'gh-comment', id: String(cid), observedAt: new Date().toISOString() }, payload: { approvalId: id, decision, bind } });
   await submit(r.submitStore, r.inbox, i, null); const rep = await r.writer().drain();
   return rep.processed.find((p) => p.opid === i.opid)!;
 }
 const newPr = (r: ReturnType<typeof rig>) => r.world.addIssue({ isPr: true, head: 'a'.repeat(40), author: 'dev1' });
+
+test('approval decisions require the exact unedited source command on the target item', async () => {
+  for (const variation of ['another-item', 'no-command', 'different-decision', 'different-binding', 'different-reason', 'edited-source', 'override-command']) {
+    const r = rig(); const n = newPr(r); const id = await requested(r, n);
+    const bind = (await led(r, n)).approvals[id].bindingDigest;
+    const body = variation === 'no-command' ? 'Please investigate; no approval is given.' : variation === 'override-command' ? '/warden override ready investigate'
+      : `/warden ${variation === 'different-decision' ? 'deny' : 'approve'} ${id} bind=${variation === 'different-binding' ? 'deadbeef0000' : bind}${variation === 'different-reason' ? ' actual reason' : ''}`;
+    const source = await r.comment('maint1', variation === 'another-item' ? r.world.addIssue() : n, body);
+    if (variation === 'edited-source') { r.world.clock = r.world.now() + 1000; await r.world.view('maint1').updateComment(source, body); }
+    const intent = r.intent({ kind: 'approval-decision', item: n, itemKind: 'pr', origin: 'maintainer', actor: 'maint1', source: { kind: 'gh-comment', id: String(source), observedAt: '' }, payload: { approvalId: id, decision: 'approve', bind } });
+    await submit(r.submitStore, r.inbox, intent, null);
+    const rep = await r.writer().drain();
+    assert.equal(rep.processed[0].reason, 'unverified-source', variation);
+    assert.equal((await led(r, n)).approvals[id].status, 'pending', variation);
+  }
+});
 
 test('approve by authorized maintainer is recorded before work is authorized; decision lands in corpus data', async () => {
   const r = rig(); const n = newPr(r); const id = await requested(r, n);
@@ -70,8 +86,9 @@ test('revision/policy/evidence change invalidates; stale approval cannot authori
   assert.equal(checkAuthorized(l, 'merge', r.policy, r.world.now()).ok, false);
   // policy change (different digest) invalidates a pending request's decision
   const r2 = rig(); const n2 = newPr(r2); const id2 = await requested(r2, n2);
-  const w2 = r2.writer({ policy: { ...r2.policy, digest: 'changedpolicy' } }); const cid = await r2.comment('maint1', n2, 'x');
-  const l2 = await led(r2, n2); const i = r2.intent({ kind: 'approval-decision', item: n2, itemKind: 'pr', origin: 'maintainer', actor: 'maint1', source: { kind: 'gh-comment', id: String(cid), observedAt: '' }, payload: { approvalId: id2, decision: 'approve', bind: l2.approvals[id2].bindingDigest } });
+  const w2 = r2.writer({ policy: { ...r2.policy, digest: 'changedpolicy' } }); const l2 = await led(r2, n2);
+  const cid = await r2.comment('maint1', n2, `/warden approve ${id2} bind=${l2.approvals[id2].bindingDigest}`);
+  const i = r2.intent({ kind: 'approval-decision', item: n2, itemKind: 'pr', origin: 'maintainer', actor: 'maint1', source: { kind: 'gh-comment', id: String(cid), observedAt: '' }, payload: { approvalId: id2, decision: 'approve', bind: l2.approvals[id2].bindingDigest } });
   await submit(r2.submitStore, r2.inbox, i, null); const rep = await w2.drain(); assert.equal(rep.processed.find((p) => p.opid === i.opid)!.reason, 'stale-binding:policy-changed');
   assert.equal((await led(r2, n2)).approvals[id2].status, 'invalidated');
 });

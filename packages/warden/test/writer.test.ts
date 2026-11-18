@@ -2,15 +2,55 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { claim, rig, WRITER } from './helpers.ts';
 import { Crash } from '../src/util.ts';
-import { parseLedger, LEDGER_MARK } from '../src/writer/protocol.ts';
+import { encodeIntent, encodeReceipt, parseLedger, LEDGER_MARK } from '../src/writer/protocol.ts';
 import { reconcileJournal, submit, Journal } from '../src/writer/journal.ts';
 import { Faults } from '../src/util.ts';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const ledger = async (r: ReturnType<typeof rig>, n: number) => { const cs = (await r.world.view('x').listComments(n)).filter((c) => c.body.startsWith(LEDGER_MARK)); assert.equal(cs.length, 1); return parseLedger(cs[0].body)!; };
 const ready = async (r: ReturnType<typeof rig>, n: number) => { await r.send({ kind: 'transition', item: n, payload: { to: 'ready' }, actor: 'bot' }); await r.writer().drain(); };
+
+test('journal: untrusted or mismatched receipts cannot acknowledge pending operations', async (t) => {
+  const r = rig(); const n = r.world.addIssue(); const dir = mkdtempSync(join(tmpdir(), 'wj-trust-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const journal = new Journal(join(dir, 'j.jsonl'));
+  const intent = r.intent({ kind: 'note', item: n, payload: { text: 'not processed yet' } });
+  const posted = await submit(r.submitStore, r.inbox, intent, journal);
+  const receipt = { intentCommentId: posted.commentId, opid: intent.opid, item: n, result: 'applied' as const, epoch: 1, seq: 1, by: 'writer' };
+  await r.comment('mallory', r.inbox, encodeReceipt(receipt));
+  assert.equal((await reconcileJournal(r.submitStore, r.inbox, journal, [WRITER])).acked, 0);
+  for (const variation of ['different-operation', 'different-item', 'edited']) {
+    const body = encodeReceipt({ ...receipt, opid: variation === 'different-operation' ? 'op_different' : intent.opid, item: variation === 'different-item' ? n + 1 : n });
+    const invalid = await r.comment(WRITER, r.inbox, body);
+    if (variation === 'edited') { r.world.clock = r.world.now() + 1000; await r.world.view(WRITER).updateComment(invalid, body); }
+    assert.equal((await reconcileJournal(r.submitStore, r.inbox, journal, [WRITER])).acked, 0, variation);
+    assert.equal(journal.unacked().length, 1, variation);
+    await r.world.view(WRITER).deleteComment(invalid);
+  }
+  await r.writer().drain();
+  assert.equal((await reconcileJournal(r.submitStore, r.inbox, journal, [WRITER])).acked, 1);
+  assert.equal(journal.unacked().length, 0);
+});
+
+test('journal: another submitter or an edited comment cannot impersonate a posted local intent', async (t) => {
+  for (const variation of ['another-author', 'edited']) {
+    const r = rig(); const n = r.world.addIssue(); const dir = mkdtempSync(join(tmpdir(), 'wj-author-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const journal = new Journal(join(dir, 'j.jsonl'));
+    const intent = r.intent({ kind: 'note', item: n, payload: { text: 'recover this operation' } });
+    journal.append({ opid: intent.opid, intent, state: 'pending', at: new Date().toISOString() });
+    const author = variation === 'another-author' ? 'mallory' : r.submitStore.actor();
+    const source = await r.comment(author, r.inbox, encodeIntent(intent));
+    if (variation === 'edited') { r.world.clock = r.world.now() + 1000; await r.world.view(author).updateComment(source, encodeIntent(intent)); }
+    const rep = await reconcileJournal(r.submitStore, r.inbox, journal, [WRITER]);
+    assert.equal(rep.resubmitted, 1, variation); assert.equal(rep.adopted, 0, variation);
+    assert.equal(journal.unacked().length, 1);
+    await r.writer().drain();
+    assert.equal((await reconcileJournal(r.submitStore, r.inbox, journal, [WRITER])).acked, 1);
+  }
+});
 
 test('two claims for one issue: exactly one owner, loser gets a visible rejection', async () => {
   const r = rig(); const n = r.world.addIssue();
@@ -137,8 +177,8 @@ test('journal: crash after journal before post is resubmitted; lost reply adopte
   const i = r.intent({ kind: 'note', item: n, payload: { text: 'hello' } });
   await assert.rejects(() => submit(r.submitStore, r.inbox, i, j, new Faults().arm('after-journal-before-post')), Crash);
   assert.equal(j.unacked().length, 1);
-  const o = await reconcileJournal(r.submitStore, r.inbox, j); assert.equal(o.resubmitted, 1); assert.equal(j.unacked().length, 1); // not acked until a receipt exists
-  await r.writer().drain(); const o2 = await reconcileJournal(r.submitStore, r.inbox, j); assert.equal(o2.acked, 1); assert.equal(j.unacked().length, 0);
+  const o = await reconcileJournal(r.submitStore, r.inbox, j, [WRITER]); assert.equal(o.resubmitted, 1); assert.equal(j.unacked().length, 1); // not acked until a receipt exists
+  await r.writer().drain(); const o2 = await reconcileJournal(r.submitStore, r.inbox, j, [WRITER]); assert.equal(o2.acked, 1); assert.equal(j.unacked().length, 0);
 });
 
 test('content-creation budget halts the drain with intents left pending', async () => {

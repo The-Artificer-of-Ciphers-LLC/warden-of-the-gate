@@ -3,7 +3,7 @@ import { NetworkError, sleep } from '../util.ts';
 import type { CredentialProvider, CredentialRequest } from '../credentials/types.ts';
 
 /** Real GitHub REST store. Every request obtains a short-lived token from the CredentialProvider; there is no env/PAT fallback.
- *  CredentialUnavailable propagates so only this authenticated operation is suspended. UNVERIFIED LIVE until the App proof lands. */
+ *  CredentialUnavailable suspends the authenticated operation. Exercised by the sandbox App proof; full P1 live acceptance remains gated. */
 export class HttpStore implements Store {
   readonly name = 'github';
   skew = 0; private who: string; private repo: string; private creds: CredentialProvider; private credReq: CredentialRequest; private apiBase: string;
@@ -19,6 +19,7 @@ export class HttpStore implements Store {
       catch (e) { if (method === 'GET' && attempt < 3) { await sleep(300 * (attempt + 1)); continue; } throw new NetworkError(String(e)); }
       const d = res.headers.get('date'); if (d) this.skew = Date.parse(d) - Date.now();
       const limited = (res.status === 403 || res.status === 429) && (res.headers.get('retry-after') || res.headers.get('x-ratelimit-remaining') === '0' || /secondary rate/i.test(await res.clone().text()));
+      if (res.status === 401) this.creds.reportUnauthorized?.(this.credReq);
       if (limited) { if (attempt >= 6) throw new Error('rate limited persistently'); await sleep((Number(res.headers.get('retry-after')) || Math.min(60, 5 * (attempt + 1))) * 1000); continue; }
       if (res.status >= 500 && method === 'GET' && attempt < 3) { await sleep(500 * (attempt + 1)); continue; }
       const text = await res.text(); let json: any = null; try { json = text ? JSON.parse(text) : null; } catch { json = text; }

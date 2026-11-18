@@ -1,0 +1,134 @@
+{
+  "at": "2026-11-18T18:05:31.831Z",
+  "sourceCommit": "55f2dc0d41f1b8302d511a62f0d8771506cc8c28",
+  "scope": "app-actions-only",
+  "sourceHashes": {
+    "proof/inbox/src/app-live-proof.ts": "762300d2b09564a1a87782fc6a1dc4f75d3f564cc4534f6535e16245d4dbb824",
+    "proof/inbox/src/scenarios.ts": "e8e2dfea522fe928809a3a45f734b18835514f06f0d8b530bd5a9e145bdcf356",
+    "proof/inbox/workflows/p0-app-proof.yml": "8df53e0b4855b3f277fc013fcbaf6d8e41a9eedb8dab7636083d325efbb942a4",
+    "packages/warden/src/github/http.ts": "39efadcb82cc5c3535897505ff50197700da852ea9d90e5a04d4b1474de1eec7"
+  },
+  "appId": 5819526,
+  "installationId": 183378787,
+  "appLogin": "warden-p0-sandbox-app[bot]",
+  "checks": [
+    {
+      "name": "scoped installation tokens minted without persisting or printing their values",
+      "pass": true
+    },
+    {
+      "name": "installation token produces the distinct App bot author",
+      "pass": true,
+      "observed": {
+        "author": "warden-p0-sandbox-app[bot]",
+        "operator": "trek-e"
+      }
+    },
+    {
+      "name": "sandbox-only App token cannot read the other private control repository",
+      "pass": true
+    },
+    {
+      "name": "App removing the human operator stop cannot resume",
+      "pass": true,
+      "observed": {
+        "stopped": true,
+        "unknown": false,
+        "reasons": [
+          "ignored unlabeled by non-operator warden-p0-sandbox-app[bot]",
+          "instance: label removed by non-operator; operator stop still in force"
+        ],
+        "lastOperatorEvent": 36561680906
+      }
+    },
+    {
+      "name": "explicit human operator resume clears the stop",
+      "pass": true
+    },
+    {
+      "name": "Mac App token reads a stopped control in the other private repository",
+      "pass": true
+    },
+    {
+      "name": "revoked control token fails closed in Actions without falling back to GITHUB_TOKEN",
+      "pass": true
+    }
+  ],
+  "credentials": [
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+      "expiresAt": "2026-11-18T19:05:35Z",
+      "permissions": {
+        "issues": "write",
+        "metadata": "read"
+      }
+    },
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-control",
+      "expiresAt": "2026-11-18T19:05:35Z",
+      "permissions": {
+        "issues": "read",
+        "metadata": "read"
+      }
+    }
+  ],
+  "scenarios": [],
+  "actions": [
+    {
+      "mode": "stopped",
+      "state": {
+        "stopped": true,
+        "unknown": false,
+        "reasons": [
+          "global: stop label present"
+        ],
+        "lastOperatorEvent": 36561688166
+      },
+      "repoScopedReadStatus": 404,
+      "crossScopeReadStatus": 404,
+      "readOnlyWriteStatus": 403,
+      "writerAuthor": "github-actions[bot]",
+      "writerCommentId": 6987185519,
+      "runUrl": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/actions/runs/44365922879"
+    },
+    {
+      "mode": "running",
+      "state": {
+        "stopped": false,
+        "unknown": false,
+        "reasons": [],
+        "lastOperatorEvent": 36561740550
+      },
+      "repoScopedReadStatus": 404,
+      "crossScopeReadStatus": 404,
+      "readOnlyWriteStatus": 403,
+      "writerAuthor": "github-actions[bot]",
+      "writerCommentId": 6987193701,
+      "runUrl": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/actions/runs/44366003021"
+    },
+    {
+      "mode": "unknown",
+      "state": {
+        "stopped": true,
+        "unknown": true,
+        "reasons": [
+          "global: control state unreadable (AssertionError [ERR_ASSERTION]: control read HTTP 401\n\n401 !== 200\n) => fail closed"
+        ]
+      },
+      "repoScopedReadStatus": 404,
+      "crossScopeReadStatus": 401,
+      "readOnlyWriteStatus": 401,
+      "writerAuthor": "github-actions[bot]",
+      "writerCommentId": 6987201664,
+      "runUrl": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/actions/runs/44366062454"
+    }
+  ],
+  "cleanupErrors": [
+    "disable sandbox writer schedule: Command failed: gh api -X PUT repos/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/actions/workflows/422227724/disable\ngh: Unable to disable a workflow that is not active. (HTTP 403)\n"
+  ],
+  "scheduleRuns": {
+    "total_count": 0,
+    "workflow_runs": []
+  },
+  "pass": false
+}

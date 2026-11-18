@@ -3,12 +3,23 @@ import { Writer, defaultWriterConfig } from '../writer/writer.ts';
 import { Journal, reconcileJournal, submit } from '../writer/journal.ts';
 import { makeIntent } from '../writer/protocol.ts';
 import type { Origin } from '../writer/protocol.ts';
+import { parseMaintainerCommand } from '../approvals/approvals.ts';
 import { buildPolicy } from '../config/snapshot.ts';
 import { InstanceStorage } from '../storage/instance.ts';
 import { SUBMIT_LOGIN, WRITER_LOGIN, homeDir, loadConfigs, openBackend, openStorage, str } from './common.ts';
 import type { Ctx, Result } from './common.ts';
 
 function optStorage(c: Ctx, repo: string): InstanceStorage | null { try { return openStorage(c, repo, false); } catch { return null; } }
+
+export async function journalReconcile(c: Ctx): Promise<Result> {
+  const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'journal: configuration invalid' };
+  const cfg = cfgs.warden; const st = openStorage(c, cfg.repository);
+  const be = openBackend(c, cfg); const store = be.open('submit');
+  if (!store) return { code: 4, data: {}, text: `journal: ${be.unavailable}; pending operations remain durable` };
+  const writers = (str(c.flags, 'writer-identities') ?? (be.name === 'sim' ? WRITER_LOGIN : 'github-actions[bot]')).split(',');
+  const report = await reconcileJournal(store, cfg.inbox.inboxIssue, new Journal(st.journalPath), writers, cfg.inbox.maxIntentBytes);
+  return { code: 0, data: { ...report }, text: `journal: ${report.resubmitted} resubmitted, ${report.adopted} adopted, ${report.acked} acknowledged` };
+}
 
 /** `warden writer drain`: the ONE serialized effect path (Actions entry point; also runnable on the Mac). Authenticates as the WRITER identity. */
 export async function writerDrain(c: Ctx): Promise<Result> {
@@ -20,7 +31,7 @@ export async function writerDrain(c: Ctx): Promise<Result> {
   const keyFile = str(c.flags, 'ledger-key-file'); const ledgerKey = keyFile ? readFileSync(keyFile, 'utf8').trim() : c.env.WARDEN_LEDGER_KEY;
   const w = new Writer(store, defaultWriterConfig({
     repository: cfg.repository, inboxIssue: cfg.inbox.inboxIssue, controlIssue: cfg.inbox.controlIssue, global, policy: pol,
-    submitters: (str(c.flags, 'submitters') ?? SUBMIT_LOGIN).split(','), writerIdentities: (str(c.flags, 'writer-identities') ?? WRITER_LOGIN).split(','),
+    submitters: (str(c.flags, 'submitters') ?? be.submitLogin ?? SUBMIT_LOGIN).split(','), writerIdentities: (str(c.flags, 'writer-identities') ?? store.actor()).split(','),
     env: str(c.flags, 'env') ?? 'actions', holder: c.env.GITHUB_RUN_ID ? `run-${c.env.GITHUB_RUN_ID}` : 'writer-' + process.pid, ledgerKey, assignable: () => true,
     leaseTtlMs: 30_000, leaseWaitMs: Number(str(c.flags, 'lease-wait-ms') ?? 20_000), fenceMarginMs: 5000, fenceCacheMs: Number(str(c.flags, 'fence-cache-ms') ?? 0),
   }));
@@ -28,15 +39,13 @@ export async function writerDrain(c: Ctx): Promise<Result> {
   const st = optStorage(c, cfg.repository); let corpus = 0;
   if (st) {
     for (const d of rep.decisions) if (st.recordDecision(d as never)) corpus++;
-    if (existsSync(st.journalPath)) { const sub = be.open('submit'); if (sub) await reconcileJournal(sub, cfg.inbox.inboxIssue, new Journal(st.journalPath), pol.maxIntentBytes).catch(() => {}); }
+    if (existsSync(st.journalPath)) { const sub = be.open('submit'); if (sub) await reconcileJournal(sub, cfg.inbox.inboxIssue, new Journal(st.journalPath), w.cfg.writerIdentities, pol.maxIntentBytes); }
   }
   const counts = rep.processed.reduce<Record<string, number>>((a, p) => ({ ...a, [p.result]: (a[p.result] ?? 0) + 1 }), {});
   const text = `writer ${rep.env}/${rep.holder} epoch ${rep.epoch}: ${rep.processed.length} processed ${JSON.stringify(counts)}; pending after: ${rep.pendingAfter.length}; repairs ${rep.repairs}; creates ${rep.creates}${rep.halted ? `\nHALTED (${rep.halted}): ${rep.haltReason ?? ''}` : ''}${corpus ? `\n${corpus} decision(s) added to the local decision corpus` : ''}`;
   return { code: rep.halted && rep.halted !== 'busy' ? 5 : 0, data: { ...rep, corpusAdded: corpus, backend: be.name }, text };
 }
 
-const CMD = /^\/warden\s+(approve|deny)\s+(apr_[0-9a-f]{6,})(?:\s+bind=([0-9a-f]{6,}))?(?:\s+(.*))?$/;
-const OVR = /^\/warden\s+override\s+([a-z-]+)\s+(.+)$/;
 /** `warden event handle`: Actions doorbell. Turns a GitHub `issue_comment` event into a durable INTENT using the GitHub-attributed commenter (never comment text for identity). */
 export async function eventHandle(c: Ctx): Promise<Result> {
   const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'event: configuration invalid:\n' + cfgs.errors.join('\n') };
@@ -48,11 +57,9 @@ export async function eventHandle(c: Ctx): Promise<Result> {
   if (ev.repository && ev.repository.full_name.toLowerCase() !== cfg.repository.toLowerCase()) return { code: 0, data: { ignored: 'wrong-instance' }, text: 'event: for another repository; ignored' };
   const line = ev.comment.body.split('\n').map((l) => l.trim()).find((l) => l.startsWith('/warden'));
   if (!line) return { code: 0, data: { ignored: 'no-command' }, text: 'event: no /warden command in comment' };
-  let kind: 'approval-decision' | 'override'; let payload: Record<string, unknown>;
-  const m = CMD.exec(line); const o = OVR.exec(line);
-  if (m) { kind = 'approval-decision'; payload = { approvalId: m[2], decision: m[1], bind: m[3], reason: m[4]?.trim() || undefined }; }
-  else if (o) { kind = 'override'; payload = { to: o[1], reason: o[2].trim() }; }
-  else return { code: 0, data: { ignored: 'unrecognized-command', line: line.slice(0, 80) }, text: `event: unrecognized /warden command (${line.slice(0, 60)}); ignored` };
+  const command = parseMaintainerCommand(ev.comment.body);
+  if (!command) return { code: 0, data: { ignored: 'unrecognized-command', line: line.slice(0, 80) }, text: `event: unrecognized /warden command (${line.slice(0, 60)}); ignored` };
+  const { kind, payload } = command;
   const be = openBackend(c, cfg); const sub = be.open('submit');
   if (!sub) return { code: 4, data: {}, text: `event: cannot submit: ${be.unavailable}` };
   const itemKind = ev.issue.pull_request ? 'pr' : 'issue';

@@ -1,0 +1,53 @@
+{
+  "verificationDate": "2026-11-18",
+  "verdict": "App infrastructure checks demonstrated; scheduled sweep and full production P1 acceptance remain unverified.",
+  "scenarioEvidence": {
+    "report": "live-app-2026-11-18-attempt2.json",
+    "passed": ["S02", "S03", "S10", "S11"],
+    "writerExecution": "Both scenario writers ran locally with real human and App credentials, not on separate Mac and Actions hosts."
+  },
+  "actionsEvidence": {
+    "report": "live-app-2026-11-18.json",
+    "runs": [
+      { "mode": "stopped", "id": 44365922879, "status": "completed", "conclusion": "success" },
+      { "mode": "running", "id": 44366003021, "status": "completed", "conclusion": "success" },
+      { "mode": "unknown", "id": 44366062454, "status": "completed", "conclusion": "success" }
+    ],
+    "observed": {
+      "appAuthor": "warden-p0-sandbox-app[bot]",
+      "actionsWriterAuthor": "github-actions[bot]",
+      "repoScopedTokenCrossRepoRead": 404,
+      "controlOnlyTokenSandboxRead": 404,
+      "readOnlyControlTokenWrite": 403,
+      "revokedControlTokenAccess": 401,
+      "revokedControlFailsClosed": true
+    }
+  },
+  "rawReportsAllGreen": false,
+  "preservedFailures": [
+    "Attempt 1 exposed S10's fixed-position pause assuming an assignment effect. A failing offline regression was added; the pause now leaves a later effect even without assignments. No writer behavior was changed.",
+    "Attempt 2 passed all four scenarios but dispatched before GitHub registered the temporary workflow. Registration is now observed with a bounded wait before dispatch by workflow ID.",
+    "The Actions-only run passed all three runner checks but reported a cleanup error when disabling an already-disabled schedule. Cleanup now reads and verifies state rather than attempting a non-idempotent disable blindly."
+  ],
+  "independentCleanupVerification": {
+    "method": "Read-only GitHub REST queries after the Actions-only run; raw reports were not rewritten.",
+    "remainingWorkflows": [
+      { "id": 422227723, "name": "p0-overlap", "state": "disabled_manually" },
+      { "id": 422227724, "name": "p0-writer", "state": "disabled_manually" }
+    ],
+    "temporaryWorkflowFileAbsent": true,
+    "temporarySecretAbsent": true,
+    "openAppProofSandboxFixtures": 0,
+    "openControlFixtures": 0,
+    "tokenRevocation": "Control token revocation was observed as HTTP 401 on the runner. Other minted tokens were revoked by DELETE /installation/token without a revocation cleanup error.",
+    "localKeyDirectoryMode": "0700",
+    "localPrivateKeyMode": "0600",
+    "appAndProtectedLocalKeyRetained": true
+  },
+  "remainingGates": [
+    "No schedule-triggered sweep run observed.",
+    "Production GitHub App issuer, renewal and trust-root rotation/recovery are not implemented or live-accepted.",
+    "Full P1 CLI/writer/approval/journal live acceptance and live tamper-detection/repair remain unverified.",
+    "No production activation, package publication, pilot-repository change or main-project push was authorized."
+  ]
+}

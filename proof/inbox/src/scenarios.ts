@@ -215,14 +215,14 @@ const SCENARIOS: Scenario[] = [
       await setStop(c.env.store('mallory'), fx.control, false);                     // non-operator removes the label
       const r2 = await new Writer(bot, cfgFor(c.env, fx)).drain() as DrainReport;
       c.ck('non-operator removing the stop label does NOT resume (derived from operator-attributed events)', r2.halted === 'stop' && r2.pendingAfter.length === 1, r2.haltReason);
-    } else c.log.push('non-operator unlabel check runs in the Actions-side proof (actor github-actions[bot]); single gh identity here');
+    } else c.log.push('non-operator unlabel check is exercised separately by the App/Actions proofs');
     await setStop(op, fx.control, false); await setStop(op, fx.control, true); await setStop(op, fx.control, false);   // explicit operator resume
     await setStop(op, fx.global, true);
     const r3 = await new Writer(bot, cfgFor(c.env, fx)).drain() as DrainReport;
     c.ck('global stop (separate control scope) halts a running-instance writer', r3.halted === 'stop' && /global/.test(r3.haltReason ?? ''), r3.haltReason);
     await setStop(op, fx.global, false);
-    // stop during multi-effect: operator stops right before effect #1
-    const f = new Faults().onStall('before-effect:1', async () => { await setStop(op, fx.control, true); });
+    // Leave another effect after the pause even when the plan has no assignment.
+    const f = new Faults().onStall('before-effect:0', async () => { await setStop(op, fx.control, true); });
     const r4 = await new Writer(c.env.store('bot', f), cfgFor(c.env, fx, { holder: 'w-stop' })).drain() as DrainReport;
     const mid = await ledgerOf(bot, item);
     c.ck('stop mid-plan: halted between effects; op remains applying (recoverable), no receipt', r4.halted === 'stop' && mid?.ops[i.opid]?.status === 'applying' && (await receiptsOf(bot, fx.inbox)).length === 0, { halted: r4.halted, st: mid?.ops[i.opid] });
@@ -378,8 +378,9 @@ const SCENARIOS: Scenario[] = [
   } },
 ];
 
-export async function runScenarios(backend: 'fake' | 'github', only?: string[]) {
-  const env = makeEnv(backend); const results: ScenarioResult[] = [];
+export async function runScenarios(backend: 'fake' | 'github', only?: string[], suppliedEnv?: Env) {
+  const env = suppliedEnv ?? makeEnv(backend); const results: ScenarioResult[] = [];
+  if (env.backend !== backend) throw new Error('scenario environment/backend mismatch');
   for (const s of SCENARIOS) {
     if (only?.length && !only.includes(s.id)) continue;
     const t0 = Date.now(); const ctx: Ctx = { env, log: [], checks: [], ck: (desc, pass, observed) => { ctx.checks.push({ desc, pass, observed }); } };
