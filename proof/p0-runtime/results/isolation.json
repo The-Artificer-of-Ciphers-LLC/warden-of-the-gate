@@ -1,0 +1,651 @@
+{
+  "proof": "PROOF-runtime",
+  "area": "isolation",
+  "startedAt": "2026-11-18T05:46:06.305Z",
+  "host": {
+    "os": "macOS 27.2.1 (26B131)",
+    "arch": "arm64",
+    "node": "v26.13.0",
+    "cpus": "18",
+    "memGiB": "128"
+  },
+  "versions": {
+    "sandboxExec": "present (deprecated by Apple per man page)",
+    "macOS": "macOS 27.2.1 (26B131)",
+    "node": "v26.13.0",
+    "npm": "11.20.0",
+    "git": "git version 2.54.0 (Apple Git-157)",
+    "docker": "Docker version 29.9.3, build 5457199aa5 / daemon NOT running",
+    "appleContainerCli": "not installed"
+  },
+  "inputs": {
+    "mechanism": "macOS Seatbelt via /usr/bin/sandbox-exec, deny-default profile, rebuilt env, per-run scratch HOME",
+    "fixture": "fixtures/hostile-repo",
+    "credentialTargetsPresentOnThisMac": [
+      "~/.ssh",
+      "~/.ssh/id_ed25519",
+      "~/.config/gh/hosts.yml",
+      "~/.config/gh",
+      "~/.npmrc",
+      "~/.gitconfig",
+      "~/.lmstudio/credentials",
+      "~/.config/opencode",
+      "~/.claude",
+      "~/.claude.json",
+      "~/Library/Keychains",
+      "~/.zsh_history"
+    ],
+    "note": "attack payload reads/writes only canaries and records errno; real credential files are never read by the harness itself",
+    "uncontainedControlOutcomes": {
+      "ws_write": "ALLOWED",
+      "read_canary_in_home": "ALLOWED",
+      "read_cred:~/.ssh": "ALLOWED",
+      "read_cred:~/.ssh/id_ed25519": "ALLOWED",
+      "read_cred:~/.config/gh/hosts.yml": "ALLOWED",
+      "read_cred:~/.config/gh": "ALLOWED",
+      "read_cred:~/.npmrc": "ALLOWED",
+      "read_cred:~/.gitconfig": "ALLOWED",
+      "read_cred:~/.lmstudio/credentials": "ALLOWED",
+      "read_cred:~/.config/opencode": "ALLOWED",
+      "read_cred:~/.claude": "ALLOWED",
+      "read_cred:~/.claude.json": "ALLOWED",
+      "read_cred:~/Library/Keychains": "ALLOWED",
+      "read_cred:~/.zsh_history": "ALLOWED",
+      "list_home_dir": "ALLOWED",
+      "list_Users": "ALLOWED",
+      "read_sibling_sentinel": "ALLOWED",
+      "read_main_checkout": "ALLOWED",
+      "env_has_write_token": "ALLOWED",
+      "env_has_any_secret_like": "ALLOWED",
+      "write_parent_of_workspace": "ALLOWED",
+      "write_real_home": "ALLOWED",
+      "write_canary_dir": "ALLOWED",
+      "write_outside_tmp": "ALLOWED",
+      "symlink_read_canary": "ALLOWED",
+      "symlink_write_outside": "ALLOWED",
+      "hardlink_canary": "ALLOWED",
+      "rename_out_of_ws": "ALLOWED",
+      "chmod_canary": "ALLOWED",
+      "chdir_dotdot_read": "ALLOWED",
+      "tcp_approved_port": "ALLOWED",
+      "tcp_unapproved_loopback_port": "ALLOWED",
+      "tcp_lmstudio_port": "ALLOWED"
+    },
+    "containedOutcomes": {
+      "direct-node": {
+        "ws_write": "ALLOWED (workspace write ok)",
+        "read_canary_in_home": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh/id_ed25519": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh/hosts.yml": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh": "BLOCKED (EPERM)",
+        "read_cred:~/.npmrc": "BLOCKED (EPERM)",
+        "read_cred:~/.gitconfig": "BLOCKED (EPERM)",
+        "read_cred:~/.lmstudio/credentials": "BLOCKED (EPERM)",
+        "read_cred:~/.config/opencode": "BLOCKED (EPERM)",
+        "read_cred:~/.claude": "BLOCKED (EPERM)",
+        "read_cred:~/.claude.json": "BLOCKED (EPERM)",
+        "read_cred:~/Library/Keychains": "BLOCKED (EPERM)",
+        "read_cred:~/.zsh_history": "BLOCKED (EPERM)",
+        "list_home_dir": "BLOCKED (EPERM)",
+        "list_Users": "BLOCKED (EPERM)",
+        "read_sibling_sentinel": "BLOCKED (EPERM)",
+        "read_main_checkout": "BLOCKED (EPERM)",
+        "env_has_write_token": "BLOCKED (env secret-like keys: [])",
+        "env_has_any_secret_like": "BLOCKED",
+        "gh_auth_token": "BLOCKED (status=1 err=no oauth token found for gi)",
+        "gh_auth_token_abs": "BLOCKED (status=1)",
+        "write_parent_of_workspace": "BLOCKED (EPERM)",
+        "write_real_home": "BLOCKED (EPERM)",
+        "write_canary_dir": "BLOCKED (EPERM)",
+        "write_outside_tmp": "BLOCKED (EPERM)",
+        "symlink_read_canary": "BLOCKED (EPERM)",
+        "symlink_write_outside": "BLOCKED (EPERM)",
+        "hardlink_canary": "BLOCKED (EPERM)",
+        "rename_out_of_ws": "BLOCKED (EPERM)",
+        "chmod_canary": "BLOCKED (EPERM)",
+        "chdir_dotdot_read": "BLOCKED (EPERM)",
+        "tcp_approved_port": "ALLOWED (connected)",
+        "tcp_unapproved_loopback_port": "BLOCKED (EPERM)",
+        "tcp_lmstudio_port": "BLOCKED (EPERM)",
+        "tcp_internet_1.1.1.1_443": "BLOCKED (EPERM)",
+        "dns_example_com": "BLOCKED (ENOTFOUND)",
+        "udp_8.8.8.8_53": "BLOCKED (EPERM)",
+        "unix_socket_mdnsresponder": "BLOCKED (EPERM)",
+        "curl_example_com": "BLOCKED (status=6 http=000)",
+        "listen_0.0.0.0": "BLOCKED (EPERM)",
+        "osascript": "BLOCKED (status=null )",
+        "pbpaste_clipboard": "BLOCKED (status=1 )",
+        "launchctl_list": "BLOCKED (status=1 )",
+        "sudo_noninteractive": "BLOCKED (status=null )",
+        "open_launchservices": "BLOCKED (status=1 LSCopyApplicationURLsForBundleI)"
+      },
+      "npm-install-lifecycle": {
+        "ws_write": "ALLOWED (workspace write ok)",
+        "read_canary_in_home": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh/id_ed25519": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh/hosts.yml": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh": "BLOCKED (EPERM)",
+        "read_cred:~/.npmrc": "BLOCKED (EPERM)",
+        "read_cred:~/.gitconfig": "BLOCKED (EPERM)",
+        "read_cred:~/.lmstudio/credentials": "BLOCKED (EPERM)",
+        "read_cred:~/.config/opencode": "BLOCKED (EPERM)",
+        "read_cred:~/.claude": "BLOCKED (EPERM)",
+        "read_cred:~/.claude.json": "BLOCKED (EPERM)",
+        "read_cred:~/Library/Keychains": "BLOCKED (EPERM)",
+        "read_cred:~/.zsh_history": "BLOCKED (EPERM)",
+        "list_home_dir": "BLOCKED (EPERM)",
+        "list_Users": "BLOCKED (EPERM)",
+        "read_sibling_sentinel": "BLOCKED (EPERM)",
+        "read_main_checkout": "BLOCKED (EPERM)",
+        "env_has_write_token": "BLOCKED (env secret-like keys: [])",
+        "env_has_any_secret_like": "BLOCKED",
+        "gh_auth_token": "BLOCKED (status=1 err=no oauth token found for gi)",
+        "gh_auth_token_abs": "BLOCKED (status=1)",
+        "write_parent_of_workspace": "BLOCKED (EPERM)",
+        "write_real_home": "BLOCKED (EPERM)",
+        "write_canary_dir": "BLOCKED (EPERM)",
+        "write_outside_tmp": "BLOCKED (EPERM)",
+        "symlink_read_canary": "BLOCKED (EEXIST)",
+        "symlink_write_outside": "BLOCKED (EEXIST)",
+        "hardlink_canary": "BLOCKED (EPERM)",
+        "rename_out_of_ws": "BLOCKED (EPERM)",
+        "chmod_canary": "BLOCKED (EPERM)",
+        "chdir_dotdot_read": "BLOCKED (EPERM)",
+        "tcp_approved_port": "ALLOWED (connected)",
+        "tcp_unapproved_loopback_port": "BLOCKED (EPERM)",
+        "tcp_lmstudio_port": "BLOCKED (EPERM)",
+        "tcp_internet_1.1.1.1_443": "BLOCKED (EPERM)",
+        "dns_example_com": "BLOCKED (ENOTFOUND)",
+        "udp_8.8.8.8_53": "BLOCKED (EPERM)",
+        "unix_socket_mdnsresponder": "BLOCKED (EPERM)",
+        "curl_example_com": "BLOCKED (status=6 http=000)",
+        "listen_0.0.0.0": "BLOCKED (EPERM)",
+        "osascript": "BLOCKED (status=null )",
+        "pbpaste_clipboard": "BLOCKED (status=1 )",
+        "launchctl_list": "BLOCKED (status=1 )",
+        "sudo_noninteractive": "BLOCKED (status=null )",
+        "open_launchservices": "BLOCKED (status=1 LSCopyApplicationURLsForBundleI)"
+      },
+      "node-test-runner": {
+        "ws_write": "ALLOWED (workspace write ok)",
+        "read_canary_in_home": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh/id_ed25519": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh/hosts.yml": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh": "BLOCKED (EPERM)",
+        "read_cred:~/.npmrc": "BLOCKED (EPERM)",
+        "read_cred:~/.gitconfig": "BLOCKED (EPERM)",
+        "read_cred:~/.lmstudio/credentials": "BLOCKED (EPERM)",
+        "read_cred:~/.config/opencode": "BLOCKED (EPERM)",
+        "read_cred:~/.claude": "BLOCKED (EPERM)",
+        "read_cred:~/.claude.json": "BLOCKED (EPERM)",
+        "read_cred:~/Library/Keychains": "BLOCKED (EPERM)",
+        "read_cred:~/.zsh_history": "BLOCKED (EPERM)",
+        "list_home_dir": "BLOCKED (EPERM)",
+        "list_Users": "BLOCKED (EPERM)",
+        "read_sibling_sentinel": "BLOCKED (EPERM)",
+        "read_main_checkout": "BLOCKED (EPERM)",
+        "env_has_write_token": "BLOCKED (env secret-like keys: [])",
+        "env_has_any_secret_like": "BLOCKED",
+        "gh_auth_token": "BLOCKED (status=1 err=no oauth token found for gi)",
+        "gh_auth_token_abs": "BLOCKED (status=1)",
+        "write_parent_of_workspace": "BLOCKED (EPERM)",
+        "write_real_home": "BLOCKED (EPERM)",
+        "write_canary_dir": "BLOCKED (EPERM)",
+        "write_outside_tmp": "BLOCKED (EPERM)",
+        "symlink_read_canary": "BLOCKED (EPERM)",
+        "symlink_write_outside": "BLOCKED (EPERM)",
+        "hardlink_canary": "BLOCKED (EPERM)",
+        "rename_out_of_ws": "BLOCKED (EPERM)",
+        "chmod_canary": "BLOCKED (EPERM)",
+        "chdir_dotdot_read": "BLOCKED (EPERM)",
+        "tcp_approved_port": "ALLOWED (connected)",
+        "tcp_unapproved_loopback_port": "BLOCKED (EPERM)",
+        "tcp_lmstudio_port": "BLOCKED (EPERM)",
+        "tcp_internet_1.1.1.1_443": "BLOCKED (EPERM)",
+        "dns_example_com": "BLOCKED (ENOTFOUND)",
+        "udp_8.8.8.8_53": "BLOCKED (EPERM)",
+        "unix_socket_mdnsresponder": "BLOCKED (EPERM)",
+        "curl_example_com": "BLOCKED (status=6 http=000)",
+        "listen_0.0.0.0": "BLOCKED (EPERM)",
+        "osascript": "BLOCKED (status=null )",
+        "pbpaste_clipboard": "BLOCKED (status=1 )",
+        "launchctl_list": "BLOCKED (status=1 )",
+        "sudo_noninteractive": "BLOCKED (status=null )",
+        "open_launchservices": "BLOCKED (status=1 LSCopyApplicationURLsForBundleI)"
+      },
+      "git-hook": {
+        "ws_write": "ALLOWED (workspace write ok)",
+        "read_canary_in_home": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh": "BLOCKED (EPERM)",
+        "read_cred:~/.ssh/id_ed25519": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh/hosts.yml": "BLOCKED (EPERM)",
+        "read_cred:~/.config/gh": "BLOCKED (EPERM)",
+        "read_cred:~/.npmrc": "BLOCKED (EPERM)",
+        "read_cred:~/.gitconfig": "BLOCKED (EPERM)",
+        "read_cred:~/.lmstudio/credentials": "BLOCKED (EPERM)",
+        "read_cred:~/.config/opencode": "BLOCKED (EPERM)",
+        "read_cred:~/.claude": "BLOCKED (EPERM)",
+        "read_cred:~/.claude.json": "BLOCKED (EPERM)",
+        "read_cred:~/Library/Keychains": "BLOCKED (EPERM)",
+        "read_cred:~/.zsh_history": "BLOCKED (EPERM)",
+        "list_home_dir": "BLOCKED (EPERM)",
+        "list_Users": "BLOCKED (EPERM)",
+        "read_sibling_sentinel": "BLOCKED (EPERM)",
+        "read_main_checkout": "BLOCKED (EPERM)",
+        "env_has_write_token": "BLOCKED (env secret-like keys: [])",
+        "env_has_any_secret_like": "BLOCKED",
+        "gh_auth_token": "BLOCKED (status=1 err=no oauth token found for gi)",
+        "gh_auth_token_abs": "BLOCKED (status=1)",
+        "write_parent_of_workspace": "BLOCKED (EPERM)",
+        "write_real_home": "BLOCKED (EPERM)",
+        "write_canary_dir": "BLOCKED (EPERM)",
+        "write_outside_tmp": "BLOCKED (EPERM)",
+        "symlink_read_canary": "BLOCKED (EPERM)",
+        "symlink_write_outside": "BLOCKED (EPERM)",
+        "hardlink_canary": "BLOCKED (EPERM)",
+        "rename_out_of_ws": "BLOCKED (EPERM)",
+        "chmod_canary": "BLOCKED (EPERM)",
+        "chdir_dotdot_read": "BLOCKED (EPERM)",
+        "tcp_approved_port": "ALLOWED (connected)",
+        "tcp_unapproved_loopback_port": "BLOCKED (EPERM)",
+        "tcp_lmstudio_port": "BLOCKED (EPERM)",
+        "tcp_internet_1.1.1.1_443": "BLOCKED (EPERM)",
+        "dns_example_com": "BLOCKED (ENOTFOUND)",
+        "udp_8.8.8.8_53": "BLOCKED (EPERM)",
+        "unix_socket_mdnsresponder": "BLOCKED (EPERM)",
+        "curl_example_com": "BLOCKED (status=6 http=000)",
+        "listen_0.0.0.0": "BLOCKED (EPERM)",
+        "osascript": "BLOCKED (status=null )",
+        "pbpaste_clipboard": "BLOCKED (status=1 )",
+        "launchctl_list": "BLOCKED (status=1 )",
+        "sudo_noninteractive": "BLOCKED (status=null )",
+        "open_launchservices": "BLOCKED (status=1 LSCopyApplicationURLsForBundleI)"
+      }
+    }
+  },
+  "checks": [
+    {
+      "severity": "required",
+      "id": "F0-selftest",
+      "claim": "containment self-test (canary read/write/net probes) passes before any repo code runs",
+      "expected": "ok=true",
+      "observed": {
+        "ok": true,
+        "observed": {
+          "macos_major": "27",
+          "read_canary": "EPERM",
+          "write_canary": "EPERM",
+          "read_workspace": "ALLOWED",
+          "net_denied": "EPERM",
+          "net_allowed": "ALLOWED"
+        },
+        "failures": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F1-control-uncontained",
+      "claim": "positive control: with no boundary the same hostile payload reads the home canary, sees the write token, escapes the workspace and reaches unapproved loopback ports",
+      "expected": "all control vectors ALLOWED",
+      "observed": {
+        "allowed": [
+          "read_canary_in_home",
+          "list_home_dir",
+          "read_sibling_sentinel",
+          "env_has_write_token",
+          "write_parent_of_workspace",
+          "write_canary_dir",
+          "write_outside_tmp",
+          "symlink_read_canary",
+          "tcp_unapproved_loopback_port",
+          "tcp_lmstudio_port"
+        ],
+        "missing": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-direct-node-ran",
+      "claim": "direct-node: hostile code really executed inside the boundary (workspace write succeeded, positive control)",
+      "expected": "attack marker present in workspace",
+      "observed": {
+        "ran": true,
+        "exit": 0,
+        "stderrTail": ""
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-direct-node-blocked",
+      "claim": "direct-node: zero breaches across 46 attempts (control, home_read, unrelated_read, token, ws_escape, network, process_escape)",
+      "expected": "no non-control attempt ALLOWED",
+      "observed": {
+        "breaches": [],
+        "attempts": 46,
+        "absentNotEvidence": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-direct-node-approved-net",
+      "claim": "direct-node: approved destination is reachable (boundary is selective, not just broken)",
+      "expected": "tcp_approved_port ALLOWED",
+      "observed": [
+        {
+          "id": "ws_write",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "workspace write ok"
+        },
+        {
+          "id": "tcp_approved_port",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "connected"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-direct-node-host-effects",
+      "claim": "direct-node: no files were created outside the workspace on the host",
+      "expected": "none",
+      "observed": [],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-npm-install-lifecycle-ran",
+      "claim": "npm-install-lifecycle: hostile code really executed inside the boundary (workspace write succeeded, positive control)",
+      "expected": "attack marker present in workspace",
+      "observed": {
+        "ran": true,
+        "exit": 0,
+        "stderrTail": "0 (postinstall: node \"$INIT_CWD/attack.cjs\" dep-postinstall)\nnpm warn install-scripts\nnpm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.\n"
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-npm-install-lifecycle-blocked",
+      "claim": "npm-install-lifecycle: zero breaches across 46 attempts (control, home_read, unrelated_read, token, ws_escape, network, process_escape)",
+      "expected": "no non-control attempt ALLOWED",
+      "observed": {
+        "breaches": [],
+        "attempts": 46,
+        "absentNotEvidence": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-npm-install-lifecycle-approved-net",
+      "claim": "npm-install-lifecycle: approved destination is reachable (boundary is selective, not just broken)",
+      "expected": "tcp_approved_port ALLOWED",
+      "observed": [
+        {
+          "id": "ws_write",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "workspace write ok"
+        },
+        {
+          "id": "tcp_approved_port",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "connected"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-npm-install-lifecycle-host-effects",
+      "claim": "npm-install-lifecycle: no files were created outside the workspace on the host",
+      "expected": "none",
+      "observed": [],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-node-test-runner-ran",
+      "claim": "node-test-runner: hostile code really executed inside the boundary (workspace write succeeded, positive control)",
+      "expected": "attack marker present in workspace",
+      "observed": {
+        "ran": true,
+        "exit": 0,
+        "stderrTail": ""
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-node-test-runner-blocked",
+      "claim": "node-test-runner: zero breaches across 46 attempts (control, home_read, unrelated_read, token, ws_escape, network, process_escape)",
+      "expected": "no non-control attempt ALLOWED",
+      "observed": {
+        "breaches": [],
+        "attempts": 46,
+        "absentNotEvidence": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-node-test-runner-approved-net",
+      "claim": "node-test-runner: approved destination is reachable (boundary is selective, not just broken)",
+      "expected": "tcp_approved_port ALLOWED",
+      "observed": [
+        {
+          "id": "ws_write",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "workspace write ok"
+        },
+        {
+          "id": "tcp_approved_port",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "connected"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-node-test-runner-host-effects",
+      "claim": "node-test-runner: no files were created outside the workspace on the host",
+      "expected": "none",
+      "observed": [],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-git-hook-ran",
+      "claim": "git-hook: hostile code really executed inside the boundary (workspace write succeeded, positive control)",
+      "expected": "attack marker present in workspace",
+      "observed": {
+        "ran": true,
+        "exit": 0,
+        "stderrTail": "\"id\": \"open_launchservices\",\n   \"category\": \"process_escape\",\n   \"outcome\": \"BLOCKED\",\n   \"detail\": \"status=1 LSCopyApplicationURLsForBundleIdentifier() failed while tryi\"\n  }\n ]\n}\nATTACK_RESULTS_END\n"
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-git-hook-blocked",
+      "claim": "git-hook: zero breaches across 46 attempts (control, home_read, unrelated_read, token, ws_escape, network, process_escape)",
+      "expected": "no non-control attempt ALLOWED",
+      "observed": {
+        "breaches": [],
+        "attempts": 46,
+        "absentNotEvidence": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-git-hook-approved-net",
+      "claim": "git-hook: approved destination is reachable (boundary is selective, not just broken)",
+      "expected": "tcp_approved_port ALLOWED",
+      "observed": [
+        {
+          "id": "ws_write",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "workspace write ok"
+        },
+        {
+          "id": "tcp_approved_port",
+          "category": "control",
+          "outcome": "ALLOWED",
+          "detail": "connected"
+        }
+      ],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-git-hook-host-effects",
+      "claim": "git-hook: no files were created outside the workspace on the host",
+      "expected": "none",
+      "observed": [],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F2-canary-intact",
+      "claim": "home canary content and mode unchanged after all contained runs",
+      "expected": "content intact",
+      "observed": "HOME-CREDENTIAL-CANARY",
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F3-unknown-containment:sandbox-exec missing",
+      "claim": "unknown/defective containment (sandbox-exec missing) blocks execution; repo code never ran",
+      "expected": "ContainmentUnavailableError and no marker",
+      "observed": {
+        "blocked": true,
+        "err": "containment unavailable or unverified: sandbox-exec missing at /nonexistent/sandbox-exec",
+        "repoCodeRan": false
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F3-unknown-containment:permissive profile (allow default)",
+      "claim": "unknown/defective containment (permissive profile (allow default)) blocks execution; repo code never ran",
+      "expected": "ContainmentUnavailableError and no marker",
+      "observed": {
+        "blocked": true,
+        "err": "containment unavailable or unverified: probe read_canary=ALLOWED; probe write_canary=ALLOWED; probe net_denied=ALLOWED; canary file was written from inside the sandbox",
+        "repoCodeRan": false
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F3-unknown-containment:unsupported macOS major",
+      "claim": "unknown/defective containment (unsupported macOS major) blocks execution; repo code never ran",
+      "expected": "ContainmentUnavailableError and no marker",
+      "observed": {
+        "blocked": true,
+        "err": "containment unavailable or unverified: macOS major 27 not in tested set 13",
+        "repoCodeRan": false
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F3-unknown-containment:network not enforced",
+      "claim": "unknown/defective containment (network not enforced) blocks execution; repo code never ran",
+      "expected": "ContainmentUnavailableError and no marker",
+      "observed": {
+        "blocked": true,
+        "err": "containment unavailable or unverified: probe net_denied=ALLOWED",
+        "repoCodeRan": false
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F3-unknown-containment:home readable",
+      "claim": "unknown/defective containment (home readable) blocks execution; repo code never ran",
+      "expected": "ContainmentUnavailableError and no marker",
+      "observed": {
+        "blocked": true,
+        "err": "containment unavailable or unverified: probe read_canary=ALLOWED",
+        "repoCodeRan": false
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F4-wall-timeout",
+      "claim": "wall-clock limit kills contained process AND its children (process group); no orphans",
+      "expected": "timedOut=true, no surviving pids",
+      "observed": {
+        "timedOut": true,
+        "ms": 2005,
+        "signal": "SIGKILL",
+        "survivors": "none",
+        "childSurvivors": "none"
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F4-cpu-limit",
+      "claim": "ulimit -t (CPU seconds) terminates a busy loop inside the boundary",
+      "expected": "killed by signal before wall timeout",
+      "observed": {
+        "code": 152,
+        "signal": null,
+        "timedOut": false,
+        "ms": 1025
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "F4-file-size-limit",
+      "claim": "ulimit -f caps file growth (writes beyond the cap fail)",
+      "expected": "file < 8 MiB",
+      "observed": {
+        "size": 8192,
+        "code": 1,
+        "signal": null
+      },
+      "pass": true
+    },
+    {
+      "severity": "informational",
+      "id": "F4-memory-limit-ulimit-v",
+      "claim": "UNAVAILABLE GUARANTEE (informational): a per-process memory cap cannot be set on macOS (ulimit -v fails with EINVAL) - memory must be bounded by the model/context budget, the wall-clock kill and host-level monitoring instead",
+      "expected": "informational: documents whether ulimit -v works",
+      "observed": [
+        "/bin/sh: line 0: ulimit: virtual memory: cannot modify limit: Invalid argument",
+        "vlimit_rc=1"
+      ],
+      "pass": true
+    }
+  ],
+  "notes": [
+    "Boundary = Apple Seatbelt (sandbox-exec). Apple marks the CLI deprecated but the kernel sandbox is what App Sandbox, Chromium and many agent CLIs use; no replacement CLI exists for per-process deny-default profiles.",
+    "Docker CLI is installed but no daemon/VM provider (no Docker Desktop/colima/lima/podman/Apple container). Container backend is therefore UNVERIFIED here and not selected.",
+    "Seatbelt gives no memory cap (ulimit -v not enforced); CPU/file/wall-time/process-group limits are enforced and measured above.",
+    "Contained code can read system dirs and toolchain (/usr, /System, Homebrew node). Treat those as public. Network is loopback-port allowlist only; DNS/mach lookups denied so names cannot resolve.",
+    "macOS major versions outside the tested set are treated as unknown containment and block execution."
+  ],
+  "finishedAt": "2026-11-18T05:46:13.589Z",
+  "verdict": "PASS"
+}

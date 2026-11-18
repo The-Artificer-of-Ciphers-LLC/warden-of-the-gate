@@ -1,0 +1,12 @@
+{
+  "name": "hostile-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deliberately hostile fixture for Warden P0 isolation proof. Every lifecycle hook tries to escape.",
+  "scripts": {
+    "preinstall": "node \"$INIT_CWD/attack.cjs\" npm-preinstall",
+    "postinstall": "node \"$INIT_CWD/attack.cjs\" npm-postinstall",
+    "test": "node --test test/"
+  },
+  "dependencies": { "evil-dep": "file:./vendor/evil-dep" }
+}

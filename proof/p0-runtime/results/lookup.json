@@ -1,0 +1,450 @@
+{
+  "proof": "PROOF-lookup",
+  "area": "lookup",
+  "startedAt": "2026-11-18T05:46:13.828Z",
+  "host": {
+    "os": "macOS 27.2.1 (26B131)",
+    "arch": "arm64",
+    "node": "v26.13.0",
+    "cpus": "18",
+    "memGiB": "128"
+  },
+  "versions": {
+    "typescript": "6.0.3",
+    "typescriptNativeLatest": "7.0.2 exists; its programmatic API is \"unstable/*\" - not adopted for the P3 baseline",
+    "scipTypescript": "0.6.2",
+    "scipBindings": "0.10.0",
+    "swiftc": "Apple Swift version 6.4.2 (swiftlang-6.4.2.1.9 clang-2100.4.1.1)",
+    "xcodeSdk": "27.2",
+    "node": "v26.13.0"
+  },
+  "inputs": {
+    "fixture": "fixtures/lookup-repo",
+    "baseline": "TypeScript LanguageService (stable JS API), pinned",
+    "candidates": "scip-typescript (run + decoded), CodeGraphContext (identified), GSD Atlas (identified, pinned)",
+    "groundTruth": "hand-annotated \"expect:<family>:<role>\" tags in fixture source (independent of any tool)",
+    "comparisonCandidates": {
+      "compilerBaseline": "typescript@6.0.3 LanguageService - measured above",
+      "scip": "@sourcegraph/scip-typescript@0.6.2 + @scip-code/scip@0.10.0 (Apache-2.0) - ran contained, decoded",
+      "codeGraphContext": "codegraphcontext 0.6.13 on PyPI (MIT, Python>=3.10) - IDENTIFIED ONLY: not installed or run (Python/graph-DB footprint; tree-sitter derived => label heuristic). Unverified.",
+      "atlas": "@opengsd/gsd-atlas 0.1.0-alpha.0 @ 7147e43 (open-gsd/gsd-atlas) - IDENTIFIED/PINNED ONLY: not run in P0 (full comparison is P3)"
+    },
+    "supportMatrix": [
+      {
+        "check": "runtime API floor via tsconfig lib/target",
+        "language": "TypeScript/JavaScript(checkJs)",
+        "status": "supported",
+        "evidence": "G15"
+      },
+      {
+        "check": "Node API availability vs engines floor via matching @types/node",
+        "language": "TypeScript",
+        "status": "supported",
+        "evidence": "G16 (requires installing a types package: do it outside repo code, --ignore-scripts, pinned)"
+      },
+      {
+        "check": "deprecated SDK API usage (@deprecated)",
+        "language": "TypeScript",
+        "status": "supported",
+        "evidence": "G17"
+      },
+      {
+        "check": "Apple SDK availability vs deployment target (swiftc -typecheck -target)",
+        "language": "Swift (no macro plugins)",
+        "status": "supported",
+        "evidence": "G18; Swift macros/plugins execute code and were not proven under nested sandboxing"
+      },
+      {
+        "check": "mandatory verification",
+        "language": "Python",
+        "status": "unsupported",
+        "evidence": "no checker proven (mypy/pyright not run); no deployment-target model"
+      },
+      {
+        "check": "mandatory verification",
+        "language": "Go / Rust / Kotlin / Java / C#",
+        "status": "unsupported",
+        "evidence": "toolchains not installed or exercised in P0"
+      },
+      {
+        "check": "mandatory verification",
+        "language": "Swift macros / SwiftPM plugins / Xcode build phases",
+        "status": "unsupported",
+        "evidence": "execute arbitrary code; nested Seatbelt not proven; blocked until proven"
+      },
+      {
+        "check": "mandatory verification",
+        "language": "TypeScript compiler plugins (tsconfig \"plugins\", ts-patch) and repo-supplied TypeScript versions",
+        "status": "unsupported",
+        "evidence": "would run repo code; must never be loaded - pinned compiler only (this proof uses the pinned compiler)"
+      },
+      {
+        "check": "mandatory verification",
+        "language": "Lookup through SCIP/CodeGraphContext/Atlas as authority",
+        "status": "unsupported",
+        "evidence": "comparison is P3; retrieval never grants authority or a passing verification gate"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "severity": "required",
+      "id": "G1-references-precise",
+      "claim": "findReferences(LedgerStore.append) matches the hand-annotated ground truth exactly within the program (interface decl, 2 implementations, 2 call sites); same-named unrelated functions, comments and strings excluded",
+      "expected": "precision 1.0, recall 1.0 over files in the program",
+      "observed": {
+        "compiler": {
+          "precision": 1,
+          "recall": 1,
+          "got": 5,
+          "truth": 5,
+          "falsePositives": [],
+          "missed": []
+        },
+        "textGrepBaseline": {
+          "precision": 0.38,
+          "recall": 1,
+          "falsePositives": [
+            "generated/stale.ts:4",
+            "legacy/util.js:1",
+            "legacy/util.js:2",
+            "src/cli.ts:13",
+            "src/cli.ts:4",
+            "src/cli.ts:5",
+            "src/ledger.ts:20",
+            "src/ledger.ts:3"
+          ]
+        }
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G2-text-search-is-not-enough",
+      "claim": "text search baseline over the same repo is measurably worse (false positives from decoys) - justifies compiler-backed lookup",
+      "expected": "grep precision < 1",
+      "observed": {
+        "grepPrecision": 0.38,
+        "grepFalsePositives": 8
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G3-coverage-gap-labelled",
+      "claim": "files outside the compiler program (generated/stale.ts, which also implements LedgerStore) are reported as coverage gaps so the reference set is labelled incomplete rather than silently trusted",
+      "expected": "coverage.complete=false listing generated/stale.ts",
+      "observed": {
+        "complete": false,
+        "outsideProgram": [
+          "generated/stale.ts"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G3b-unsupported-file-refused",
+      "claim": "asking for lookup inside a file outside the program is refused (unsupported), not answered heuristically as if precise",
+      "expected": "refusal",
+      "observed": {
+        "refused": true
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G3c-truth-tags-consistent",
+      "claim": "hand-annotated ground-truth tags cover the lines used as expectations (self-check of the fixture)",
+      "expected": "tags present",
+      "observed": {
+        "tagsOk": true,
+        "truthImpl": [
+          "src/cli.ts:10",
+          "src/ledger.ts:5",
+          "src/ledger.ts:11",
+          "src/ledger.ts:19",
+          "src/ledger.ts:27"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G4-definition-at-call-sites",
+      "claim": "definition from `store.append(...)` (interface-typed) resolves to the interface member; from `ledger.append(...)` (MemoryLedger-typed, in another file) resolves to MemoryLedger.append - not to the unrelated local append() or legacy/util.js",
+      "expected": "src/ledger.ts:5 and src/ledger.ts:11",
+      "observed": {
+        "interfaceTyped": [
+          "src/ledger.ts:5"
+        ],
+        "concreteTyped": [
+          "src/ledger.ts:11"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G5-implementations",
+      "claim": "getImplementation on the interface member returns exactly MemoryLedger.append and FileLedger.append (the generated/stale.ts one is outside the program and labelled by G3)",
+      "expected": "src/ledger.ts:11, src/ledger.ts:19",
+      "observed": [
+        "src/ledger.ts:11",
+        "src/ledger.ts:19"
+      ],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G6-type-references-across-files",
+      "claim": "type references to the Entry interface across imports, re-exports and annotations match ground truth (precision and recall 1.0)",
+      "expected": "1.0 / 1.0",
+      "observed": {
+        "precision": 1,
+        "recall": 1,
+        "got": 10,
+        "truth": 10,
+        "falsePositives": [],
+        "missed": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G7-citations-carry-revision",
+      "claim": "all 19 citations carry repo, commit 95925b1b5d, content sha256, span, compiler version, tsconfig hash and precision label",
+      "expected": "every field present, commit = R1, clean tree",
+      "observed": {
+        "sample": {
+          "repo": "warden-fixture/core",
+          "commit": "95925b1b5df04a554e18c89fc3b5da7c996b7666",
+          "dirty": false,
+          "path": "src/ledger.ts",
+          "contentSha256": "601ffefc139a2b527f780db34a1430a038031fa994e86b22657924c416e1cad1",
+          "span": {
+            "start": 211,
+            "end": 217,
+            "line": 5,
+            "col": 3
+          },
+          "text": "append",
+          "kind": "definition",
+          "precision": "precise",
+          "compiler": {
+            "typescript": "6.0.3",
+            "tsconfigSha256": "ff6ffcac25b28efb3dc0ef6e40468d0a97c405417420e457478ea89fab033fbc",
+            "target": "ES2022",
+            "libs": [
+              "lib.es2022.d.ts"
+            ],
+            "allowJs": true
+          }
+        },
+        "count": 19
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G8-citations-verify-at-cited-revision",
+      "claim": "a consumer re-reads each citation from `git show <commit>:<path>` and the hash and span text verify (independent of the tool that produced them)",
+      "expected": "all verified",
+      "observed": {
+        "verified": 19
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G9-dirty-tree-flagged",
+      "claim": "lookup on an uncommitted working tree is flagged dirty=true (citations are bound to content hash, not a clean commit)",
+      "expected": "dirty=true on all",
+      "observed": {
+        "dirty": true,
+        "commit": "95925b1b5d"
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G10-stale-detection",
+      "claim": "after a new revision, old citations into the edited file are detected STALE by content hash while citations into untouched files still verify",
+      "expected": "stale: src/ledger.ts ; verified: src/cli.ts, src/types.ts",
+      "observed": {
+        "staleFiles": [
+          "src/ledger.ts"
+        ],
+        "okFiles": [
+          "src/cli.ts",
+          "src/index.ts",
+          "src/types.ts"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G11-rebinding-to-new-revision",
+      "claim": "a fresh lookup at r2 is bound to commit r2, includes the new call site and the shifted line numbers, and verifies",
+      "expected": "commit=R2, reference count +1, all verified",
+      "observed": {
+        "commit": "48236a528c",
+        "r2": "48236a528c",
+        "refsBefore": 5,
+        "refsAfter": 6,
+        "verify": [
+          "verified",
+          "verified",
+          "verified",
+          "verified",
+          "verified",
+          "verified"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "severity": "informational",
+      "id": "G12-latency-and-memory",
+      "claim": "INFORMATIONAL: measured cost on this Mac",
+      "expected": "informational",
+      "observed": {
+        "programBuildMs": 18,
+        "referencesMs": 14,
+        "definitionMs": 1,
+        "rssMB": 183,
+        "files": 5
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G13-scip-candidate-runs-contained",
+      "claim": "scip-typescript (pinned) indexes the fixture INSIDE the Seatbelt boundary (no network, read-only toolchain) and the SCIP index decodes with the published bindings",
+      "expected": "exit 0, index decodes, documents listed",
+      "observed": {
+        "exit": 0,
+        "ms": 406,
+        "documents": [
+          "legacy/util.js",
+          "src/cli.ts",
+          "src/index.ts",
+          "src/ledger.ts",
+          "src/types.ts"
+        ],
+        "stderr": ""
+      },
+      "pass": true
+    },
+    {
+      "severity": "informational",
+      "id": "G14-scip-symbol-occurrences",
+      "claim": "SCIP occurrences for the LedgerStore#append() symbol are extracted (a query consumer is feasible); compared with the same ground truth - INFORMATIONAL for the P3 comparison, not an endorsement",
+      "expected": "informational",
+      "observed": {
+        "symbols": [
+          "scip-typescript npm @warden-fixture/core 1.0.0 src/`ledger.ts`/LedgerStore#append().",
+          "scip-typescript npm @warden-fixture/core 1.0.0 src/`ledger.ts`/MemoryLedger#append().",
+          "scip-typescript npm @warden-fixture/core 1.0.0 src/`ledger.ts`/FileLedger#append()."
+        ],
+        "occurrences": {
+          "precision": 1,
+          "recall": 1,
+          "got": 5,
+          "truth": 5,
+          "falsePositives": [],
+          "missed": []
+        },
+        "note": "SCIP symbol for the interface member and each implementation differ; reference-through-implementation needs a consumer that joins relationships"
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G15-ts-lib-floor",
+      "claim": "TypeScript enforces a runtime-API floor via compiler lib: Array.prototype.toSorted is rejected under lib ES2022 (TS2550) and accepted under ES2023",
+      "expected": "ES2022 -> TS2550, ES2023 -> 0 diagnostics",
+      "observed": {
+        "es2022": [
+          {
+            "code": 2550,
+            "text": "Property 'toSorted' does not exist on type 'number[]'. Do you need to change your target library? Try changing"
+          }
+        ],
+        "es2023": []
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G16-node-engine-floor",
+      "claim": "deployment-target check for Node: node:fs.glob (Node ≥22) fails type-check against @types/node@18 (engines floor 18) and passes against @types/node@26",
+      "expected": "18 -> diagnostics, 26 -> none",
+      "observed": {
+        "node18": {
+          "install": 0,
+          "diags": [
+            {
+              "code": 2305,
+              "text": "Module '\"node:fs\"' has no exported member 'glob'."
+            }
+          ]
+        },
+        "node26": {
+          "install": 0,
+          "diags": []
+        }
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G17-ts-deprecated-api",
+      "claim": "use of an SDK API marked @deprecated is detected as a compiler suggestion diagnostic (TS6385)",
+      "expected": "code 6385",
+      "observed": [
+        {
+          "code": 6385,
+          "text": "'oldThing' is deprecated."
+        },
+        {
+          "code": 6387,
+          "text": "The signature '(): void' of 'oldThing' is deprecated."
+        }
+      ],
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G18-swift-deployment-target",
+      "claim": "Apple deployment-target check: swiftc -typecheck (run inside the boundary) rejects Regex (macOS 13+) with -target macos12 and accepts it with macos14",
+      "expected": "macos12 -> \"only available in macOS 13.0\", macos14 -> exit 0",
+      "observed": {
+        "macos12": {
+          "exit": 1,
+          "msg": "a.swift:1:14: error: 'Regex' is only available in macOS 13.0 or newer"
+        },
+        "macos14": {
+          "exit": 0,
+          "stderr": ""
+        }
+      },
+      "pass": true
+    },
+    {
+      "severity": "required",
+      "id": "G19-unsupported-is-explicit",
+      "claim": "the support matrix names unsupported/unverified languages and checks explicitly (unsupported mandatory checks must block, never pass implicitly)",
+      "expected": "matrix has supported and unsupported rows",
+      "observed": {
+        "supported": 4,
+        "unsupported": 5
+      },
+      "pass": true
+    }
+  ],
+  "notes": [],
+  "finishedAt": "2026-11-18T05:46:16.249Z",
+  "verdict": "PASS"
+}
