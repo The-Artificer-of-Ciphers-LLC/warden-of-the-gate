@@ -75,6 +75,21 @@ export async function run(c: Ctx): Promise<Result> {
       return { async submit(i) { if (!sub) throw new Error('submit identity unavailable'); const it = makeIntent(i); await submitIntent(sub, cfg.inbox.inboxIssue, it, journal, undefined, pol.maxIntentBytes); if (c.flags.drain) await writerDrain(c); return { opid: it.opid }; },
         async confirmClaim(n) { const deadline = c.now() + Number(str(c.flags, 'claim-wait-seconds') ?? 90) * 1000; do { const cm = (await store.listComments(n)).find((x) => x.body.startsWith(LEDGER_MARK)); const led = cm ? parseLed2(cm.body) : null; if (led?.owner) return led.owner.kind === 'factory'; await new Promise((r) => setTimeout(r, 1500)); } while (c.now() < deadline); return false; } };
     };
+    if (task === 'retro') {
+      // P5 Retro (manual, local): narrow PROPOSALS from this instance's own evidence. Nothing is applied, merged, posted or trained on.
+      const { gatherRetro } = await import('../retro/gather.ts'); const rs = await import('../retro/slice.ts');
+      const days = Number(str(c.flags, 'window-days') ?? 30); if (!Number.isInteger(days) || days < 1 || days > 365) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task retro: --window-days must be 1..365' };
+      const packet = await gatherRetro(st, store, { now: c.now(), windowDays: days });
+      if (c.flags['dry-run']) return { code: 0, data: { task, outcome: 'proposed', mode: 'dry-run', packet: { decisions: packet.decisions.length, denials: packet.denials.length, escapes: packet.escapes.length, outcomes: packet.outcomes }, mutations: 0 }, text: `task retro (dry-run): ${packet.decisions.length} decision(s), ${packet.denials.length} denial(s), ${packet.escapes.length} escape(s) in the last ${days} day(s); no model call, nothing written` };
+      const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url'), maxPromptChars: 60_000 }) : new NotReadyRunner();
+      const r = await rs.runRetro({ packet, runner, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, packetRoot: st.path('retro', 'packets'), stopped: () => ctl.stopped || local.stopped, signal: abort.signal, clock: c.now });
+      let branch: unknown = null;
+      if ((r.kind === 'proposed' || r.kind === 'no-change') && str(c.flags, 'source')) {
+        const baseSha = str(c.flags, 'base-sha') ?? await store.getBranchHead(cfg.defaultBranch).catch(() => ''); if (baseSha) branch = await rs.prepareRetroBranch({ source: String(str(c.flags, 'source')), baseSha, report: rs.renderRetroReport(packet, r, c.now()), now: c.now(), author: { name: 'warden', email: 'warden@users.noreply.invalid' }, publisher: new LocalOutboxPublisher(st.path('outbox.git')), workRoot: st.path('retro', 'work') });
+      }
+      if (r.kind === 'proposed' || r.kind === 'no-change') { mkdirSync(st.path('retro'), { recursive: true, mode: 0o700 }); st.writeJson(st.path('retro', `report-${new Date(c.now()).toISOString().slice(0, 10)}.json`), { packet, result: r }); }
+      return { code: r.kind === 'proposed' || r.kind === 'no-change' || r.kind === 'no-data' ? 0 : r.kind === 'rejected' ? 1 : 4, data: { task, outcome: r.kind, ...r, branch, runner: runner.name }, text: `task retro: ${r.kind.toUpperCase()}: ${r.notice}` };
+    }
     if (task === 'implement') {
       // P4 Implement (factory): ONE issue, a trusted checkout of the default-branch tip, a writable-only-there session with no shell, trusted-executor evidence.
       // The result is published to a LOCAL outbox unless a GitHub publisher is explicitly configured; this release never pushes or opens a PR by itself.
