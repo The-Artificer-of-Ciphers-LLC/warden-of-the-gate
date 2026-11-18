@@ -34,7 +34,13 @@ export interface Evidence {
   revision?: string;             // the item revision approvals bind to (PR head sha or issue body/criteria revision)
   updatedAt?: string;
 }
-export interface Obligation { type: 'delivery' | 'fix-window' | 'response' | 'information'; startedAt: string; dueAt: string; source: string }
+export interface Obligation {
+  type: 'delivery' | 'fix-window' | 'response' | 'information'; startedAt: string; dueAt: string; source: string;
+  /** Genuinely complete submission recorded in time (satisfies delivery/fix-window). Nothing sets these three yet: see handoff. */
+  satisfiedAt?: string;
+  hold?: { startedAt: string; remainingMs: number; reason: string };
+  completenessUnassessed?: boolean;
+}
 export type ApprovalType = 'action' | 'feature-design';
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'invalidated';
 export interface ApprovalBinding { revision: string; policyDigest: string; evidenceDigest: string }
@@ -53,7 +59,9 @@ export interface OpRec {
 export type Effect =
   | { t: 'assign'; login: string }
   | { t: 'label'; add?: string[]; remove?: string[] }
-  | { t: 'comment'; text: string };
+  | { t: 'comment'; text: string }
+  | { t: 'unassign'; login: string }
+  | { t: 'close' };
 
 export interface Ledger {
   v: 1; repository: string; item: number; kind: ItemKind; epoch: number; seq: number;
@@ -61,6 +69,8 @@ export interface Ledger {
   lease?: ProcessingLease; attempts: Attempts; evidence: Evidence; obligations: Obligation[];
   approvals: Record<string, ApprovalRec>; linked: number[];
   ops: Record<string, OpRec>; order: string[]; dropped: number; mac?: string;
+  /** P2 sweep bookkeeping: which response nudges were published for the current silence start (resets when the author replies). */
+  sweep?: { since: string; nudgesSent: Array<48 | 72> };
 }
 export const newLedger = (repository: string, item: number, kind: ItemKind): Ledger => ({
   v: 1, repository, item, kind, epoch: 0, seq: 0, state: kind === 'issue' ? 'needs-triage' : 'needs-review', facets: {}, owner: null,

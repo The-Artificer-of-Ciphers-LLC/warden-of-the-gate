@@ -42,6 +42,7 @@ export class HttpStore implements Store {
   async getIssue(n: number) { return this.is((await this.req('GET', `/issues/${n}`)).json); }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { return (await this.paged('/issues', `state=${o.state ?? 'open'}`)).map(this.is); }
   async addAssignee(n: number, login: string) { await this.req('POST', `/issues/${n}/assignees`, { assignees: [login] }); }
+  async removeAssignee(n: number, login: string) { await this.req('DELETE', `/issues/${n}/assignees`, { assignees: [login] }); }
   async addLabel(n: number, label: string) { await this.req('POST', `/issues/${n}/labels`, { labels: [label] }); }
   async removeLabel(n: number, label: string) { await this.req('DELETE', `/issues/${n}/labels/${encodeURIComponent(label)}`, undefined, { okStatuses: [404] }); }
   async listEvents(n: number): Promise<IssueEvent[]> { return (await this.paged(`/issues/${n}/events`)).map((e) => ({ id: e.id, event: e.event, actor: e.actor?.login ?? 'unknown', label: e.label?.name, createdAt: e.created_at })); }

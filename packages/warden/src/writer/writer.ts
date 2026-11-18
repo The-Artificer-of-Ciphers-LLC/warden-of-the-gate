@@ -1,3 +1,4 @@
+import { authorActivity, type SweepObs } from '../sweep/derive.ts';
 import type { Comment, Store } from '../github/store.ts';
 import { Anomaly, Crash, Faults, Fenced, NetworkError, Stopped, canonical, sleep } from '../util.ts';
 import { Lease } from './lease.ts';
@@ -196,7 +197,8 @@ export class Writer {
       if (intent.origin === 'ai' && pol.mode === 'shadow') dec = { accept: false, reason: 'shadow-mode-ai-effects-disabled', plan: [] as Effect[] };
       else {
         const sourceVerified = await this.verifySource(intent);
-        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable });
+        const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
+        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss });
       }
       const rec: OpRec = { status: 'applying', decision: dec.accept ? 'accept' : 'reject', reason: dec.reason, plan: dec.plan, step: 0, attempts: 0, epoch: this.lease.epoch, intentCommentId: c.id };
       dec.apply?.(l);
@@ -208,6 +210,11 @@ export class Writer {
     return this.runPlan(c, intent, l);
   }
 
+  /** Sweep facts are re-read here, at decision time, so a reply or label added after planning defeats a stale closure. */
+  private async observeSweep(i: Intent, iss: { labels: string[]; draft?: boolean; author: string }): Promise<SweepObs | undefined> {
+    const keep = this.cfg.policy.sweep?.keepOpenLabel; if (!keep) return undefined;
+    return { keepOpen: iss.labels.includes(keep), draft: !!iss.draft, authorLastActivityAt: authorActivity(await this.store.listComments(i.item), iss.author) };
+  }
   /** Reconstruct maintainer authority from the target item's source comment, not the submitter's interpretation. */
   private async verifySource(i: Intent): Promise<boolean> {
     if (i.kind !== 'approval-decision' && i.kind !== 'override') return true;
@@ -237,7 +244,7 @@ export class Writer {
         if (iss.state === 'closed' && rec.plan[i].t !== 'comment') { rec.reason = (rec.reason ?? '') + ' item-closed-before-effect'; break; }
         await this.faults.stall(`before-effect:${i}`);
         this.faults.hit(`before-effect:${i}`);
-        await this.effect(intent, rec.plan[i], i, iss.assignees);
+        await this.effect(intent, rec.plan[i], i, iss);
         this.faults.hit(`after-effect:${i}`);
         rec.step = i + 1; await this.commit(l, `step${i}`);
       }
@@ -255,12 +262,19 @@ export class Writer {
   }
 
   /** Idempotent effects: native idempotence (assign/label) or a marker found before posting (comment). */
-  private async effect(i: Intent, e: Effect, idx: number, assignees: string[]) {
+  private async effect(i: Intent, e: Effect, idx: number, iss: { assignees: string[]; state: string }) {
+    const assignees = iss.assignees;
     if (this.faults.fails('effect:' + e.t)) throw new Error('injected persistent failure at effect:' + e.t);
     if (e.t === 'assign') {
       if (!assignees.includes(e.login)) await this.store.addAssignee(i.item, e.login);
       const after = await this.store.getIssue(i.item);
       if (!after.assignees.includes(e.login)) throw new Error('assignment not confirmed by GitHub');  // never ack before confirmation
+    } else if (e.t === 'unassign') {
+      if (assignees.includes(e.login)) await this.store.removeAssignee(i.item, e.login);
+      if ((await this.store.getIssue(i.item)).assignees.includes(e.login)) throw new Error('unassignment not confirmed by GitHub');
+    } else if (e.t === 'close') {
+      if (iss.state !== 'closed') await this.store.closeIssue(i.item);
+      if ((await this.store.getIssue(i.item)).state !== 'closed') throw new Error('close not confirmed by GitHub');
     } else if (e.t === 'label') {
       for (const a of e.add ?? []) await this.store.addLabel(i.item, a);
       for (const r of e.remove ?? []) await this.store.removeLabel(i.item, r);

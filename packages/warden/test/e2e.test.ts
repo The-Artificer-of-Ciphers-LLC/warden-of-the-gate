@@ -108,7 +108,9 @@ test('run --task intake --dry-run: proposed transitions, zero mutation; other ta
   const by = Object.fromEntries(r.data.proposals.map((p: any) => [p.item, p.to])); assert.deepEqual(by, { 3: 'needs-triage', 4: 'needs-info', 5: 'needs-review', 6: 'needs-review' });
   assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('P2'));
   assert.equal(r.data.protection.readOnlyStoreEnforced, true);
-  for (const t of ['triage', 'claim', 'implement', 'review', 'rework', 'sweep', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
+  for (const t of ['triage', 'claim', 'implement', 'review', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
+  { const x = await e.json('run', '--task', 'sweep', '--dry-run'); assert.equal(x.code, 0, 'sweep dry-run is implemented (P2, offline)'); assert.equal(x.data.outcome, 'proposed'); assert.equal(x.data.mutations, 0); }
+  assert.equal((await e.json('run', '--task', 'sweep')).code, 3, 'live sweep stays unsupported until the Actions handler exists');
   assert.equal((await e.json('run', '--task', 'intake')).code, 3, 'non-dry intake is P2');
   assert.equal((await e.run('run', '--task', 'nope', '--dry-run')).code, 2); assert.equal((await e.run('run', '--dry-run')).code, 2);
   assert.equal(worldHash(e), before);
