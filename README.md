@@ -2,6 +2,8 @@
 
 A self-maintaining GitHub software factory that reviews and merges PRs, fixes bugs, builds approved features/enhancements, and learns from maintainer decisions.
 
+Current implementation status and continuation instructions: [November 18 handoff](docs/handoff/2026-11-18-handoff.md). P1 remains blocked on genuine native scheduled-run evidence; GitHub Support #5025247 is open.
+
 Start with the [consolidated PRD](docs/prd/0001-warden-of-the-gate.md) and [glossary](GLOSSARY.md). The MVP is one repository per instance, manually triggered local AI on a Mac with OpenCode, plus deterministic GitHub Actions housekeeping and serialized effects. Operational configuration and standing authority are separate.
 
 ## Workflow prototype
