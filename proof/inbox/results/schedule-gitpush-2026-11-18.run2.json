@@ -1,0 +1,124 @@
+{
+  "method": "git-push-ssh",
+  "startedAt": "2026-11-18T22:34:37.935Z",
+  "sourceSha256": "2ffdf260586e65e6ff1e7991f60937ea5dda26c8869aa626cd31a6b81a8d866d",
+  "observerSha256": "2f37d7e1067bb633dadbebadf2bb4cde77a78b5c98aab92a0a98cf7f65c6dc8f",
+  "workflowBlob": "013aaace843aeeabbd069596dbabe846c38f802a",
+  "cases": [
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+      "signals": [],
+      "installAttempted": true,
+      "installCommit": "986dfd3017ba3244a3ba4e14668a1e935d7828df",
+      "installed": true,
+      "installVerified": false,
+      "workflowId": 423051691,
+      "disabled": true
+    },
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-control",
+      "signals": [],
+      "installAttempted": true,
+      "installCommit": "e31df54ad2225b17b537e3c1d317c63846737569",
+      "removed": true
+    }
+  ],
+  "pass": false,
+  "cleanupErrors": [
+    "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox remove: Error: git pull exited 1: debug1: loaded pubkey from /Users/trekkie/.ssh/id_ed25519: ED25519 SHA256:D7FLNHtF0q4klgcChurvypcupRsw5l+tYkgeUrSvRUk\r | debug1: no identity pubkey loaded from /Users/trekkie/.ssh/id_ed25519\r | ssh: connect to host github.com port 22: Operation timed out\r | fatal: Could not read from remote repository. |  | Please make sure you have the correct access rights | and the repository exists. | "
+  ],
+  "error": "Error: git push timed out after 90004 ms: debug1: channel 0: new session [client-session] (inactive timeout: 0)\r | debug1: Entering interactive session.\r | debug1: client_input_global_request: rtype hostkeys-00@openssh.com want_reply 0\r | debug1: client_input_hostkeys: searching /Users/trekkie/.ssh/known_hosts for github.com / (none)\r | debug1: client_input_hostkeys: searching /Users/trekkie/.ssh/known_hosts2 for github.com / (none)\r | debug1: client_input_hostkeys: hostkeys file /Users/trekkie/.ssh/known_hosts2 does not exist\r | debug1: client_input_hostkeys: no new or deprecated keys from server\r | ",
+  "gitSteps": [
+    {
+      "step": "clone 1",
+      "ms": 474,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "config user.name",
+      "ms": 9,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "config user.email",
+      "ms": 8,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "add .github/workflows/p1-cron-minimal.yml",
+      "ms": 11,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "commit Install permission-empty minimal cron diagnostic (git push)\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+      "ms": 19,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "rev-parse HEAD",
+      "ms": 9,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "push origin",
+      "ms": 1048,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "clone 1",
+      "ms": 509,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "config user.name",
+      "ms": 10,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "config user.email",
+      "ms": 8,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "add .github/workflows/p1-cron-minimal.yml",
+      "ms": 10,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "commit Install permission-empty minimal cron diagnostic (git push)\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>",
+      "ms": 18,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "rev-parse HEAD",
+      "ms": 9,
+      "status": 0,
+      "timedOut": false
+    },
+    {
+      "step": "push origin",
+      "ms": 90004,
+      "status": null,
+      "timedOut": true
+    },
+    {
+      "step": "pull origin",
+      "ms": 7864,
+      "status": 1,
+      "timedOut": false
+    }
+  ],
+  "finishedAt": "2026-11-18T22:36:24.895Z"
+}

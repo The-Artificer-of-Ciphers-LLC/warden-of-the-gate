@@ -20,6 +20,7 @@ const method = args[2], path = args[3], control = path.includes('warden-p0-contr
 const item = state.cases[control ? 1 : 0];
 let result, error;
 if (path === 'user') result = { login: 'trek-e' };
+else if (path === 'meta') result = { ssh_keys: ['ssh-ed25519 AAAAmockkey'] };
 else if (/\\/warden-p0-(sandbox|control)$/.test(path)) result = { default_branch: 'main' };
 else if (path.includes('/commits/')) { if (state.verifyFails) error = 'simulated api failure after push'; else result = { commit: { verification: { verified: true } } }; }
 else if (path.includes('/contents/')) {
@@ -54,7 +55,7 @@ state.git = state.git || [];
 if (args[0] === 'clone') {
   const url = args[args.length - 2], target = args[args.length - 1];
   state.git.push('clone ' + url);
-  if (!url.startsWith('git@github.com:')) { console.error('git harness must use the owner SSH identity'); process.exit(2); }
+  if (!url.startsWith('ssh://git@ssh.github.com:443/') || !process.env.GIT_SSH_COMMAND.includes('-p 443') || !process.env.GIT_SSH_COMMAND.includes('StrictHostKeyChecking=yes')) { console.error('git harness must use strict SSH over 443'); process.exit(2); }
   fs.mkdirSync(target, { recursive: true }); fs.writeFileSync(path.join(target, '.mockrepo'), url);
   const it = state.cases[url.includes('control') ? 1 : 0]; if (it.source) { fs.mkdirSync(path.dirname(wf(target)), { recursive: true }); fs.writeFileSync(wf(target), it.source); }
 } else if (args[0] === 'config') { /* ok */ }
@@ -97,7 +98,7 @@ function run(options: { manualFailure?: boolean; verifyFails?: boolean; sshAs?: 
     const result = spawnSync(process.execPath, [join(proof, 'src/schedule-gitpush-proof.ts'), '--live'],
       { encoding: 'utf8', timeout: 30_000, env: { ...process.env, GITPUSH_STEP_TIMEOUT_MS: options.pushHangs ? '1500' : '90000', MOCK_STATE: stateFile, PATH: join(root, 'bin') + ':' + process.env.PATH } });
     assert.ifError(result.error);
-    return { status: result.status, stderr: result.stderr, report: JSON.parse(readFileSync(join(proof, 'results/schedule-gitpush-2026-11-18.run2.json'), 'utf8')),
+    return { status: result.status, stderr: result.stderr, report: JSON.parse(readFileSync(join(proof, 'results/schedule-gitpush-2026-11-18.run3.json'), 'utf8')),
       state: JSON.parse(readFileSync(stateFile, 'utf8')) };
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
@@ -105,10 +106,10 @@ function run(options: { manualFailure?: boolean; verifyFails?: boolean; sshAs?: 
 test('git-push harness installs and removes by git push only (never the Contents API), with the owner identity and Copilot trailer', () => {
   const { status, stderr, report, state } = run();
   assert.equal(status, 0, stderr);
-  assert.equal(report.pass, true); assert.equal(report.method, 'git-push-ssh'); assert.deepEqual(report.cleanupErrors, []);
+  assert.equal(report.pass, true); assert.equal(report.method, 'git-push-ssh-443'); assert.deepEqual(report.cleanupErrors, []);
   assert.equal(report.workflowBlob, '013aaace843aeeabbd069596dbabe846c38f802a');
   assert.equal(state.apiWrites ?? 0, 0, 'no Contents API write may occur');
-  assert.ok(state.git.filter((g: string) => g.startsWith('clone ')).every((g: string) => g.includes('git@github.com:')));
+  assert.ok(state.git.filter((g: string) => g.startsWith('clone ')).every((g: string) => g.includes('ssh://git@ssh.github.com:443/')));
   assert.equal(state.git.filter((g: string) => g.startsWith('push ')).length, 4, 'two installs and two removals');
   assert.ok(state.userArgs.every((a: string) => a === 'user.name=trek-e' || a === 'user.email=trekkie@nomorestars.com'));
   assert.ok(state.messages.every((m: string) => m.includes('Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>')));

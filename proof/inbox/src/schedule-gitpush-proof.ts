@@ -17,8 +17,9 @@ const source = readFileSync(new URL('../workflows/p1-cron-minimal.yml', import.m
 const EXPECTED_BLOB = '013aaace843aeeabbd069596dbabe846c38f802a';
 const blobSha = createHash('sha1').update(`blob ${Buffer.byteLength(source)}\0`).update(source).digest('hex');
 assert.equal(blobSha, EXPECTED_BLOB, 'the workflow must be byte-identical to the previously tested one');
-// Second and last owner-approved attempt: the first attempt's raw report (schedule-gitpush-2026-11-18.json, a git ETIMEDOUT) is preserved unchanged.
-const file = new URL('../results/schedule-gitpush-2026-11-18.run2.json', import.meta.url);
+// Attempt 3. Attempts 1 and 2 (schedule-gitpush-2026-11-18.json and .run2.json) are preserved unchanged: both stalled because `github.com:22` was
+// unreachable from this network. This attempt reaches the same GitHub SSH service over port 443 (`ssh.github.com`) with the same key.
+const file = new URL('../results/schedule-gitpush-2026-11-18.run3.json', import.meta.url);
 assert.ok(!existsSync(file), 'never overwrite earlier evidence');
 const identity = { name: 'trek-e', email: 'trekkie@nomorestars.com' };
 const COAUTHOR = 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
@@ -27,16 +28,22 @@ interface Case {
   repository: string; workflowId?: number; installAttempted?: boolean; installed?: boolean; installCommit?: string; installVerified?: boolean | null;
   manual?: Run; scheduled?: Run; signals: string[]; removed?: boolean; disabled?: boolean; dir?: string;
 }
-const report: { method: 'git-push-ssh'; startedAt: string; finishedAt?: string; sourceSha256: string; observerSha256: string; workflowBlob: string; cases: Case[];
+const report: { method: 'git-push-ssh-443'; startedAt: string; finishedAt?: string; sourceSha256: string; observerSha256: string; workflowBlob: string; cases: Case[];
   pass: boolean; symptom?: string; error?: string; cleanupErrors: string[]; gitSteps?: typeof gitSteps } = {
-  method: 'git-push-ssh', startedAt: new Date().toISOString(), sourceSha256: createHash('sha256').update(source).digest('hex'),
+  method: 'git-push-ssh-443', startedAt: new Date().toISOString(), sourceSha256: createHash('sha256').update(source).digest('hex'),
   observerSha256: createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'), workflowBlob: blobSha,
   cases: repositories.map((repository) => ({ repository, signals: [] })), pass: false, cleanupErrors: [],
 };
 function gh(args: string[], input?: string): string {
   return execFileSync('gh', args, { input, encoding: 'utf8', timeout: 10_000, stdio: ['pipe', 'pipe', 'pipe'] });
 }
-const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -v -o BatchMode=yes' };
+// SSH over 443 with host keys taken from GitHub's own /meta endpoint into a TEMPORARY known_hosts (the owner's ~/.ssh is never modified).
+const sshDir = mkdtempSync(join(tmpdir(), 'warden-gitpush-ssh-'));
+const knownHosts = join(sshDir, 'known_hosts');
+const SSH_HOST = 'ssh.github.com';
+const SSH_OPTS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-p', '443', '-o', `UserKnownHostsFile=${knownHosts}`, '-o', 'StrictHostKeyChecking=yes'];
+const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: `ssh -v ${SSH_OPTS.join(' ')}` };
+const remoteUrl = (repository: string) => `ssh://git@${SSH_HOST}:443/${repository}.git`;
 const STEP_TIMEOUT_MS = Number(process.env.GITPUSH_STEP_TIMEOUT_MS ?? 90_000);
 const gitSteps: Array<{ step: string; ms: number; status: number | null; timedOut: boolean }> = [];
 /** Every git step is timed and recorded; a stall reports which step, how long, and the tail of git/ssh stderr (the first attempt only said ETIMEDOUT). */
@@ -127,6 +134,7 @@ function finish(): Promise<void> {
         assert.equal(item.removed, true);
       } catch (e) { report.cleanupErrors.push(redact(`${item.repository} remove: ${String(e)}`)); }
     }
+    try { rmSync(sshDir, { recursive: true, force: true }); } catch { /* temp only */ }
     for (const item of report.cases) if (item.dir) { try { rmSync(item.dir, { recursive: true, force: true }); } catch { /* temp dir only */ } delete item.dir; }
     report.gitSteps = gitSteps; report.finishedAt = new Date().toISOString();
     report.pass = report.pass && !report.error && report.cleanupErrors.length === 0;
@@ -140,9 +148,13 @@ function interrupted() {
 process.once('SIGINT', interrupted); process.once('SIGTERM', interrupted);
 try { assert.equal(api<{ login: string }>('user').login, 'trek-e'); } catch (e) { report.error = redact(String(e)); }
 if (!report.error) {
-  // `ssh -T git@github.com` exits non-zero by design; the greeting names the identity the git push will use.
-  const hello = spawnSync('ssh', ['-o', 'BatchMode=yes', '-T', 'git@github.com'], { encoding: 'utf8', timeout: 15_000 });
-  if (!/Hi trek-e!/.test(`${hello.stdout}${hello.stderr}`)) report.error = redact('ssh identity is not trek-e: ' + `${hello.stdout}${hello.stderr}`.slice(0, 120));
+  try {
+    const keys = api<{ ssh_keys: string[] }>('meta').ssh_keys; assert.ok(keys.length > 0, 'GitHub published no SSH host keys');
+    writeFileSync(knownHosts, keys.map((k) => `[${SSH_HOST}]:443 ${k}`).join('\n') + '\n');
+    // `ssh -T` exits non-zero by design; the greeting names the identity the git push will use.
+    const hello = spawnSync('ssh', [...SSH_OPTS, '-T', `git@${SSH_HOST}`], { encoding: 'utf8', timeout: 20_000 });
+    if (!/Hi trek-e!/.test(`${hello.stdout}${hello.stderr}`)) report.error = redact('ssh identity is not trek-e: ' + `${hello.stdout}${hello.stderr}`.slice(0, 160));
+  } catch (e) { report.error = redact(String(e)); }
 }
 try {
   assert.ok(!report.error, report.error);
@@ -156,7 +168,7 @@ try {
   for (const item of report.cases) {
     assert.ok(!finishing, 'git-push diagnostic interrupted before installation');
     item.dir = mkdtempSync(join(tmpdir(), 'warden-gitpush-'));
-    git(null, ['clone', '-q', '--depth', '1', '--branch', 'main', `git@github.com:${item.repository}.git`, item.dir]);
+    git(null, ['clone', '-q', '--depth', '1', '--branch', 'main', remoteUrl(item.repository), item.dir]);
     assert.ok(!existsSync(join(item.dir, workflowPath)), 'clone must not already contain the workflow');
     git(item.dir, ['config', 'user.name', identity.name]); git(item.dir, ['config', 'user.email', identity.email]);
     execFileSync('mkdir', ['-p', join(item.dir, '.github/workflows')]);
