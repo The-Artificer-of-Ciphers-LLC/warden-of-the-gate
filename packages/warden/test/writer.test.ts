@@ -83,7 +83,8 @@ test('queue overflow: 50 intents with no doorbells all recover from the durable 
 
 test('actions outage: nothing is written, intents stay pending and visible, then recover', async () => {
   const r = rig(); const n = r.world.addIssue(); await ready(r, n); await r.send({ item: n, ...claim('alice') });
-  r.world.down = true; await assert.rejects(() => r.writer().drain()); r.world.down = false;
+  r.world.down = true; const down = await r.writer().drain(); assert.equal(down.halted, 'stop'); assert.match(down.haltReason!, /unreadable/); r.world.down = false;
+  assert.equal((await r.writer().scan()).pending.length, 1, 'intent still durable and pending');
   r.world.clock = Date.now() + 60_000;
   const rep = await r.writer({ assignable: () => true }).drain(); assert.equal(rep.processed[0].result, 'applied');
 });

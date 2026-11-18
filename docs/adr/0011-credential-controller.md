@@ -33,3 +33,12 @@ Evidence: [`proof/inbox/RESULTS.md`](../../proof/inbox/RESULTS.md). The proof us
 Credential automation preserves already-delegated capabilities; it is not permission escalation. Provider-specific root-key recovery needs a supported mechanism and an explicit operational recovery procedure rather than an impossible guarantee of authentication without any valid trust root.
 
 See the [primary-source credential research](../research/PRD-BEST-PRACTICES.md#credential-continuity-follow-up) and [authority gates](0008-tiered-autonomy-and-merge-gates.md).
+
+## P1 implementation record (2026-11-18, `CORE-credentials`)
+
+Code: [`packages/warden/src/credentials`](../../packages/warden/src/credentials/controller.ts); tests `test/credentials.test.ts`, `test/units.test.ts` (HttpStore). Status: **controller and interface implemented and tested offline; the GitHub App issuer is not implemented and nothing was verified live.**
+
+- **Controller:** enforces the operator ceiling (repositories, permission levels) outside any model, single-flight issuance, proactive renewal, rotation, bounded persisted exponential backoff (a cold start cannot reset it), sticky persisted revocation cleared only by an explicit audited operator acknowledgement, final (non-retried) provider denial, explicit opt-out, redacted append-only lifecycle audit. Tokens exist only in memory.
+- **No fallback:** no code path reads `GITHUB_TOKEN`, `gh auth token` or any PAT (asserted by a source test); `HttpStore` obtains every token from the controller and a credential outage suspends only that authenticated operation (no request is made).
+- **Submit versus writer identity (decision):** two identities. The submit identity (Mac CLI, Actions event handler) appends intent comments only; the writer identity is the sole author of ledgers and receipts. The writer rejects ledgers/receipts from any other author and can authenticate ledgers with an owner-provisioned HMAC key. This is a *detective* control: the installation token cannot be narrowed below `issues: write`, so it is not a permission boundary. Live confirmation of two distinct identities is pending the parent's second-identity proof.
+- **Still unverified:** installation-token issuance/renewal against GitHub, key custody, cross-repository control read, provider-supported recovery after a revoked trust root.

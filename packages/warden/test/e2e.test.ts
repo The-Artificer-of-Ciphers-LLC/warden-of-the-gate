@@ -10,7 +10,7 @@ const worldHash = (e: { world: string }) => h(readFileSync(e.world, 'utf8'));
 
 test('setup: reports prerequisites, creates only explicitly approved missing starters, never overwrites, adopts nothing', async () => {
   const e = await cliEnv({ configure: false });
-  let r = await e.json('setup'); assert.equal(r.code, 1); assert.ok(r.data.checks.some((c: any) => c.name === '.github/warden.yml' && c.status === 'missing'));
+  let r: any = await e.json('setup'); assert.equal(r.code, 1); assert.ok(r.data.checks.some((c: any) => c.name === '.github/warden.yml' && c.status === 'missing'));
   assert.ok(!existsSync(join(e.repo, '.github/warden.yml')), 'no flag => no file');
   r = await e.json('setup', '--create-config', '--repo', 'acme/widgets', '--maintainers', 'maint1', '--create-orders');
   assert.ok(r.data.checks.some((c: any) => c.name === '.github/warden.yml' && c.status === 'created'));
@@ -29,7 +29,7 @@ test('config validate: malformed, unsupported version, unknown keys, unsafe defa
   const e = await cliEnv();
   assert.equal((await e.run('config', 'validate')).code, 0);
   e.write('.github/warden.yml', 'schemaVersion: 1\nrepository: [unclosed');
-  let r = await e.run('config', 'validate'); assert.equal(r.code, 1); assert.match(r.out, /YAML parse error/);
+  let r: any = await e.run('config', 'validate'); assert.equal(r.code, 1); assert.match(r.out, /YAML parse error/);
   e.write('.github/warden.yml', 'schemaVersion: 2\nrepository: acme/widgets\nmaintainers: [m]\n'); r = await e.run('config', 'validate'); assert.match(r.out, /unsupported schemaVersion 2/);
   e.write('.github/warden.yml', 'schemaVersion: 1\nrepository: acme/widgets\nmaintainers: [m]\nbogus: 1\ngates: {blocker: false}\nruntime: {remoteFallback: true, isolation: none}\napprovals: {actionExpiryHours: 500}\n');
   r = await e.run('config', 'validate'); assert.equal(r.code, 1); assert.match(r.out, /bogus/); assert.match(r.out, /blocker/);

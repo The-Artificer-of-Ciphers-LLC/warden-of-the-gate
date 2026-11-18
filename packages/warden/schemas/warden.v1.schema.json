@@ -100,7 +100,7 @@
           ]
         },
         "remoteFallback": {
-          "type": "boolean"
+          "const": false
         },
         "isolation": {
           "enum": [

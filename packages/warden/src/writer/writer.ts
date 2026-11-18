@@ -178,7 +178,8 @@ export class Writer {
     }
     if (!known) {
       const age = this.store.now() - Date.parse(c.createdAt);
-      if (l.dropped > 0 && age > pol.maxIntentAgeMs) {                     // P0 open item: redelivery older than the dedupe horizon cannot be recognized
+      const observedAge = Number.isFinite(Date.parse(intent.source.observedAt)) ? this.store.now() - Date.parse(intent.source.observedAt) : age;
+      if (l.dropped > 0 && Math.max(age, observedAge) > pol.maxIntentAgeMs) {                     // P0 open item: redelivery older than the dedupe horizon cannot be recognized
         return this.finalizeReject(c, intent, l, 'beyond-dedupe-horizon', `Operation rejected: it is older than the replay-protection window (${Math.round(pol.maxIntentAgeMs / 3600_000)}h) and cannot be proven new.`);
       }
       if (intent.causalAfter) {
