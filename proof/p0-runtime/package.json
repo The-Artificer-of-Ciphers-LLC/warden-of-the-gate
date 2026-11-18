@@ -1,0 +1,24 @@
+{
+  "name": "warden-p0-runtime-proof",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Warden P0 runtime/isolation/lookup proofs. Evidence spikes, NOT production modules.",
+  "type": "module",
+  "engines": {
+    "node": ">=26.13.0"
+  },
+  "scripts": {
+    "proof:all": "node src/run-all.ts",
+    "proof:isolation": "node src/proofs/isolation.ts",
+    "proof:runtime": "node src/proofs/runtime.ts",
+    "proof:lookup": "node src/proofs/lookup.ts"
+  },
+  "dependencies": {
+    "@scip-code/scip": "0.10.0",
+    "@sourcegraph/scip-typescript": "0.6.2",
+    "@types/node": "26.6.6",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "typescript": "6.0.3"
+  }
+}
