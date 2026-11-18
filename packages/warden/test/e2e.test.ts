@@ -108,7 +108,7 @@ test('run --task intake --dry-run: proposed transitions, zero mutation; other ta
   const by = Object.fromEntries(r.data.proposals.map((p: any) => [p.item, p.to])); assert.deepEqual(by, { 3: 'needs-triage', 4: 'needs-info', 5: 'needs-review', 6: 'needs-review' });
   assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('close with explanation'));
   assert.equal(r.data.protection.readOnlyStoreEnforced, true);
-  for (const t of ['claim', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
+  for (const t of ['retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
   { const x = await e.json('run', '--task', 'sweep', '--dry-run'); assert.equal(x.code, 0, 'sweep dry-run is implemented (P2, offline)'); assert.equal(x.data.outcome, 'proposed'); assert.equal(x.data.mutations, 0); }
   assert.equal((await e.json('run', '--task', 'sweep')).code, 0, 'live sweep only SUBMITS intents (none here: no item has a ledger)');
   assert.equal((await e.json('run', '--task', 'intake')).code, 2, 'live intake never scans the backlog: --item is required');
@@ -231,4 +231,30 @@ test('run --task rework: needs --item and a factory identity; the dry-run descri
   e.write('.github/warden.yml', 'schemaVersion: 1\nrepository: acme/widgets\nmaintainers: [maint1, maint2]\nmerge:\n  factoryLogins: [warden-factory]\n');
   const dry = await e.json('run', '--task', 'rework', '--item', '3', '--dry-run'); assert.equal(dry.code, 0); assert.equal(dry.data.mutations, 0);
   assert.equal((await e.json('run', '--task', 'rework', '--item', '3')).code, 4);
+});
+
+/** GitHub event doorbells end to end through the CLI against the simulated GitHub: each event becomes deterministic intents; the writer decides. */
+test('event doorbells: issue opened -> intake; draft PR opened -> closed by policy; /warden claim comment -> verified claim; blocking review -> fix window; every one through the writer', async () => {
+  const e = await cliEnv(); const ev = (name: string, body: unknown) => { e.write(`ev-${name}.json`, JSON.stringify(body)); return join(e.repo, `ev-${name}.json`); };
+  const ledger = (n: number) => { const c = (e.worldJson().comments as Array<{ issue: number; c: { body: string } }>).find((x) => x.issue === n && x.c.body.startsWith('<!-- warden-ledger:v1 -->')); const m = c?.c.body.match(/```json\n([\s\S]*?)\n```/); return m ? JSON.parse(m[1]) : null; };
+  await e.sim('sim', 'issue', '--title', 'Saving crashes the app', '--body', 'Steps: open, save, crash.', '--as', 'reporter');   // #3
+  await e.sim('sim', 'issue', '--title', 'WIP change', '--pr', '--draft', '--as', 'dev1');                                                   // #4
+  await e.sim('sim', 'issue', '--title', 'Real change', '--pr', '--as', 'dev2');                                                             // #5
+  const open = await e.json('event', 'handle', '--event-name', 'issues', '--event-path', ev('i', { action: 'opened', issue: { number: 3 }, repository: { full_name: 'acme/widgets' } }), '--drain');
+  assert.equal(open.code, 0, open.out); assert.equal(ledger(3)?.state, 'needs-triage'); assert.ok(e.worldJson().issues.find((i: any) => i.number === 3).labels.includes('warden:needs-triage'));
+  await e.json('event', 'handle', '--event-name', 'pull_request', '--event-path', ev('p4', { action: 'opened', pull_request: { number: 4 }, repository: { full_name: 'acme/widgets' } }), '--drain');
+  assert.equal(e.worldJson().issues.find((i: any) => i.number === 4).state, 'closed', 'a draft PR is closed by policy with an explanation');
+  await e.json('event', 'handle', '--event-name', 'pull_request', '--event-path', ev('p5', { action: 'opened', pull_request: { number: 5 }, repository: { full_name: 'acme/widgets' } }), '--drain'); assert.equal(ledger(5)?.state, 'needs-review');
+  // claim: an unedited comment by alice on a READY issue
+  await e.sim('sim', 'issue', '--title', 'Ready issue title', '--body', 'b');   // #6
+  const w = e.worldJson(); const led = { v: 1, repository: 'acme/widgets', item: 6, kind: 'issue', epoch: 0, seq: 0, state: 'ready', facets: {}, owner: null, attempts: { launchRetries: 0, reworkCycles: 0, contributorFixRounds: 0, review: 0 }, evidence: {}, obligations: [], approvals: {}, linked: [], ops: {}, order: [], dropped: 0 };
+  w.comments.push({ issue: 6, c: { id: w.nextId++, body: `<!-- warden-ledger:v1 -->\n**Warden item ledger**\n\`\`\`json\n${JSON.stringify(led)}\n\`\`\``, author: 'warden-writer', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } }); writeFileSync(e.world, JSON.stringify(w));
+  await e.sim('sim', 'comment', '--issue', '6', '--as', 'alice', '--body', '/warden claim', '--repo', 'acme/widgets', '--event-out', join(e.repo, 'ev-claim.json'));
+  const claim = await e.json('event', 'handle', '--event-path', join(e.repo, 'ev-claim.json'), '--drain'); assert.equal(claim.code, 0, claim.out);
+  assert.equal(ledger(6)?.owner?.id, 'alice'); assert.ok(ledger(6)?.obligations.some((o: any) => o.type === 'delivery')); assert.deepEqual(e.worldJson().issues.find((i: any) => i.number === 6).assignees, ['alice']);
+  // blocking review by someone other than the author starts the fix window; a review by the author does not
+  const own = await e.json('event', 'handle', '--event-name', 'pull_request_review', '--event-path', ev('r0', { action: 'submitted', pull_request: { number: 5, user: { login: 'dev2' } }, review: { id: 1, state: 'changes_requested', user: { login: 'dev2' } }, repository: { full_name: 'acme/widgets' } }), '--drain'); assert.match(own.out, /ignored/);
+  await e.json('event', 'handle', '--event-name', 'pull_request_review', '--event-path', ev('r1', { action: 'submitted', pull_request: { number: 5, user: { login: 'dev2' } }, review: { id: 2, state: 'changes_requested', user: { login: 'maint1' }, submitted_at: new Date().toISOString() }, repository: { full_name: 'acme/widgets' } }), '--drain');
+  assert.equal(ledger(5)?.state, 'needs-author'); assert.ok(ledger(5)?.obligations.some((o: any) => o.type === 'fix-window'));
+  const other = await e.json('event', 'handle', '--event-name', 'workflow_run', '--event-path', ev('x', { action: 'completed' })); assert.equal(other.code, 0); assert.match(other.out, /no handler/);
 });

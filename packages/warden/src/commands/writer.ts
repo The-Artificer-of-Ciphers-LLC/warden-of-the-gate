@@ -1,3 +1,4 @@
+import { handleOtherEvent } from './events.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import { Writer, defaultWriterConfig } from '../writer/writer.ts';
 import { Journal, reconcileJournal, submit } from '../writer/journal.ts';
@@ -51,7 +52,7 @@ export async function eventHandle(c: Ctx): Promise<Result> {
   const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'event: configuration invalid:\n' + cfgs.errors.join('\n') };
   const cfg = cfgs.warden; const path = str(c.flags, 'event-path') ?? c.env.GITHUB_EVENT_PATH; const name = str(c.flags, 'event-name') ?? c.env.GITHUB_EVENT_NAME ?? 'issue_comment';
   if (!path || !existsSync(path)) return { code: 2, data: {}, text: 'event: --event-path (or GITHUB_EVENT_PATH) is required' };
-  if (name !== 'issue_comment') return { code: 0, data: { ignored: name }, text: `event ${name}: no handler in P1 (intake/claim/sweep handlers land in P2); ignored, nothing lost: the sweep backstop will observe state` };
+  if (name !== 'issue_comment') { const raw = JSON.parse(readFileSync(path, 'utf8')); const r = await handleOtherEvent(c, cfg, name, raw); if (c.flags.drain && r.code === 0) await writerDrain(c); return r; }
   const ev = JSON.parse(readFileSync(path, 'utf8')) as { action: string; issue: { number: number; pull_request?: unknown }; comment: { id: number; body: string; user: { login: string }; created_at?: string }; repository?: { full_name: string } };
   if (ev.action !== 'created') return { code: 0, data: { ignored: ev.action }, text: `event: comment ${ev.action} ignored (only newly created comments carry decisions; edits grant nothing)` };
   if (ev.repository && ev.repository.full_name.toLowerCase() !== cfg.repository.toLowerCase()) return { code: 0, data: { ignored: 'wrong-instance' }, text: 'event: for another repository; ignored' };
@@ -63,7 +64,9 @@ export async function eventHandle(c: Ctx): Promise<Result> {
   const be = openBackend(c, cfg); const sub = be.open('submit');
   if (!sub) return { code: 4, data: {}, text: `event: cannot submit: ${be.unavailable}` };
   const itemKind = ev.issue.pull_request ? 'pr' : 'issue';
-  const intent = makeIntent({ v: 1, kind, repo: cfg.repository, item: ev.issue.number, itemKind, origin: 'maintainer' as Origin, source: { kind: 'gh-comment', id: String(ev.comment.id), observedAt: ev.comment.created_at ?? new Date(c.now()).toISOString() }, actor: ev.comment.user.login, payload });
+  const body = kind === 'claim' ? { claimant: { kind: 'contributor', id: ev.comment.user.login } } : payload;   // a claim is ALWAYS for the commenter, taken from GitHub's identity, never from text
+  const origin: Origin = kind === 'claim' || kind === 'release' ? 'deterministic' : 'maintainer';
+  const intent = makeIntent({ v: 1, kind, repo: cfg.repository, item: ev.issue.number, itemKind, origin, source: { kind: 'gh-comment', id: String(ev.comment.id), observedAt: ev.comment.created_at ?? new Date(c.now()).toISOString() }, actor: ev.comment.user.login, payload: body });
   const st = optStorage(c, cfg.repository); const j = st ? new Journal(st.journalPath) : null;
   const { commentId } = await submit(sub, cfg.inbox.inboxIssue, intent, j, undefined, cfg.inbox.maxIntentBytes);
   let drained: unknown;

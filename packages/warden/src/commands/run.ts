@@ -37,7 +37,7 @@ export async function run(c: Ctx): Promise<Result> {
   let st; try { st = openStorage(c, cfg.repository); } catch (e) { return { code: 4, data: { outcome: 'blocked' }, text: `run blocked: ${(e as Error).message}` }; }
   const local = readLocalStop(st);
   if (local.stopped) return { code: 4, data: { task, outcome: 'blocked', reason: 'local stop in force' }, text: `run blocked: local stop in force (since ${local.at}, by ${local.by}). No model or verification work starts. Use \`warden resume --confirm\`.` };
-  const be = openBackend(c, cfg); const store = be.open('operator');
+  const be = openBackend(c, cfg); const store = be.open('operator') ?? (str(c.flags, 'submit-auth') ? be.open('submit') : null);   // in Actions the read-only reads use the submit identity
   if (!store) return { code: 4, data: { task, outcome: 'blocked', reason: be.unavailable }, text: `run blocked: ${be.unavailable}` };
   const pol = buildPolicy(cfg, cfgs.orders);
   const global = cfg.inbox.globalControl ? { store: be.open('operator', cfg.inbox.globalControl.repository) ?? store, issue: cfg.inbox.globalControl.issue } : null;
@@ -48,12 +48,17 @@ export async function run(c: Ctx): Promise<Result> {
   const abort = new AbortController(); const onTerm = () => abort.abort(); process.once('SIGTERM', onTerm);
   try {
     const skip = new Set<number>([cfg.inbox.inboxIssue, cfg.inbox.controlIssue, ...(cfg.inbox.globalControl?.repository === cfg.repository ? [cfg.inbox.globalControl.issue] : [])]);
-    if (!c.flags['dry-run'] && (task === 'intake' || task === 'sweep')) {
+    if (!c.flags['dry-run'] && (task === 'intake' || task === 'sweep' || task === 'claim')) {
       // Live deterministic housekeeping: SUBMITS intents only. The one serialized writer (`warden writer drain`) decides and applies; nothing is
       // scheduled by this command, and no model or inference is used.
       const sub = be.open('submit'); if (!sub) return { code: 4, data: { task, outcome: 'blocked', reason: be.unavailable }, text: `run blocked: ${be.unavailable}` };
       let journal: Journal | null = null; try { journal = new Journal(st.journalPath); } catch { /* none */ }
       const now = c.now(); const base = { submitStore: sub, inboxIssue: cfg.inbox.inboxIssue, now, journal };
+      if (task === 'claim') {
+        const { planClaims: plan, } = await import('../tasks/claims.ts'); const { submitClaims } = await import('../tasks/claims.ts');
+        const { found, skipped } = await plan(store, cfg, { skip }); const done = await submitClaims(found, { submitStore: sub, repo: cfg.repository, inboxIssue: cfg.inbox.inboxIssue, now, journal });
+        return { code: 0, data: { task, outcome: 'submitted', submitted: done, skipped, aborted: abort.signal.aborted }, text: `task claim: ${done.length} volunteer claim(s) submitted, ${skipped.length} skipped; run \`warden writer drain\` to apply (the writer re-verifies each comment and ownership)` };
+      }
       if (task === 'intake') {
         const items = str(c.flags, 'item') ? String(str(c.flags, 'item')).split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
         if (!items.length) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task intake (live) requires --item N[,N]: intake never scans the backlog; use `warden adopt` for existing items' };

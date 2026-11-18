@@ -33,6 +33,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'claim': {
       const cl = pl.claimant as { kind: 'contributor' | 'factory'; id: string } | undefined;
       if (l.kind !== 'issue') return rej('claim-on-pr', 'Claims apply to issues only.');
+      if (cl?.kind === 'contributor' && !c.sourceVerified) return rej('unverified-source', 'Claim rejected: it must be a real, unedited comment by the claiming GitHub user (`/warden claim`).');
       if (!cl?.id || cl.id !== i.actor) return rej('claimant-actor-mismatch', 'Claim rejected: the requesting identity does not match the claimant.');
       const others = (c.item?.assignees ?? []).filter((a) => a !== cl.id);   // fresh GitHub ownership check, read at decision time
       if (others.length) return rej(`assigned-on-github-to:${others.join(',')}`, `Claim by ${cl.id} rejected: GitHub already shows this item assigned to ${others.join(', ')}.`);

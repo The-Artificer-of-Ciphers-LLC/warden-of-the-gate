@@ -34,7 +34,7 @@ try {
   execFileSync(bin, ['sim', 'init', '--world', world], { encoding: 'utf8' }); execFileSync(bin, ['sim', 'issue', '--title', 'Saving crashes the app', '--body', 'Steps: open, save, crash.', '--world', world]);
   run(['setup', '--create-config', '--repo', 'acme/widgets', '--maintainers', 'maint1,maint2', '--create-orders', '--approve-ceiling', '--create-labels'], 0);
   run(['config', 'validate'], 0); run(['status'], 0);
-  for (const [t, extra, want] of [['intake', [], 0], ['triage', ['--item', '3'], 0], ['claim', [], 3], ['implement', ['--item', '3'], 4], ['review', [], 0], ['rework', ['--item', '3'], 4], ['sweep', [], 0], ['retro', [], 3]] as const) run(['run', '--task', t, '--dry-run', ...extra], want, `run --task ${t} --dry-run`);
+  for (const [t, extra, want] of [['intake', [], 0], ['triage', ['--item', '3'], 0], ['claim', [], 0], ['implement', ['--item', '3'], 4], ['review', [], 0], ['rework', ['--item', '3'], 4], ['sweep', [], 0], ['retro', [], 3]] as const) run(['run', '--task', t, '--dry-run', ...extra], want, `run --task ${t} --dry-run`);
   run(['adopt', '--dry-run'], 0); run(['data', 'status'], 0); run(['upgrade', '--dry-run'], 0);
   run(['stop', '--reason', 'install verification', '--as', 'maint1'], 0); run(['resume', '--confirm', '--as', 'maint1'], 0);
   assert.ok(results.every((r) => r.ok), 'one or more steps failed');

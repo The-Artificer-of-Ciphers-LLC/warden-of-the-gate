@@ -10,6 +10,7 @@ import { submit } from '../writer/journal.ts';
 import type { Journal } from '../writer/journal.ts';
 import { iso } from '../util.ts';
 import { decideIntake } from './intake.ts';
+import { planClaims } from './claims.ts';
 
 export const TASK_NAMES = ['intake', 'triage', 'claim', 'implement', 'review', 'rework', 'sweep', 'retro'] as const;
 export type TaskName = (typeof TASK_NAMES)[number];
@@ -130,6 +131,12 @@ export async function runTask(task: string, o: { dryRun: boolean; store: Store; 
   if (task === 'intake') {
     if (!o.dryRun) return { task, outcome: 'unsupported', reason: 'live intake runs through the Actions handler and is delivered in P2; use --dry-run', owner: 'P2' };
     return intakeDryRun(o.store, o.cfg, { items: o.items, skip: o.skip });
+  }
+  if (task === 'claim') {
+    if (!o.dryRun) return { task, outcome: 'unsupported', reason: 'live claim submission is a CLI path (`run --task claim`) that only submits intents', owner: 'P2' };
+    const { found, skipped } = await planClaims(o.store, o.cfg, { skip: o.skip, items: o.items });
+    return { task, outcome: 'proposed', mode: 'dry-run', mutations: 0, proposals: [...found.map((f): Proposal => ({ item: f.item, kind: 'issue', adopted: true, from: 'ready', to: 'claimed', labels: { add: [], remove: [] }, reasons: [`volunteered by ${f.claimant} (comment ${f.commentId})`], effects: ['assign and start the delivery obligation (through the writer, which re-verifies the comment and ownership)'] })),
+      ...skipped.map((s): Proposal => ({ item: s.item, kind: 'issue', adopted: true, from: 'ready', to: null, labels: { add: [], remove: [] }, reasons: [`skipped: ${s.why}`], effects: [] }))] };
   }
   if (task === 'sweep') {
     if (!o.dryRun) return { task, outcome: 'unsupported', reason: 'live sweep is submitted by the Actions handler (not built); use --dry-run. Enforcement exists only as writer intents (submitSweep) and is not scheduled', owner: 'P2' };

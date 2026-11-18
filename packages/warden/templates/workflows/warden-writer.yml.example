@@ -1,0 +1,25 @@
+# EXAMPLE, NOT INSTALLED. The ONE serialized effect path. Runs as the runner's own GITHUB_TOKEN identity (a different identity from the submit token),
+# one drain at a time. Triggered by new inbox activity; schedule is intentionally absent (see warden-sweep.yml.example).
+name: warden-writer
+on:
+  issues: { types: [opened, edited] }
+  issue_comment: { types: [created] }
+  workflow_dispatch:
+permissions: { contents: read, issues: write }
+concurrency: { group: warden-writer, cancel-in-progress: false }
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.event.repository.default_branch }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - run: npm install --no-audit --no-fund --ignore-scripts ./vendor/taoc-warden-0.1.0-p4.tgz
+      - run: npx warden writer drain --writer-auth actions --submit-auth actions-secret --control-auth actions-secret
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WARDEN_SUBMIT_TOKEN: ${{ secrets.WARDEN_SUBMIT_TOKEN }}
+          WARDEN_CONTROL_READ_TOKEN: ${{ secrets.WARDEN_CONTROL_READ_TOKEN }}
+          WARDEN_LEDGER_KEY: ${{ secrets.WARDEN_LEDGER_KEY }}

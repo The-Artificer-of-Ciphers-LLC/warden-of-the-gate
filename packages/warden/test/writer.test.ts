@@ -97,7 +97,7 @@ test('effect applied but reply lost: marker makes the retry a no-op', async () =
 
 test('duplicate delivery of one source event yields one effect and a duplicate receipt', async () => {
   const r = rig(); const n = r.world.addIssue(); await ready(r, n);
-  const i = r.intent({ item: n, ...claim('alice') });
+  const srcId = await r.comment('alice', n, '/warden claim'); const i = r.intent({ item: n, ...claim('alice'), source: { kind: 'gh-comment', id: String(srcId), observedAt: new Date(r.world.now()).toISOString() } });
   const { commentId: a } = await submit(r.submitStore, r.inbox, i, null); const { commentId: b } = await submit(r.submitStore, r.inbox, i, null);
   const rep = await r.writer({ assignable: () => true }).drain();
   assert.deepEqual(rep.processed.map((p) => p.result).sort(), ['applied', 'duplicate']); void a; void b;
@@ -106,7 +106,7 @@ test('duplicate delivery of one source event yields one effect and a duplicate r
 test('out-of-order intent waits for its predecessor, then applies', async () => {
   const r = rig(); const n = r.world.addIssue();
   const first = r.intent({ kind: 'transition', item: n, actor: 'bot', payload: { to: 'ready' } });
-  const second = r.intent({ item: n, ...claim('alice'), causalAfter: first.opid });
+  const srcId = await r.comment('alice', n, '/warden claim'); const second = r.intent({ item: n, ...claim('alice'), causalAfter: first.opid, source: { kind: 'gh-comment', id: String(srcId), observedAt: new Date(r.world.now()).toISOString() } });
   await submit(r.submitStore, r.inbox, second, null);
   let rep = await r.writer({ assignable: () => true }).drain(); assert.equal(rep.processed[0].result, 'deferred'); assert.equal(rep.pendingAfter.length, 1);
   await submit(r.submitStore, r.inbox, first, null);

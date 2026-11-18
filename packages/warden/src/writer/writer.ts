@@ -226,6 +226,16 @@ export class Writer {
   }
   /** Reconstruct maintainer authority from the target item's source comment, not the submitter's interpretation. */
   private async verifySource(i: Intent): Promise<boolean> {
+    const claimish = i.kind === 'claim' || i.kind === 'release';
+    if (claimish) {
+      const claimant = (i.payload as { claimant?: { kind?: string; id?: string } }).claimant;
+      if (i.kind === 'claim' && claimant?.kind === 'factory') return true;                    // the factory identity is deterministic infrastructure, not a commenter
+      if (i.kind === 'release' && i.source.kind !== 'gh-comment') return true;               // internal releases (implement/sweep) carry their own non-comment source
+      if (i.source.kind !== 'gh-comment') return false;                                        // a contributor claim must be a real comment
+      const sc0 = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
+      const cmd = sc0 ? parseMaintainerCommand(sc0.body) : null;
+      return !!sc0 && sc0.author === i.actor && sc0.updatedAt === sc0.createdAt && cmd?.kind === i.kind && (i.kind === 'release' || claimant?.id === i.actor);
+    }
     if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release' && i.kind !== 'resume-scope') return true;
     if (i.source.kind !== 'gh-comment') return false;
     const sc = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
