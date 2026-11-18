@@ -5,12 +5,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 assert.equal(process.argv[2], '--live');
-const offPeak = process.argv[3] === '--off-peak';
+const rapid = process.argv[3] === '--rapid';
+const offPeak = rapid || process.argv[3] === '--off-peak';
 assert.equal(process.argv.length, offPeak ? 4 : 3);
 const repo = 'The-Artificer-of-Ciphers-LLC/warden-p0-sandbox';
 const workflow = `repos/${repo}/actions/workflows/422227724`;
 const originalReport = new URL('../results/schedule-2026-11-18.json', import.meta.url);
-const file = offPeak ? new URL('../results/schedule-off-peak-2026-11-18.json', import.meta.url) : originalReport;
+const file = offPeak ? new URL(`../results/schedule-${rapid ? 'rapid' : 'off-peak'}-2026-11-18.json`, import.meta.url) : originalReport;
 assert.ok(!existsSync(file), 'preserve previous evidence before rerunning');
 if (offPeak) {
   const previous = JSON.parse(readFileSync(originalReport, 'utf8'));
@@ -23,10 +24,12 @@ function api(path: string, method = 'GET', body?: unknown): string {
 }
 const report: { startedAt: string; finishedAt?: string; observingAt?: string; run?: unknown; disabled?: boolean; error?: string; pass: boolean;
   experiment?: string; sourceSha256?: string; cronBefore?: string; cronDuring?: string; changeCommit?: string; restoreCommit?: string;
-  registeredActor?: string; restored?: boolean; cleanupErrors?: string[] } = { startedAt: new Date().toISOString(), pass: false };
+  registeredActor?: string; restored?: boolean; observationMinutes?: number; cleanupErrors?: string[] } = { startedAt: new Date().toISOString(), pass: false };
 const contents = `repos/${repo}/contents/.github/workflows/p0-writer.yml`;
 const originalCron = "    - cron: '*/15 * * * *'";
-const diagnosticCron = "    - cron: '7,22,37,52 * * * *'";
+const testCron = rapid ? '2/5 * * * *' : '7,22,37,52 * * * *';
+const diagnosticCron = `    - cron: '${testCron}'`;
+const observationMinutes = rapid ? 10 : offPeak ? 56 : 59;
 const personal = { name: 'trek-e', email: 'trekkie@nomorestars.com' };
 let originalSource: string | undefined;
 let diagnosticSource: string | undefined;
@@ -106,9 +109,11 @@ try {
     const current = readWorkflow(); originalSource = current.source;
     assert.equal(originalSource.split(originalCron).length, 2, 'expected exactly the approved original cron');
     diagnosticSource = originalSource.replace(originalCron, diagnosticCron);
-    report.experiment = 'off-peak cron re-registration with verified personal commit identity; both variables change, so success does not isolate a cause';
+    report.experiment = rapid
+      ? 'five-minute cron capability check with verified personal commit identity; manual dispatch does not satisfy this check'
+      : 'off-peak cron re-registration with verified personal commit identity; both variables change, so success does not isolate a cause';
     report.sourceSha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
-    report.cronBefore = '*/15 * * * *'; report.cronDuring = '7,22,37,52 * * * *';
+    report.cronBefore = '*/15 * * * *'; report.cronDuring = testCron; report.observationMinutes = observationMinutes;
     editAttempted = true;
     const changed = writeWorkflow(diagnosticSource, current.sha, 'p0 proof: register off-peak sandbox cron with verified operator\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>');
     report.changeCommit = changed.sha; report.registeredActor = changed.actor ?? undefined;
@@ -119,7 +124,7 @@ try {
   await waitForState(/^active$/);
   if (offPeak) report.observingAt = new Date().toISOString();
   console.log('Sandbox p0-writer enabled; bounded schedule observation started');
-  const deadline = offPeak ? Date.parse(report.startedAt) + 56 * 60_000 : Date.now() + 59 * 60_000;
+  const deadline = (offPeak ? Date.parse(report.startedAt) : Date.now()) + observationMinutes * 60_000;
   while (!finishing && Date.now() < deadline) {
     const runs = JSON.parse(api(`${workflow}/runs?event=schedule&per_page=10`)).workflow_runs as { created_at: string; status: string; conclusion: string; html_url: string; head_sha: string }[];
     const run = runs.find((r) => r.created_at >= report.startedAt && r.status === 'completed');
@@ -134,7 +139,7 @@ try {
     }
     await sleep(15_000);
   }
-  if (!report.pass) report.error = `No successful schedule-triggered run observed within ${offPeak ? 56 : 59} minutes`;
+  if (!report.pass) report.error = `No successful schedule-triggered run observed within ${observationMinutes} minutes`;
 } catch (e) { report.error = String(e); }
 finally { await finish(); }
 console.log(JSON.stringify(report));

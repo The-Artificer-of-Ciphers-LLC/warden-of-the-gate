@@ -50,7 +50,7 @@ if (denied) { console.error('Unable to disable a workflow that is not active.');
 console.log(JSON.stringify(result));
 `;
 
-function run(options: { conclusion?: string; concurrent?: string; alreadyDisabled?: boolean } = {}) {
+function run(options: { conclusion?: string; concurrent?: string; alreadyDisabled?: boolean } = {}, rapid = false) {
   const root = mkdtempSync(join(tmpdir(), 'warden-schedule-test-'));
   try {
     mkdirSync(join(root, 'src')); mkdirSync(join(root, 'results')); mkdirSync(join(root, 'bin'));
@@ -60,11 +60,11 @@ function run(options: { conclusion?: string; concurrent?: string; alreadyDisable
     const stateFile = join(root, 'state.json');
     writeFileSync(stateFile, JSON.stringify({ source: original, active: false, staleReads: 0, version: 0, revisions: {}, writes: [],
       conclusion: 'success', ...options }));
-    const result = spawnSync(process.execPath, [join(root, 'src/schedule-proof.ts'), '--live', '--off-peak'],
+    const result = spawnSync(process.execPath, [join(root, 'src/schedule-proof.ts'), '--live', rapid ? '--rapid' : '--off-peak'],
       { encoding: 'utf8', timeout: 20_000, env: { ...process.env, MOCK_GH_STATE: stateFile, PATH: join(root, 'bin') + ':' + process.env.PATH } });
     assert.ifError(result.error);
     return { status: result.status, stderr: result.stderr,
-      report: JSON.parse(readFileSync(join(root, 'results/schedule-off-peak-2026-11-18.json'), 'utf8')),
+      report: JSON.parse(readFileSync(join(root, `results/schedule-${rapid ? 'rapid' : 'off-peak'}-2026-11-18.json`), 'utf8')),
       state: JSON.parse(readFileSync(stateFile, 'utf8')) };
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
@@ -105,5 +105,15 @@ test('cleanup refuses to overwrite a concurrent owner edit and still disables th
   assert.equal(report.disabled, true);
   assert.equal(state.source, concurrent);
   assert.equal(state.writes.length, 1);
+  assert.equal(state.active, false);
+});
+
+test('rapid capability mode still requires a genuine successful run and restores the original workflow', () => {
+  const { status, stderr, report, state } = run({}, true);
+  assert.equal(status, 0, stderr);
+  assert.equal(report.pass, true);
+  assert.equal(report.restored, true);
+  assert.equal(report.disabled, true);
+  assert.equal(state.source, original);
   assert.equal(state.active, false);
 });

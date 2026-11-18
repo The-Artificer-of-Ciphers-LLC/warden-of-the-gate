@@ -72,6 +72,8 @@ The harness uploads a source-hashed copy of the P1 package to `.warden-p1-proof/
 
 After a failed, finished original observation and **separate owner approval**, `--live --off-peak` temporarily re-registers the same sandbox workflow at `7,22,37,52 * * * *` with the verified personal commit identity. It checks live disabled state before editing, observes for at most 56 minutes to reserve cleanup time, verifies the successful scheduled run's actual workflow revision, restores the exact original workflow, and confirms disabled state again. Cleanup waits boundedly for status/source propagation and refuses to overwrite a concurrent owner edit. The report's `registeredActor` records GitHub's linked commit author, not otherwise-unobservable internal scheduler attribution. Both timing and attribution change, so success cannot isolate either as the original cause.
 
+For a capability check rather than a longer observation, the owner requested `--live --rapid`: GitHub's minimum supported five-minute interval, offset as `2/5 * * * *`, with a **10-minute maximum** and the same early-success and restoration/disable safeguards. It writes `results/schedule-rapid-2026-11-18.json`. The longer window is a timeout, never a required duration or timing-accuracy assertion. GitHub may still delay or drop events; shortening the test does not make delivery guaranteed.
+
 The original [failed observation](results/schedule-2026-11-18.json) remains failed; its [independent closeout](results/schedule-2026-11-18-closeout.json) records the verified disabled state after an immediate status-read discrepancy. The approved off-peak diagnostic writes its own report and never overwrites that evidence.
 
 ## Owner-approved trust-root recovery
