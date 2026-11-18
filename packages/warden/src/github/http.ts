@@ -3,7 +3,7 @@ import { NetworkError, sleep } from '../util.ts';
 import type { CredentialProvider, CredentialRequest } from '../credentials/types.ts';
 
 /** Real GitHub REST store. Every request obtains a short-lived token from the CredentialProvider; there is no env/PAT fallback.
- *  CredentialUnavailable propagates so only this authenticated operation is suspended. UNVERIFIED LIVE until the App proof lands. */
+ *  CredentialUnavailable suspends the authenticated operation. Exercised by the sandbox App proof; full P1 live acceptance remains gated. */
 export class HttpStore implements Store {
   readonly name = 'github';
   skew = 0; private who: string; private repo: string; private creds: CredentialProvider; private credReq: CredentialRequest; private apiBase: string;

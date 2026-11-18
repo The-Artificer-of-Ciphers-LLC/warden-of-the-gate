@@ -7,7 +7,7 @@ TypeScript with erasable syntax only, run directly by Node (22.18+; developed on
 ## Safety
 
 * `GithubStore` refuses every repository except `The-Artificer-of-Ciphers-LLC/warden-p0-sandbox` (hard-coded guard; `WARDEN_P0_REPO` cannot widen it).
-* Authority used: the operator's existing `gh` login (`gh auth token`) on the sandbox only, and the per-run `GITHUB_TOKEN` inside sandbox workflows. **No GitHub App, PAT or repository secret was created.**
+* Original proof authority: the operator's existing `gh` login (`gh auth token`) on the sandbox only, and the per-run `GITHUB_TOKEN` inside sandbox workflows. No GitHub App, PAT or repository secret was created during that original proof. The separately approved App proof below uses scoped installation tokens and one temporary Actions secret.
 * Fixtures are issues titled `[P0 proof] ...` / `warden-*`, closed when a run ends; labels named `warden-lock-epoch-*` are the lease and are garbage-collected.
 * The pilot repo is never referenced.
 
@@ -32,6 +32,28 @@ scripts/install-sandbox.sh                  # pushes src + workflows into the sa
 node src/cli.ts actions-proof --out results/live-actions.json
 node src/cli.ts status                      # pending, receipts, lease, stop state + which environments acked
 ```
+
+## Owner-approved App proof
+
+`src/app-live-proof.ts` is a separate, explicitly live proof for the approved `warden-p0-sandbox-app` installation. It is not the production credential issuer and does not enable the P1 CLI's GitHub backend.
+
+```bash
+node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18.pem
+# Retry just the runner checks after separately recorded scenario results:
+node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18.pem --actions-only
+```
+
+Requires explicit owner approval for both tokens and the temporary Actions resources:
+
+- The key stays outside the repository in the protected directory, mode 600; its contents are never printed or uploaded.
+- A sandbox-only installation token has Issues write and Metadata read. A separate control-repository-only token has Issues read and Metadata read. Tokens last at most one hour and remain in memory, except for the control-read token's approved temporary sandbox secret `WARDEN_P0_CONTROL_READ_TOKEN`.
+- S02/S03/S10/S11 use real human/App credentials instead of routing every actor through one login. Both scenario writers execute locally; their `env` names do not prove execution on an Actions runner. A supplemental check exercises non-operator App removal of an operator's stop.
+- The temporary, dispatch-only `p0-app-proof.yml` runs on a real Actions runner. It checks cross-repository control while stopped, after explicit resume, and after token revocation; verifies that `GITHUB_TOKEN` cannot read the control repository; rejects writes with the read-only App token; and confirms the writer's distinct `github-actions[bot]` author.
+- Cleanup revokes tokens, deletes the temporary secret and workflow file, closes fixtures, and disables the existing sandbox writer schedule. Any cleanup error fails the report. The approved App and its protected local key remain for subsequent work.
+
+The script writes non-secret evidence to `results/live-app-2026-11-18.json`, with its execution scope, source hashes, scenario checks, Actions run URLs and cleanup errors. Preserve an existing report under an attempt filename before retrying; the script refuses to overwrite it, an existing secret or an existing workflow. It waits for workflow registration, dispatches by workflow ID, and verifies disabled state during cleanup. It uses the P1 `HttpStore` with proof-supplied credentials; this is not a production issuer or full P1 live acceptance result.
+
+The November 18 run passed four live scenarios and three real Actions checks across separate attempts. The raw reports retain their failed assertions and orchestration/cleanup errors; the independent final-state verification and remaining gates are in [`live-app-2026-11-18-closeout.json`](results/live-app-2026-11-18-closeout.json) and [FINDINGS.md](FINDINGS.md). An Actions-only result never claims the scenarios were rerun.
 
 ## Scenario index
 

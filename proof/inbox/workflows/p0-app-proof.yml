@@ -1,0 +1,84 @@
+name: p0-app-proof
+run-name: P0 App proof ${{ inputs.nonce }} (${{ inputs.mode }})
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [stopped, running, unknown]
+        required: true
+      control_issue:
+        required: true
+      writer_issue:
+        required: true
+      nonce:
+        required: true
+permissions:
+  contents: read
+  issues: write
+jobs:
+  proof:
+    if: github.repository == 'The-Artificer-of-Ciphers-LLC/warden-p0-sandbox'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: Verify cross-repository control and distinct writer identity
+        env:
+          CONTROL_TOKEN: ${{ secrets.WARDEN_P0_CONTROL_READ_TOKEN }}
+          WRITER_TOKEN: ${{ github.token }}
+          CONTROL_ISSUE: ${{ inputs.control_issue }}
+          WRITER_ISSUE: ${{ inputs.writer_issue }}
+          EXPECTED: ${{ inputs.mode }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readStop } from './proof/inbox/src/control.ts';
+          const sandbox = 'The-Artificer-of-Ciphers-LLC/warden-p0-sandbox';
+          const control = 'The-Artificer-of-Ciphers-LLC/warden-p0-control';
+          const issue = process.env.CONTROL_ISSUE;
+          const writerIssue = process.env.WRITER_ISSUE;
+          assert.match(issue, /^[1-9]\d*$/);
+          assert.match(writerIssue, /^[1-9]\d*$/);
+          async function api(token, method, repo, path, body) {
+            assert.ok([sandbox, control].includes(repo));
+            const response = await fetch(`https://api.github.com/repos/${repo}${path}`, {
+              method,
+              headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'content-type': 'application/json' },
+              body: body === undefined ? undefined : JSON.stringify(body)
+            });
+            return { status: response.status, data: await response.json() };
+          }
+          const controlStore = {
+            async getIssue(n) {
+              const r = await api(process.env.CONTROL_TOKEN, 'GET', control, `/issues/${n}`);
+              assert.equal(r.status, 200, `control read HTTP ${r.status}`);
+              return { labels: r.data.labels.map(l => l.name) };
+            },
+            async listEvents(n) {
+              const r = await api(process.env.CONTROL_TOKEN, 'GET', control, `/issues/${n}/events?per_page=100`);
+              assert.equal(r.status, 200, `control events HTTP ${r.status}`);
+              assert.ok(r.data.length < 100, 'fresh fixture must not require event pagination');
+              return r.data.map(e => ({ id: e.id, event: e.event, actor: e.actor.login, label: e.label?.name }));
+            }
+          };
+          const state = await readStop(controlStore, Number(issue), new Set(['trek-e']), 'global');
+          const repoScoped = await api(process.env.WRITER_TOKEN, 'GET', control, `/issues/${issue}`);
+          assert.ok([403, 404].includes(repoScoped.status), 'GITHUB_TOKEN must not read the other private repository');
+          const crossScope = await api(process.env.CONTROL_TOKEN, 'GET', sandbox, `/issues/${writerIssue}`);
+          assert.ok([401, 403, 404].includes(crossScope.status), 'control token must not read the sandbox');
+          const deniedWrite = await api(process.env.CONTROL_TOKEN, 'POST', control, `/issues/${issue}/comments`, { body: 'P0 negative control: this read-only write must be denied.' });
+          assert.ok([401, 403].includes(deniedWrite.status), 'read-only token must not write');
+          assert.equal(state.unknown, process.env.EXPECTED === 'unknown');
+          assert.equal(state.stopped, process.env.EXPECTED !== 'running');
+          const writer = await api(process.env.WRITER_TOKEN, 'POST', sandbox, `/issues/${writerIssue}/comments`, { body: `P0 sandbox writer identity proof (${process.env.EXPECTED}).` });
+          assert.equal(writer.status, 201);
+          assert.equal(writer.data.user.login, 'github-actions[bot]');
+          console.log('APP_PROOF_RESULT ' + JSON.stringify({
+            mode: process.env.EXPECTED, state, repoScopedReadStatus: repoScoped.status,
+            crossScopeReadStatus: crossScope.status, readOnlyWriteStatus: deniedWrite.status,
+            writerAuthor: writer.data.user.login, writerCommentId: writer.data.id
+          }));
+          JS

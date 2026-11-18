@@ -53,8 +53,8 @@ Exit codes: 0 ok, 1 invalid/refused, 2 usage or unconfirmed, 3 unsupported task,
 
 ## Known gaps and unverified items
 
-- **No live GitHub result.** `HttpStore` is tested only against a local HTTP server. The real credential issuer (GitHub App JWT -> installation token) is **not implemented**: `--backend github` reports unavailable instead of falling back to any ambient token. This is gated on the parent's App proofs (cross-repo stop, identity split, second identity, scheduled sweep).
-- Cross-repository global stop is wired (`inbox.globalControl`) but unverified; an unreadable global control makes the instance stopped.
+- **Partial live transport evidence, not live P1 acceptance.** The [P0 App proof](../../proof/inbox/FINDINGS.md#owner-approved-app-proof-2026-11-18) exercised `HttpStore` against the sandboxes with scoped installation tokens supplied by the proof harness. The production credential issuer (GitHub App JWT -> installation token) is **not implemented**: `--backend github` still reports unavailable, without ambient-token fallback. Scheduled sweep, trust-root recovery and full P1 live acceptance remain gated.
+- Cross-repository global control reads and revoked-access fail-closed behavior are demonstrated by the App proof on Mac and Actions. The complete P1 writer's `inbox.globalControl` integration still needs live acceptance.
 - Writer-side `assignable` is `() => true`; real GitHub assignability checks belong to P2 (Claim).
 - No OpenCode adapter (P3); `AgentRunner`, `BudgetMonitor` and `runValidated` are tested with scripted runners only.
 - Setup does not create the inbox/control issues or the Actions workflow; the writer workflow template is P2.

@@ -1,0 +1,309 @@
+{
+  "at": "2026-11-18T16:45:23.917Z",
+  "sourceCommit": "55f2dc0d41f1b8302d511a62f0d8771506cc8c28",
+  "appId": 5819526,
+  "installationId": 183378787,
+  "appLogin": "warden-p0-sandbox-app[bot]",
+  "checks": [
+    {
+      "name": "scoped installation tokens minted without persisting or printing their values",
+      "pass": true
+    },
+    {
+      "name": "installation token produces the distinct App bot author",
+      "pass": true,
+      "observed": {
+        "author": "warden-p0-sandbox-app[bot]",
+        "operator": "trek-e"
+      }
+    },
+    {
+      "name": "sandbox-only App token cannot read the other private control repository",
+      "pass": true
+    },
+    {
+      "name": "S02/S03/S10/S11 pass with real human and App identities (both scenario writers run locally)",
+      "pass": false
+    }
+  ],
+  "credentials": [
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+      "expiresAt": "2026-11-18T17:45:25Z",
+      "permissions": {
+        "issues": "write",
+        "metadata": "read"
+      }
+    },
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-control",
+      "expiresAt": "2026-11-18T17:45:26Z",
+      "permissions": {
+        "issues": "read",
+        "metadata": "read"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "S02",
+      "title": "Two claims for one issue, concurrent submitters, two concurrent writers (Mac + Actions)",
+      "covers": "two claims; serialization; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "exactly one accepted, one rejected",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "rejected": 1
+          }
+        },
+        {
+          "desc": "ledger has exactly one owner and it is the accepted op",
+          "pass": true,
+          "observed": {
+            "id": "factory",
+            "kind": "factory",
+            "opid": "op_e0e84bf857dc7c9b627eecefb362a274"
+          }
+        },
+        {
+          "desc": "only one \"Claim accepted\" notice was ever posted",
+          "pass": true
+        },
+        {
+          "desc": "loser was told why (explanatory comment)",
+          "pass": true
+        },
+        {
+          "desc": "receipt epochs never decrease by receipt order (no overlapping writers)",
+          "pass": true,
+          "observed": [
+            171,
+            171
+          ]
+        },
+        {
+          "desc": "both writers ran without error; one processed, the other idle or sequential",
+          "pass": true,
+          "observed": [
+            {
+              "env": "mac",
+              "epoch": 172,
+              "n": 0
+            },
+            {
+              "env": "actions",
+              "epoch": 171,
+              "n": 2
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 32087
+    },
+    {
+      "id": "S03",
+      "title": "Contributor vs factory ownership race (repeated rounds)",
+      "covers": "contributor/factory ownership race",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "each of 3 rounds has exactly one confirmed owner, one notice, GitHub assignment consistent with ledger",
+          "pass": true,
+          "observed": [
+            {
+              "item": 176,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            },
+            {
+              "item": 177,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            },
+            {
+              "item": 178,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 96034
+    },
+    {
+      "id": "S10",
+      "title": "Stop: global/instance, before and during application, operator authority, fail closed",
+      "covers": "global/instance stop visibility; stop during effect; resume",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "non-operator unlabel check runs in the Actions-side proof (actor github-actions[bot]); single gh identity here"
+      ],
+      "checks": [
+        {
+          "desc": "instance stop: writer halts before any effect, intent stays pending, stop-ack posted",
+          "pass": true,
+          "observed": "instance: stop label present"
+        },
+        {
+          "desc": "global stop (separate control scope) halts a running-instance writer",
+          "pass": true,
+          "observed": "global: stop label present"
+        },
+        {
+          "desc": "stop mid-plan: halted between effects; op remains applying (recoverable), no receipt",
+          "pass": false,
+          "observed": {
+            "st": {
+              "attempts": 0,
+              "decision": "accept",
+              "epoch": 179,
+              "intentCommentId": 6985199048,
+              "plan": [
+                {
+                  "add": [
+                    "warden:claimed"
+                  ],
+                  "remove": [
+                    "warden:ready"
+                  ],
+                  "t": "label"
+                },
+                {
+                  "t": "comment",
+                  "text": "Claim accepted: contributor trek-e now owns this item."
+                }
+              ],
+              "status": "applied",
+              "step": 2
+            }
+          }
+        },
+        {
+          "desc": "explicit resume completes the interrupted op exactly once",
+          "pass": false,
+          "observed": []
+        },
+        {
+          "desc": "unreadable stop control => fail closed (no effects), reported as unknown",
+          "pass": true,
+          "observed": "instance: control state unreadable (Error: control unreadable) => fail closed"
+        }
+      ],
+      "pass": false,
+      "ms": 34913
+    },
+    {
+      "id": "S11",
+      "title": "Admission: authorization, edits, forged identity, oversize, malformed",
+      "covers": "request admission; authorization; payload limits; failure visibility",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 20000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "oversize intent rejected at the submission edge (never truncated)",
+          "pass": true
+        },
+        {
+          "desc": "forged identity, malformed, oversize, edited => all quarantined with a visible receipt (none silently ignored)",
+          "pass": true,
+          "observed": [
+            "identity-mismatch",
+            "malformed-json",
+            "payload-too-large",
+            "edited-after-admission"
+          ]
+        },
+        {
+          "desc": "the one valid intent still applied",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "quarantined": 4
+          }
+        },
+        {
+          "desc": "quarantined intents produced no ledger op",
+          "pass": true
+        },
+        {
+          "desc": "intent from a non-allow-listed author is quarantined, never applied",
+          "pass": true,
+          "observed": [
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:warden-p0-sandbox-app[bot]",
+            "unauthorized-author:trek-e"
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 37947
+    }
+  ],
+  "actions": [],
+  "cleanupErrors": [],
+  "error": "S02/S03/S10/S11 pass with real human and App identities (both scenario writers run locally)",
+  "scheduleRuns": {
+    "total_count": 0,
+    "workflow_runs": []
+  },
+  "pass": false
+}
