@@ -3,6 +3,11 @@ import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
 import type { WardenConfig } from '../config/load.ts';
 import { readOnly } from '../github/store.ts';
 import type { Ledger } from '../state/model.ts';
+import { evaluateClock, type Due } from '../sweep/clocks.ts';
+import { authorActivity, clockConfigOf, clockItemFrom, type SweepObs } from '../sweep/derive.ts';
+import { makeIntent } from '../writer/protocol.ts';
+import { submit } from '../writer/journal.ts';
+import { iso } from '../util.ts';
 
 export const TASK_NAMES = ['intake', 'triage', 'claim', 'implement', 'review', 'rework', 'sweep', 'retro'] as const;
 export type TaskName = (typeof TASK_NAMES)[number];
@@ -40,11 +45,51 @@ export async function intakeDryRun(rawStore: Store, cfg: WardenConfig, o: { item
   return { task: 'intake', outcome: 'proposed', mode: 'dry-run', proposals, mutations: 0 };
 }
 
-export async function runTask(task: string, o: { dryRun: boolean; store: Store; cfg: WardenConfig; items?: number[]; skip?: Set<number> }): Promise<TaskOutcome> {
+export interface SweepFinding { item: number; itemKind: 'issue' | 'pr'; state: string; due: Due; obs: SweepObs }
+/** Sweep planning (deterministic, read-only: takes a Store that may be a read-only proxy). Items without a Warden ledger are skipped:
+ *  adoption (not this slice) is the only way an item gains a ledger and a clock. Only ledger obligations of type response/information are evaluated. */
+export async function planSweep(rawStore: Store, cfg: WardenConfig, o: { now: number; items?: number[]; skip?: Set<number> }): Promise<SweepFinding[]> {
+  const store = readOnly(rawStore); const skip = o.skip ?? new Set<number>(); const clocks = clockConfigOf(cfg);
+  const issues = o.items?.length ? await Promise.all(o.items.map((n) => store.getIssue(n))) : await store.listIssues({ state: 'open' });
+  const out: SweepFinding[] = [];
+  for (const it of issues.filter((i) => !skip.has(i.number) && i.state === 'open')) {
+    const cs = await store.listComments(it.number);
+    const l = cs.filter((c) => c.body.startsWith(LEDGER_MARK)).map((c) => parseLedger(c.body)).find(Boolean) as Ledger | undefined;
+    if (!l) continue;
+    const obs: SweepObs = { keepOpen: it.labels.includes(cfg.labels.keepOpen), draft: !!it.draft, authorLastActivityAt: authorActivity(cs, it.author) };
+    const due = evaluateClock(clockItemFrom(l, obs), { now: iso(o.now), stopped: false, cfg: clocks }).due;
+    if (due.kind !== 'none') out.push({ item: it.number, itemKind: it.isPr ? 'pr' : 'issue', state: l.state, due, obs });
+  }
+  return out;
+}
+const toProposal = (f: SweepFinding): Proposal => {
+  const closes = f.due.kind === 'close-silence' || f.due.kind === 'close-information';
+  return { item: f.item, kind: f.itemKind, adopted: true, from: f.state, to: closes ? 'closed' : null, labels: { add: [], remove: [] },
+    reasons: [f.due.kind === 'defer' ? `deferred: ${f.due.why}` : f.due.kind === 'nudge' ? `${f.due.hours}h response nudge` : `${f.due.kind} (since ${'since' in f.due ? f.due.since : '?'})`],
+    effects: f.due.kind === 'defer' ? [] : [closes ? 'close with explanation (through the writer)' : 'post reminder comment (through the writer)'] };
+};
+/** Submit enforceable findings as deterministic intents. `defer` verdicts are never submitted. Same finding => same opid (idempotent). */
+export async function submitSweep(findings: SweepFinding[], o: { submitStore: Store; repo: string; inboxIssue: number; now: number }): Promise<{ submitted: number[]; skipped: number[] }> {
+  const submitted: number[] = []; const skipped: number[] = [];
+  for (const f of findings) {
+    if (f.due.kind === 'defer' || f.due.kind === 'none' || f.due.kind === 'expire-commitment') { skipped.push(f.item); continue; }
+    const expect = f.due.kind === 'nudge' ? { kind: 'nudge', hours: f.due.hours } : { kind: f.due.kind };
+    const intent = makeIntent({ v: 1, kind: 'sweep-action', repo: o.repo, item: f.item, itemKind: f.itemKind, origin: 'deterministic',
+      source: { kind: 'sweep', id: `sweep:${f.item}:${expect.kind}${'hours' in expect ? expect.hours : ''}:${f.due.since}`, observedAt: iso(o.now) }, actor: o.submitStore.actor(), payload: { expect, obs: f.obs } });
+    await submit(o.submitStore, o.inboxIssue, intent, null); submitted.push(f.item);
+  }
+  return { submitted, skipped };
+}
+
+export async function runTask(task: string, o: { dryRun: boolean; store: Store; cfg: WardenConfig; items?: number[]; skip?: Set<number>; now?: number }): Promise<TaskOutcome> {
   if (!(TASK_NAMES as readonly string[]).includes(task)) return { task, outcome: 'unknown-task', reason: `unknown task "${task}"; tasks: ${TASK_NAMES.join(', ')}` };
   if (task === 'intake') {
     if (!o.dryRun) return { task, outcome: 'unsupported', reason: 'live intake runs through the Actions handler and is delivered in P2; use --dry-run', owner: 'P2' };
     return intakeDryRun(o.store, o.cfg, { items: o.items, skip: o.skip });
+  }
+  if (task === 'sweep') {
+    if (!o.dryRun) return { task, outcome: 'unsupported', reason: 'live sweep is submitted by the Actions handler (not built); use --dry-run. Enforcement exists only as writer intents (submitSweep) and is not scheduled', owner: 'P2' };
+    return { task, outcome: 'proposed', mode: 'dry-run', proposals: (await planSweep(o.store, o.cfg, { now: o.now ?? o.store.now(), items: o.items, skip: o.skip })).map(toProposal), mutations: 0 };
   }
   return { task, outcome: 'unsupported', reason: `task "${task}" is not implemented yet (owned by ${OWNER[task as Exclude<TaskName, 'intake'>]}); no result was fabricated`, owner: OWNER[task as Exclude<TaskName, 'intake'>] };
 }

@@ -5,8 +5,10 @@ import type { Intent } from './protocol.ts';
 import { decideApproval, requestApproval, revisionUpdate } from '../approvals/approvals.ts';
 import type { Decision } from '../approvals/approvals.ts';
 import { iso } from '../util.ts';
+import { evaluateClock } from '../sweep/clocks.ts';
+import { clockItemFrom, type SweepObs } from '../sweep/derive.ts';
 
-export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean }
+export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs }
 const note = (text: string): Effect => ({ t: 'comment', text });
 const rej = (reason: string, text: string): Decision => ({ accept: false, reason, plan: [note(text)] });
 
@@ -61,5 +63,36 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'approval-request': return requestApproval(l, i, c);
     case 'approval-decision': return decideApproval(l, i, c);
     case 'revision-update': return revisionUpdate(l, i, c);
+    case 'sweep-action': return sweepAction(l, i, c);
   }
+}
+
+/** Deterministic sweep enforcement. The writer RE-EVALUATES the clock against the CURRENT ledger at decision time and accepts only if the
+ *  same verdict still holds, so a stale or replayed sweep cannot close or nudge anything (the second of two racing decisions loses).
+ *  Observations (keep-open label, author activity) are read by the writer at decision time, not trusted from the intent. Only comments count as author activity (pushes/reviews are not observable through Store yet). Delivery/fix-window expiry and
+ *  claim release are NOT enforced here: they need an unassign effect and ledger fields for satisfaction/holds. */
+function sweepAction(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const pl = i.payload as { expect?: { kind?: string; hours?: number } };
+  if (i.origin !== 'deterministic') return rej('sweep-origin', 'Sweep actions are deterministic only.');
+  const cfg = c.policy.sweep?.clocks; if (!cfg) return rej('sweep-policy-missing', 'Sweep rejected: no approved clock policy in the snapshot.');
+  if (!pl.expect?.kind) return rej('sweep-malformed', 'Sweep rejected: an expectation is required.');
+  if (!c.observed) return rej('sweep-unobserved', 'Sweep rejected: the writer could not observe current GitHub state.');
+  const due = evaluateClock(clockItemFrom(l, c.observed), { now: iso(c.now), stopped: false, cfg }).due;
+  const same = due.kind === pl.expect.kind && (due.kind !== 'nudge' || due.hours === pl.expect.hours);
+  if (!same) return rej(`stale-sweep:expected-${pl.expect.kind}-found-${due.kind}`, `Sweep rejected: the clock no longer says ${pl.expect.kind}.`);
+  if (due.kind === 'nudge') {
+    const keep = l.sweep?.since === due.since ? l.sweep.nudgesSent : [];
+    const left = due.hours === 48 ? 'about three days remain before a five-day closure' : 'closure follows at five days of silence';
+    return { accept: true, plan: [note(`Friendly reminder (${due.hours}h without a response): the author's reply or update is still needed; ${left}. A comment, push or review reply restarts the silence clock.`)],
+      apply: (led) => { led.sweep = { since: due.since, nudgesSent: [...new Set([...keep, due.hours])] }; } };
+  }
+  if (due.kind === 'close-silence' || due.kind === 'close-information') {
+    const ok = canTransition(l.kind, l.state, 'closed'); if (!ok.ok) return rej(ok.reason, `Sweep closure rejected: ${ok.reason}.`);
+    const from = l.state;
+    const retained = l.kind === 'pr' && l.linked.length ? ` Linked issue${l.linked.length > 1 ? 's' : ''} ${l.linked.map((n) => '#' + n).join(', ')} remain open with the partial-work references.` : '';
+    const why = due.kind === 'close-silence' ? `no author response since ${due.since}` : `the requested reporter information was not received since ${due.since}`;
+    const back = l.kind === 'pr' ? 'You can reopen this PR or open a new one when the requested changes are ready.' : 'Reply with the requested information and a maintainer or the sweep can reopen it.';
+    return { accept: true, plan: [...project(c.policy, from, 'closed'), note(`Closing this ${l.kind === 'pr' ? 'PR' : 'issue'} automatically: ${why}.${retained} ${back}`), { t: 'close' }], apply: (led) => moveTo(led, 'closed', undefined, c.now) };
+  }
+  return rej(`unsupported-sweep-verdict:${due.kind}`, `Sweep verdict ${due.kind} is not enforceable by the writer yet.`);
 }
