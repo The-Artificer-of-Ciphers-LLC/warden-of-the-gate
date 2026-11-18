@@ -1,0 +1,16 @@
+{
+  "inbox": 86,
+  "control": 87,
+  "global": 88,
+  "item": 89,
+  "counterIssue": 90,
+  "holdMs": 12000,
+  "operators": [
+    "trek-e"
+  ],
+  "allowed": [
+    "trek-e",
+    "github-actions[bot]"
+  ],
+  "ttlMs": 20000
+}

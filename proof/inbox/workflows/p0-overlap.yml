@@ -1,0 +1,26 @@
+# P0 PROOF: NO concurrency control at all. Parallel runners hammer one shared read-modify-write comment.
+# mode=nolease shows lost updates (control); mode=lease must show none.
+name: p0-overlap
+on:
+  workflow_dispatch:
+    inputs:
+      comment: { description: 'counter comment id', required: true }
+      mode: { description: 'lease | nolease', default: lease }
+      per: { description: 'increments per worker', default: '3' }
+permissions:
+  issues: write
+  contents: read
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        w: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node proof/inbox/src/cli.ts counter-worker --comment ${{ github.event.inputs.comment }} --mode ${{ github.event.inputs.mode }} --per ${{ github.event.inputs.per }} --label gha-${{ matrix.w }}

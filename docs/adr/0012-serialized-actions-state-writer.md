@@ -1,6 +1,6 @@
 # GitHub item ledgers with a serialized Actions state writer
 
-- **Status:** Draft
+- **Status:** Draft; P0 `PROOF-inbox` mechanism selected and demonstrated against the disposable sandbox (see Proof results)
 - **Date:** 2026-11-17
 - **Decided by:** @trek-e
 
@@ -17,6 +17,27 @@ Bookkeeping must continue while the pilot Mac is off, and local AI results must 
 - Claims require eligible unclaimed state at application time; serialization must not merely order two requests that both overwrite ownership. Confirm GitHub assignment before acknowledging success.
 - Keep a durable local operations/recovery journal. Maintainer decisions are recorded on GitHub and retained in the scoped decision corpus.
 - Do not create a competing repository ledger file. Do not fall back to unsynchronized local mutations during an Actions outage.
+
+## Selected mechanism (P0 `PROOF-inbox`, 2026-11-18)
+
+Spike code, design and raw evidence: [`proof/inbox/`](../../proof/inbox/README.md) ([design](../../proof/inbox/DESIGN.md), [results](../../proof/inbox/RESULTS.md)). Everything below needs only `issues: write` on the instance repository; no database, no repository ledger file, no contents-write authority.
+
+- **Durable inbox:** append-only intent comments on a dedicated `warden-inbox` issue, enumerated in server-assigned comment-id order. An intent is `{v, kind, item, source, actor, payload, causalAfter, opid}`; `opid = sha256(canonical core)` so identity is content-derived and verifiable. Actions triggers and the Mac are only *doorbells and submitters*; a scheduled sweep runs the same level-triggered drain.
+- **Admission:** edge size limit 8 KiB (rejected, never truncated); author allow-list; comment unedited; body hash equals `opid`; anything else yields a visible `quarantined` receipt.
+- **Single writer:** only the drain path edits item ledgers and posts receipts, and only while holding a **label-epoch lease** (`warden-lock-epoch-NNNNNN`, created with GitHub's atomic label-name uniqueness, which probes confirmed; milestone titles are *not* atomic and must not be used). Ledger writes are **fenced** (lease check, base-`seq` check, write, read-back, lease check) and external effects follow only a verified commit. An Actions concurrency group is a throughput hint, not the correctness mechanism.
+- **Acknowledgement:** one receipt per intent comment (`applied | rejected | duplicate | failed | quarantined`) carrying `opid`, epoch, seq and the resulting owner/state. The ledger records the op before the receipt, so lost receipts regenerate. The Mac journal marks `acked` only from a receipt.
+- **Recovery:** pending = intent without receipt. `applying` ops resume from their recorded step; effects are idempotent (native, or marker-checked before posting). Out-of-order intents wait on `causalAfter`. Retry bound 5, persisted in the ledger. A competing second ledger comment halts the writer (fail closed).
+- **Known residual window:** a writer frozen after its last pre-write check for longer than the lease TTL can land one stale ledger write. It is detected by the post-write fence (no effect is performed) and repaired on the next drain by folding receipts. This is not a distributed compare-and-swap; no exactly-once claim is made.
+- **Retention:** applied pairs expire after a configured window (failed/quarantined kept 4x; pending never deleted); the ledger keeps the last 256 applied op ids as the dedupe horizon. A redelivery older than that horizon needs an age-based rejection rule in P1 (open).
+- **Stop storage:** `warden:stop` label on instance and global control issues; effective state is derived from **operator-attributed issue events**, so a non-operator cannot resume by removing the label, and an unreadable control issue means stopped. Both scopes are re-read before each task and each effect. Writers post a per-environment stop acknowledgement. Repo Actions variables are not used: `GITHUB_TOKEN` cannot read them and `vars` is a start-of-run snapshot.
+
+## Proof results and blockers
+
+Results are generated into [`proof/inbox/RESULTS.md`](../../proof/inbox/RESULTS.md) from raw JSON. Blockers and unverified items are listed there and summarized in the P0 hand-over; the ones that gate P1 are:
+
+- **Global stop across repositories** is unverified: Actions in repository X reading a control repository needs a credential wider than `GITHUB_TOKEN` (the GitHub App of ADR 0011). Until demonstrated, global stop is only proven as a second control scope inside one repository; do not claim cross-instance stop.
+- **Submit-versus-write separation** is not enforceable with one installation token: the Mac's `issues: write` token could also edit a ledger comment. P1 must either use two identities (submit-only vs writer) or accept divergence detection plus repair as the control.
+- **Cross-repository rate limits** (content-creation secondary limits) bound throughput; the live run records retries.
 
 ## Consequences
 
