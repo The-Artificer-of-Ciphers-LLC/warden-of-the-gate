@@ -61,6 +61,8 @@ export type Effect =
   | { t: 'label'; add?: string[]; remove?: string[] }
   | { t: 'comment'; text: string }
   | { t: 'unassign'; login: string }
+  | { t: 'merge'; expectedHead: string }
+  | { t: 'mark-merged' }
   | { t: 'close' };
 
 export interface Ledger {
@@ -73,6 +75,10 @@ export interface Ledger {
   sweep?: { since: string; nudgesSent: Array<48 | 72> };
   /** Set by deliberate adoption: an existing draft was kept; policy closure does not apply to it. */
   draftDecision?: 'keep';
+  /** Latest accepted AI review summary, recorded through a live-mode `review-record` intent (never in shadow). Severities only: no finding text is copied. */
+  review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; policyDigest?: string; acceptedAt: string };
+  /** Critical escape / unauthorized effect: the affected scope is paused (only notes and an explicit maintainer resume are accepted) and evidence is preserved. */
+  paused?: { reason: string; at: string; evidence: string[] };
   /** Adoption receipt reference (the inventory/receipt file is NOT a second canonical ledger). */
   adoptedAt?: string;
 }

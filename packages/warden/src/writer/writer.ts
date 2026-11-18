@@ -68,6 +68,11 @@ export class Writer {
     if (this.cfg.ledgerKey && !macValid(l, this.cfg.ledgerKey)) throw new Anomaly(`ledger #${item} failed integrity check (edited by something other than the writer)`);
     return l;
   }
+  /** Read another item's ledger WITHOUT touching the per-item comment-id cache (used to carry accounting across replacement PRs). */
+  private async loadLedgerReadOnly(item: number): Promise<Ledger | undefined> {
+    const c = (await this.store.listComments(item)).find((x) => x.body.startsWith(LEDGER_MARK) && this.cfg.writerIdentities.includes(x.author));
+    const l = c ? parseLedger(c.body) : null; return l && l.repository === this.cfg.repository ? l : undefined;
+  }
   private async commit(l: Ledger, why: string): Promise<void> {
     await this.lease.assertHeld(this.cfg.fenceMarginMs, this.cfg.fenceCacheMs);
     await this.faults.stall('between-fence-and-write');
@@ -192,14 +197,17 @@ export class Writer {
         if (dep.status !== 'applied') return this.finalizeReject(c, intent, l, 'causal-predecessor-' + dep.status, null);
       }
       expireApprovals(l, this.store.now());
+      if (l.paused && !['note', 'resume-scope', 'critical-escape'].includes(intent.kind)) return this.finalizeReject(c, intent, l, 'scope-paused', null);   // a paused scope accepts only notes and an explicit maintainer resume
       if (iss.state === 'closed' && intent.kind !== 'note' && intent.kind !== 'reconcile') return this.finalizeReject(c, intent, l, 'item-closed', null);
       let dec;
       if (intent.origin === 'ai' && pol.mode === 'shadow') dec = { accept: false, reason: 'shadow-mode-ai-effects-disabled', plan: [] as Effect[] };
       else {
         const sourceVerified = await this.verifySource(intent);
         const linkedPr = intent.kind === 'submission' && typeof (intent.payload as { pr?: unknown }).pr === 'number' ? await this.store.getIssue((intent.payload as { pr: number }).pr).catch(() => undefined) : undefined;
+        const replaced = intent.kind === 'carry-accounting' && typeof (intent.payload as { replaces?: unknown }).replaces === 'number' ? await this.loadLedgerReadOnly((intent.payload as { replaces: number }).replaces) : undefined;
+        const pullObs = intent.kind === 'merge-request' ? await this.store.getPull(intent.item).catch(() => undefined) : undefined;
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
-        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr });
+        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr, pull: pullObs, replaced });
       }
       const rec: OpRec = { status: 'applying', decision: dec.accept ? 'accept' : 'reject', reason: dec.reason, plan: dec.plan, step: 0, attempts: 0, epoch: this.lease.epoch, intentCommentId: c.id };
       dec.apply?.(l);
@@ -218,7 +226,7 @@ export class Writer {
   }
   /** Reconstruct maintainer authority from the target item's source comment, not the submitter's interpretation. */
   private async verifySource(i: Intent): Promise<boolean> {
-    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release') return true;
+    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release' && i.kind !== 'resume-scope') return true;
     if (i.source.kind !== 'gh-comment') return false;
     const sc = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
     if (!sc || sc.author !== i.actor || sc.updatedAt !== sc.createdAt) return false;
@@ -242,10 +250,10 @@ export class Writer {
         await this.assertRunning();                                          // control re-read before EVERY effect
         await this.lease.assertHeld(this.cfg.fenceMarginMs, this.cfg.fenceCacheMs);
         const iss = await this.store.getIssue(intent.item);                  // current item re-read before effect
-        if (iss.state === 'closed' && rec.plan[i].t !== 'comment') { rec.reason = (rec.reason ?? '') + ' item-closed-before-effect'; break; }
+        if (iss.state === 'closed' && rec.plan[i].t !== 'comment' && !rec.plan.some((x) => x.t === 'merge')) { rec.reason = (rec.reason ?? '') + ' item-closed-before-effect'; break; }   // a merge plan is exempt: it expects the PR to be closed by its own merge
         await this.faults.stall(`before-effect:${i}`);
         this.faults.hit(`before-effect:${i}`);
-        await this.effect(intent, rec.plan[i], i, iss);
+        await this.effect(intent, rec.plan[i], i, iss, l);
         this.faults.hit(`after-effect:${i}`);
         rec.step = i + 1; await this.commit(l, `step${i}`);
       }
@@ -254,6 +262,7 @@ export class Writer {
       await this.receipt(c, intent, rec.status, rec.reason, l, { state: l.state, owner: l.owner });
       return { commentId: c.id, opid: intent.opid, result: rec.status, reason: rec.reason };
     } catch (e) {
+      if (e instanceof StaleMerge) { rec.status = 'rejected'; rec.reason = 'stale-merge:' + e.message; await this.commit(l, 'stale-merge'); await this.receipt(c, intent, 'rejected', rec.reason, l, { state: l.state, owner: l.owner }); return { commentId: c.id, opid: intent.opid, result: 'rejected', reason: rec.reason }; }
       if (e instanceof Crash || e instanceof Fenced || e instanceof Stopped || e instanceof Anomaly || e instanceof BudgetExhausted) throw e;
       rec.attempts += 1;                                                     // persisted retry bound: a cold start cannot reset it
       if (rec.attempts >= this.cfg.policy.maxAttempts) { rec.status = 'failed'; rec.reason = 'retries-exhausted:' + String(e).slice(0, 80); await this.commit(l, 'failed'); await this.receipt(c, intent, 'failed', rec.reason, l); return { commentId: c.id, opid: intent.opid, result: 'failed', reason: rec.reason }; }
@@ -263,7 +272,7 @@ export class Writer {
   }
 
   /** Idempotent effects: native idempotence (assign/label) or a marker found before posting (comment). */
-  private async effect(i: Intent, e: Effect, idx: number, iss: { assignees: string[]; state: string }) {
+  private async effect(i: Intent, e: Effect, idx: number, iss: { assignees: string[]; state: string }, l: Ledger) {
     const assignees = iss.assignees;
     if (this.faults.fails('effect:' + e.t)) throw new Error('injected persistent failure at effect:' + e.t);
     if (e.t === 'assign') {
@@ -273,6 +282,17 @@ export class Writer {
     } else if (e.t === 'unassign') {
       if (assignees.includes(e.login)) await this.store.removeAssignee(i.item, e.login);
       if ((await this.store.getIssue(i.item)).assignees.includes(e.login)) throw new Error('unassignment not confirmed by GitHub');
+    } else if (e.t === 'merge') {
+      const p0 = await this.store.getPull(i.item);
+      if (!p0.merged) {
+        if (p0.head !== e.expectedHead) throw new StaleMerge(`head moved ${e.expectedHead.slice(0, 8)} -> ${p0.head.slice(0, 8)}`);
+        try { await this.store.mergePull(i.item, e.expectedHead); }
+        catch (err) { const st = (err as { status?: number }).status; if (st === 409 || st === 405 || st === 422) { if (!(await this.store.getPull(i.item)).merged) throw new StaleMerge(`GitHub refused the bound merge (${st})`); } else throw err; }
+      }
+      if (!(await this.store.getPull(i.item)).merged) throw new Error('merge not confirmed by GitHub');   // never record merged before GitHub says so
+    } else if (e.t === 'mark-merged') {
+      if (!(await this.store.getPull(i.item)).merged) throw new Error('cannot record merged: GitHub does not show it merged');
+      l.state = 'merged';
     } else if (e.t === 'close') {
       if (iss.state !== 'closed') await this.store.closeIssue(i.item);
       if ((await this.store.getIssue(i.item)).state !== 'closed') throw new Error('close not confirmed by GitHub');
@@ -322,6 +342,8 @@ export class Writer {
   }
 }
 class BudgetExhausted extends Error {}
+/** A merge bound to a head that is no longer current: a clean rejection, never retried and never redirected to another head. */
+class StaleMerge extends Error {}
 void RECEIPT_MARK;
 
 export const defaultWriterConfig = (o: Partial<WriterConfig> & Pick<WriterConfig, 'repository' | 'inboxIssue' | 'controlIssue' | 'policy' | 'submitters' | 'writerIdentities'>): WriterConfig => ({

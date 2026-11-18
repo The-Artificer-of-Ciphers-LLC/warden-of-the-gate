@@ -24,6 +24,8 @@ export const DEFAULT_WARDEN = {
     contributorFixRounds: 3, reworkCycles: 3,
   },
   drafts: { allowed: false },
+  /** Merge facts the writer cannot read from GitHub: identities by LOGIN (never label), and how many independent GitHub approvals the branch rules require. */
+  merge: { automationLogins: [] as string[], factoryLogins: [] as string[], requiredApprovals: 0 },
   gates: { blocker: true, major: true, minor: true, nit: true },
   approvals: { actionExpiryHours: 24, requireIndependentApprover: true },
   notifications: { discord: { enabled: false, userMap: {} as Record<string, string> } },

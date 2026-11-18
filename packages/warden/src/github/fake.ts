@@ -1,7 +1,7 @@
 import type { Comment, IssueEvent, IssueState, Label, PullInfo, Store } from './store.ts';
 import { Faults, NetworkError, iso, jitter, sleep } from '../util.ts';
 
-interface FakeIssue extends IssueState { events: IssueEvent[]; pull?: Omit<PullInfo, 'number' | 'title' | 'author' | 'draft' | 'state'> }
+interface FakeIssue extends IssueState { events: IssueEvent[]; pull?: Omit<PullInfo, 'number' | 'title' | 'author' | 'draft' | 'state' | 'merged' | 'approvals'> & { merged?: boolean; approvals?: string[] } }
 export interface WorldSnapshot { nextId: number; nextEvent: number; nextIssue: number; comments: { issue: number; c: Comment }[]; labels: Label[]; issues: FakeIssue[]; clock?: number }
 
 /** Shared in-memory "GitHub": monotonic comment ids, edit timestamps, atomic unique label create, labeled/unlabeled events with
@@ -61,7 +61,7 @@ export class FakeStore implements Store {
   async getPull(n: number): Promise<PullInfo> {
     await this.lat(); const i = this.issue(n);
     if (!i.isPr || !i.pull) { const e: Error & { status?: number } = new Error('404 pull ' + n); e.status = 404; throw e; }
-    return { number: n, title: i.title, author: i.author, draft: !!i.draft, state: i.state, head: i.pull.head, base: i.pull.base, ci: i.pull.ci, files: i.pull.files.map((f) => ({ ...f })) };
+    return { number: n, title: i.title, author: i.author, draft: !!i.draft, state: i.state, merged: !!i.pull.merged, approvals: [...(i.pull.approvals ?? [])], head: i.pull.head, base: i.pull.base, ci: i.pull.ci, files: i.pull.files.map((f) => ({ ...f })) };
   }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { await this.lat(); return [...this.w.issues.values()].filter((i) => !o.state || o.state === 'all' || i.state === o.state).map((i) => this.view(i)); }
   async addAssignee(n: number, login: string) { await this.lat(); const i = this.issue(n); if (!i.assignees.includes(login)) i.assignees.push(login); this.touch(); await this.maybeLost('addAssignee'); }
@@ -87,5 +87,12 @@ export class FakeStore implements Store {
   async deleteLabel(name: string) { await this.lat(); this.w.labels.delete(name); this.touch(); }
   async createIssue(title: string, body: string) { await this.lat(); const n = this.w.addIssue({ title, body, author: this.who }); this.touch(); return n; }
   async removeAssignee(n: number, login: string) { await this.lat(); const i = this.issue(n); i.assignees = i.assignees.filter((a) => a !== login); this.touch(); await this.maybeLost('removeAssignee'); }
+  async mergePull(n: number, expectedHead: string) {
+    await this.lat(); const i = this.issue(n);
+    if (!i.isPr || !i.pull) { const e: Error & { status?: number } = new Error('404 pull'); e.status = 404; throw e; }
+    if (i.pull.merged) return;
+    if (i.pull.head !== expectedHead) { const e: Error & { status?: number } = new Error('409 head branch was modified'); e.status = 409; throw e; }
+    i.pull.merged = true; i.state = 'closed'; this.touch(); await this.maybeLost('mergePull');
+  }
   async closeIssue(n: number) { await this.lat(); this.issue(n).state = 'closed'; this.touch(); }
 }

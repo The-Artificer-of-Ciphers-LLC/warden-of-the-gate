@@ -6,7 +6,7 @@ export interface IssueEvent { id: number; event: string; actor: string; label?: 
 
 /** Read-only pull request snapshot input. `head` is the commit the review is bound to; `ci` is a coarse summary of checks on that head. */
 export interface PullFile { path: string; status: string; patch?: string }
-export interface PullInfo { number: number; head: string; base: string; title: string; author: string; draft: boolean; state: 'open' | 'closed'; ci: 'passing' | 'failing' | 'pending' | 'none'; files: PullFile[] }
+export interface PullInfo { number: number; head: string; base: string; title: string; author: string; draft: boolean; state: 'open' | 'closed'; merged: boolean; /** logins whose latest review is an approval */ approvals: string[]; ci: 'passing' | 'failing' | 'pending' | 'none'; files: PullFile[] }
 
 export interface Store {
   readonly name: string;
@@ -35,10 +35,12 @@ export interface Store {
   deleteLabel(name: string): Promise<void>;
   createIssue(title: string, body: string): Promise<number>;
   closeIssue(n: number): Promise<void>;
+  /** Merge bound to the head the caller decided on: GitHub refuses (409) when the head moved. Never a fallback to a different head. */
+  mergePull(n: number, expectedHead: string): Promise<void>;
 }
 
 /** Write methods of Store; used by ReadOnlyStore and tests. */
-export const WRITE_METHODS = ['createComment', 'updateComment', 'deleteComment', 'addAssignee', 'removeAssignee', 'addLabel', 'removeLabel', 'createLabel', 'updateLabel', 'deleteLabel', 'createIssue', 'closeIssue'] as const;
+export const WRITE_METHODS = ['createComment', 'updateComment', 'deleteComment', 'addAssignee', 'removeAssignee', 'addLabel', 'removeLabel', 'createLabel', 'updateLabel', 'deleteLabel', 'createIssue', 'closeIssue', 'mergePull'] as const;
 
 export class ReadOnlyViolation extends Error { constructor(m: string) { super('READ-ONLY STORE: refused ' + m); } }
 /** Dry-run guard: every mutation throws. Wraps any Store, so "no repository mutation" is enforced, not promised. */
