@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://warden.invalid/schemas/warden.v1.schema.json",
+  "title": "Warden operational configuration (.github/warden.yml), schema version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repository",
+    "maintainers"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "defaultBranch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "maintainers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\\[bot\\])?$"
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projection": {
+          "type": "boolean"
+        },
+        "prefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "states": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          }
+        },
+        "keepOpen": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "enum": [
+            "neutral",
+            "friendly",
+            "terse"
+          ]
+        },
+        "signature": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "harness": {
+          "enum": [
+            "opencode"
+          ]
+        },
+        "harnessVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "modelPool": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "provider": {
+          "enum": [
+            "local"
+          ]
+        },
+        "remoteFallback": {
+          "type": "boolean"
+        },
+        "isolation": {
+          "enum": [
+            "seatbelt",
+            "container",
+            "none"
+          ]
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxItems": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "maxModelTurns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "maxToolCalls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "wallTimeSeconds": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 86400
+            },
+            "maxOperationRetries": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "maxFactoryImplementationPrs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            }
+          }
+        }
+      }
+    },
+    "clocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initialDeliveryHours": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fixWindowHours": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "responseNudgeHours": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "responseCloseDays": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reproductionDays": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "otherInfoDays": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "contributorFixRounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "reworkCycles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      }
+    },
+    "drafts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocker": {
+          "const": true
+        },
+        "major": {
+          "type": "boolean"
+        },
+        "minor": {
+          "type": "boolean"
+        },
+        "nit": {
+          "type": "boolean"
+        }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actionExpiryHours": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 168
+        },
+        "requireIndependentApprover": {
+          "type": "boolean"
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "discord": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "userMap": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9]{5,25}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transcriptDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "securityAuditDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 36500
+        }
+      }
+    },
+    "inbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inboxIssue": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "controlIssue": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "globalControl": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "issue"
+          ],
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+            },
+            "issue": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "stopLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxIntentBytes": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 16384
+        },
+        "dedupeHorizon": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 1024
+        },
+        "maxIntentAgeHours": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "shadow",
+        "live"
+      ]
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "automation": {
+          "enum": [
+            "enabled",
+            "opt-out"
+          ]
+        }
+      }
+    },
+    "operators": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\\[bot\\])?$"
+      }
+    }
+  }
+}

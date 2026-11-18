@@ -1,0 +1,32 @@
+{
+  "name": "warden-core-unpublished",
+  "version": "0.1.0-p1",
+  "private": true,
+  "type": "module",
+  "description": "Warden of the Gate P1 walking skeleton: versioned CLI, schemas, state model, serialized writer, stop/approvals. Not published; package scope is a P6 release gate.",
+  "bin": {
+    "warden": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --test-reporter=spec 'test/**/*.test.ts'",
+    "evidence": "node scripts/evidence.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3"
+  }
+}
