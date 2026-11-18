@@ -12,6 +12,8 @@ import type { AgentRunner } from '../runner/agent-runner.ts';
 import { OpenCodeRunner } from '../runner/opencode.ts';
 import { fileKV, planReview, runReview } from '../review/slice.ts';
 import { eligible, scanReviews } from '../scan/review-scan.ts';
+import { planTriage, runTriage } from '../triage/slice.ts';
+import type { TriageKV } from '../triage/slice.ts';
 import { select } from '../scan/select.ts';
 import { mkdirSync } from 'node:fs';
 import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
@@ -54,6 +56,18 @@ export async function run(c: Ctx): Promise<Result> {
       const sw = await submitSweep(findings, { ...base, repo: cfg.repository });
       const rec = await submitReconcile(await planReconcile(store, cfg, { skip }), { ...base, repo: cfg.repository });
       return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred; run \`warden writer drain\` to apply` };
+    }
+    if (task === 'triage') {
+      // P3 Triage (shadow): ONE issue per invocation, local only. Nothing is posted, labelled or closed; the result is a draft proposal card.
+      const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task triage requires --item N (one issue per invocation)' };
+      mkdirSync(st.path('triage'), { recursive: true, mode: 0o700 });
+      const tkv: TriageKV = { read: (n) => st.readJson(st.path('triage', `${n}.json`)), write: (n, rec) => st.writeJson(st.path('triage', `${n}.json`), rec) };
+      const maxAttempts = 3;
+      if (c.flags['dry-run']) { const p = await planTriage(store, item, tkv, maxAttempts); return { code: p.action === 'blocked' ? 4 : 0, data: { task, outcome: 'proposed', mode: 'dry-run', plan: p, mutations: 0 }, text: `task triage (dry-run) #${item}: ${p.action}: ${p.why}; no model call, no repository mutation` }; }
+      const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url') }) : new NotReadyRunner();
+      const o = await runTriage({ store, item, runner, kv: tkv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest,
+        cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('triage', 'packets') } });
+      return { code: o.kind === 'accepted' || o.kind === 'reused' ? 0 : o.kind === 'rejected' ? 1 : 4, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task triage #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
     if (task === 'review') {
       // P3 first checkpoint: ONE read-only shadow review of ONE pull request. Local only: nothing is posted, merged or written to the contributor's branch.
