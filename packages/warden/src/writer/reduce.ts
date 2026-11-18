@@ -6,9 +6,11 @@ import { decideApproval, requestApproval, revisionUpdate } from '../approvals/ap
 import type { Decision } from '../approvals/approvals.ts';
 import { iso } from '../util.ts';
 import { evaluateClock } from '../sweep/clocks.ts';
+import type { IssueState } from '../github/store.ts';
+import { decideIntake } from '../tasks/intake.ts';
 import { clockItemFrom, type SweepObs } from '../sweep/derive.ts';
 
-export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs }
+export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState }
 const note = (text: string): Effect => ({ t: 'comment', text });
 const rej = (reason: string, text: string): Decision => ({ accept: false, reason, plan: [note(text)] });
 
@@ -31,16 +33,23 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
       const cl = pl.claimant as { kind: 'contributor' | 'factory'; id: string } | undefined;
       if (l.kind !== 'issue') return rej('claim-on-pr', 'Claims apply to issues only.');
       if (!cl?.id || cl.id !== i.actor) return rej('claimant-actor-mismatch', 'Claim rejected: the requesting identity does not match the claimant.');
+      const others = (c.item?.assignees ?? []).filter((a) => a !== cl.id);   // fresh GitHub ownership check, read at decision time
+      if (others.length) return rej(`assigned-on-github-to:${others.join(',')}`, `Claim by ${cl.id} rejected: GitHub already shows this item assigned to ${others.join(', ')}.`);
       if (l.state === 'ready' && !l.owner) {
         const plan: Effect[] = [];
         if (cl.kind === 'contributor' && c.assignable(cl.id)) plan.push({ t: 'assign', login: cl.id });
         plan.push(...project(c.policy, 'ready', 'claimed'), note(`Claim accepted: ${cl.kind} ${cl.id} now owns this item.`));
-        return { accept: true, plan, apply: (led) => { led.state = 'claimed'; led.owner = { kind: cl.kind, id: cl.id, opid: i.opid }; } };
+        return { accept: true, plan, apply: (led) => {
+          led.state = 'claimed'; led.owner = { kind: cl.kind, id: cl.id, opid: i.opid };
+          // Contributor commitments start at the confirmed assignment decision (not at issue creation or an old comment). Factory claims carry none.
+          const hours = c.policy.sweep?.deliveryHours;
+          if (cl.kind === 'contributor' && hours) led.obligations = [...led.obligations.filter((x) => x.type !== 'delivery'), { type: 'delivery', startedAt: iso(c.now), dueAt: iso(c.now + hours * 3_600_000), source: 'assignment' }];
+        } };
       }
       return rej(`already-owned-by:${l.owner?.id ?? 'n/a'}`, l.owner ? `Claim by ${cl.id} rejected: this item is already owned by ${l.owner.id}.` : `Claim by ${cl.id} rejected: item is ${l.state}, not claimable.`);
     }
     case 'release': {
-      if (l.owner && l.owner.id === i.actor) return { accept: true, plan: [...project(c.policy, 'claimed', 'ready'), note(`Released by ${i.actor}.`)], apply: (led) => { led.state = 'ready'; led.owner = null; } };
+      if (l.owner && l.owner.id === i.actor) return { accept: true, plan: [...project(c.policy, 'claimed', 'ready'), note(`Released by ${i.actor}.`)], apply: (led) => { led.state = 'ready'; led.owner = null; led.obligations = led.obligations.filter((x) => x.type !== 'delivery'); } };
       return rej('not-owner', `Release by ${i.actor} rejected: not the current owner.`);
     }
     case 'note': return { accept: true, plan: [note(String(pl.text ?? 'note'))] };
@@ -64,6 +73,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'approval-decision': return decideApproval(l, i, c);
     case 'revision-update': return revisionUpdate(l, i, c);
     case 'sweep-action': return sweepAction(l, i, c);
+    case 'intake': return intake(l, i, c);
   }
 }
 
@@ -104,9 +114,30 @@ function sweepAction(l: Ledger, i: Intent, c: ReduceCtx): Decision {
         apply: (led) => { moveTo(led, 'ready', undefined, c.now); led.owner = null; led.obligations = led.obligations.filter((x) => !(x.type === 'delivery' && x.dueAt === due.dueAt)); } };
     }
     if (due.commitment !== 'fix-window') return rej('commitment-kind-mismatch', 'Expiry rejected: only a fix window applies to a PR.');
+    const fw = l.obligations.find((x) => x.type === 'fix-window' && x.dueAt === due.dueAt); const fixHours = fw ? Math.round((Date.parse(fw.dueAt) - Date.parse(fw.startedAt)) / 3_600_000) : '?';
     const ok = canTransition('pr', from, 'closed'); if (!ok.ok) return rej(ok.reason, `Closure rejected: ${ok.reason}.`);
-    return { accept: true, plan: [...project(c.policy, from, 'closed'), note(`Closing this PR automatically: the 48-hour fix window ended at ${due.dueAt} without the requested changes.${refs} The original issue stays open; you can reopen this PR or open a new one when the changes are ready.`), { t: 'close' }],
+    return { accept: true, plan: [...project(c.policy, from, 'closed'), note(`Closing this PR automatically: the ${fixHours}-hour fix window ended at ${due.dueAt} without the requested changes.${refs} The original issue stays open; you can reopen this PR or open a new one when the changes are ready.`), { t: 'close' }],
       apply: (led) => moveTo(led, 'closed', undefined, c.now) };
   }
   return rej(`unsupported-sweep-verdict:${due.kind}`, `Sweep verdict ${due.kind} is not enforceable by the writer yet.`);
+}
+
+/** Live intake for ONE explicit item. Only a fresh ledger (no prior operations, owner or obligations, still in its initial state) is eligible:
+ *  intake is how NEW items enter, never a way to adopt existing backlog. The writer re-derives the decision from the current GitHub item. */
+function intake(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const pl = i.payload as { expect?: string };
+  if (i.origin !== 'deterministic') return rej('intake-origin', 'Intake is deterministic only.');
+  if (!c.item) return rej('intake-unobserved', 'Intake rejected: the writer could not observe the item.');
+  const initial = l.kind === 'issue' ? 'needs-triage' : 'needs-review';
+  if (Object.keys(l.ops).length || l.owner || l.obligations.length || l.state !== initial || l.dropped) return { accept: false, reason: 'already-adopted', plan: [] };
+  const d = decideIntake({ title: c.item.title, body: c.item.body, isPr: c.item.isPr, draft: c.item.draft }, { draftsAllowed: c.policy.draftsAllowed ?? false });
+  if (d.to !== pl.expect) return { accept: false, reason: `stale-intake:expected-${pl.expect}-found-${d.to}`, plan: [] };   // silent: not a contributor-facing event
+  const days = c.policy.sweep?.clocks.otherInformationDays;
+  const add = c.policy.labelStates[d.to]; const drop = d.to === initial ? undefined : c.policy.labelStates[initial];   // a brand-new item has no state label yet
+  const plan: Effect[] = c.policy.projection && (add || drop) ? [{ t: 'label', add: add ? [add] : [], remove: drop ? [drop] : [] }] : [];
+  if (d.needsInfo) plan.push(note(`Thanks for opening this. Some required information is missing (${d.reasons[0].replace('missing required information ', '')}). Please add it${days ? ` within ${days} days` : ''}; if nothing arrives the issue is closed with a note on how to reopen it.`));
+  return { accept: true, plan, apply: (led) => {
+    if (d.to !== led.state) moveTo(led, d.to, undefined, c.now);
+    if (d.needsInfo && days) led.obligations = [{ type: 'information', startedAt: iso(c.now), dueAt: iso(c.now + days * 86_400_000), source: 'metadata' }];
+  } };
 }

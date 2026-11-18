@@ -198,7 +198,7 @@ export class Writer {
       else {
         const sourceVerified = await this.verifySource(intent);
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
-        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed });
+        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss });
       }
       const rec: OpRec = { status: 'applying', decision: dec.accept ? 'accept' : 'reject', reason: dec.reason, plan: dec.plan, step: 0, attempts: 0, epoch: this.lease.epoch, intentCommentId: c.id };
       dec.apply?.(l);

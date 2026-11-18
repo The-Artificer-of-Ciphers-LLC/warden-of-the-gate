@@ -8,6 +8,7 @@ import { authorActivity, clockConfigOf, clockItemFrom, type SweepObs } from '../
 import { makeIntent } from '../writer/protocol.ts';
 import { submit } from '../writer/journal.ts';
 import { iso } from '../util.ts';
+import { decideIntake } from './intake.ts';
 
 export const TASK_NAMES = ['intake', 'triage', 'claim', 'implement', 'review', 'rework', 'sweep', 'retro'] as const;
 export type TaskName = (typeof TASK_NAMES)[number];
@@ -32,13 +33,7 @@ export async function intakeDryRun(rawStore: Store, cfg: WardenConfig, o: { item
     const cs = await store.listComments(it.number);
     const led = cs.filter((c) => c.body.startsWith(LEDGER_MARK)).map((c) => parseLedger(c.body)).find(Boolean) as Ledger | undefined;
     if (led) { proposals.push({ item: it.number, kind, adopted: true, from: led.state, to: null, labels: { add: [], remove: [] }, reasons: ['already has a Warden ledger: intake proposes no transition'], effects: [] }); continue; }
-    const reasons: string[] = []; const effects: string[] = [];
-    let to: string;
-    if (kind === 'pr') {
-      to = 'needs-review'; reasons.push('new PR enters review queue');
-      if (it.draft && !cfg.drafts.allowed) { reasons.push('draft PR while drafts are disallowed'); effects.push('(P2) close with explanation and ready-for-review return path; not performed in dry-run'); }
-    } else if (!it.body.trim() || it.title.trim().length < 5) { to = 'needs-info'; reasons.push('missing required information (empty body or title too short)'); effects.push('(P2) request information from the reporter'); }
-    else { to = 'needs-triage'; reasons.push('metadata present; queue semantic triage'); }
+    const { to, reasons, effects } = decideIntake(it, { draftsAllowed: cfg.drafts.allowed });
     const add = cfg.labels.projection ? [cfg.labels.states[to]].filter(Boolean) : [];
     proposals.push({ item: it.number, kind, adopted: false, from: null, to, labels: { add, remove: [] }, reasons, effects });
   }
@@ -70,6 +65,24 @@ const toProposal = (f: SweepFinding): Proposal => {
     reasons: [f.due.kind === 'defer' ? `deferred: ${f.due.why}` : f.due.kind === 'nudge' ? `${f.due.hours}h response nudge` : `${f.due.kind} (${f.due.kind === 'expire-commitment' ? 'due' : 'since'} ${whenOf(f.due)})`],
     effects: f.due.kind === 'defer' ? [] : [releases ? 'release claim: unassign, return to ready, explain (through the writer)' : closes ? 'close with explanation (through the writer)' : 'post reminder comment (through the writer)'] };
 };
+/** Submit live intake for EXPLICIT items only (the event handler passes the new item). Never scans the backlog: intake must not become
+ *  blanket adoption of existing issues/PRs. Items that already have a ledger are skipped. */
+export async function submitIntake(rawStore: Store, cfg: WardenConfig, o: { submitStore: Store; inboxIssue: number; now: number; items: number[] }): Promise<{ submitted: number[]; skipped: Array<{ item: number; why: string }> }> {
+  if (!o.items.length) throw new Error('live intake requires explicit item numbers; it never scans the backlog (adoption is a separate, deliberate flow)');
+  const store = readOnly(rawStore); const submitted: number[] = []; const skipped: Array<{ item: number; why: string }> = [];
+  for (const n of o.items) {
+    const it = await store.getIssue(n);
+    if (it.state !== 'open') { skipped.push({ item: n, why: 'closed' }); continue; }
+    const cs = await store.listComments(n);
+    if (cs.some((c) => c.body.startsWith(LEDGER_MARK))) { skipped.push({ item: n, why: 'already-has-ledger' }); continue; }
+    const d = decideIntake(it, { draftsAllowed: cfg.drafts.allowed });
+    const intent = makeIntent({ v: 1, kind: 'intake', repo: cfg.repository, item: n, itemKind: it.isPr ? 'pr' : 'issue', origin: 'deterministic',
+      source: { kind: 'intake', id: `intake:${n}`, observedAt: iso(o.now) }, actor: o.submitStore.actor(), payload: { expect: d.to } });
+    await submit(o.submitStore, o.inboxIssue, intent, null); submitted.push(n);
+  }
+  return { submitted, skipped };
+}
+
 /** Submit enforceable findings as deterministic intents. `defer` verdicts are never submitted. Same finding => same opid (idempotent). */
 export async function submitSweep(findings: SweepFinding[], o: { submitStore: Store; repo: string; inboxIssue: number; now: number }): Promise<{ submitted: number[]; skipped: number[] }> {
   const submitted: number[] = []; const skipped: number[] = [];
