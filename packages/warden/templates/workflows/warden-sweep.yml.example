@@ -1,0 +1,25 @@
+# EXAMPLE, NOT INSTALLED, AND NOT VALIDATED: the P1 scheduling gate is OPEN. No native `event: schedule` run has ever been observed in the disposable
+# sandbox repositories (three bounded experiments and a support case, see docs/handoff). Until genuine scheduled runs are shown to work for your
+# repository, run the sweep by hand (`warden run --task sweep`) or with `workflow_dispatch`. Scheduling is best effort and never an exact-deadline guarantee.
+name: warden-sweep
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '17 */4 * * *'   # enable ONLY after you have observed a real scheduled run in your repository
+permissions: { contents: read, issues: write }
+concurrency: { group: warden-sweep, cancel-in-progress: false }
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.event.repository.default_branch }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - run: npm install --no-audit --no-fund --ignore-scripts ./vendor/taoc-warden-0.1.0-p4.tgz
+      - run: |
+          npx warden run --task sweep --submit-auth actions-secret
+          npx warden run --task claim --submit-auth actions-secret
+        env:
+          WARDEN_SUBMIT_TOKEN: ${{ secrets.WARDEN_SUBMIT_TOKEN }}

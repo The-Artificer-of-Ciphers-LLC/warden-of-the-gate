@@ -30,7 +30,16 @@ export function rig(over: Record<string, unknown> = {}, orders: Orders = ORDERS)
   const submitStore = world.view(SUBMIT); const opStore = world.view(OPERATOR);
   const writer = (o: Partial<WriterConfig> = {}, faults = new Faults()) => new Writer(world.view(WRITER, faults), defaultWriterConfig({ repository: REPO, inboxIssue: inbox, controlIssue: control, policy, submitters: [SUBMIT], writerIdentities: [WRITER], leaseTtlMs: 5000, leaseWaitMs: 2000, fenceMarginMs: 500, ...o }), faults);
   const intent = (c: Partial<IntentCore> & Pick<IntentCore, 'kind' | 'item'>) => makeIntent({ v: 1, repo: REPO, itemKind: 'issue', origin: 'deterministic', source: { kind: 'test', id: String(++seq), observedAt: new Date(world.now()).toISOString() }, actor: 'contributor1', payload: {}, ...c });
-  const send = async (c: Partial<IntentCore> & Pick<IntentCore, 'kind' | 'item'>) => (await submit(submitStore, inbox, intent(c), null)).commentId;
+  const send = async (c: Partial<IntentCore> & Pick<IntentCore, 'kind' | 'item'>) => {
+    const cl = (c.payload as { claimant?: { kind?: string } } | undefined)?.claimant;
+    if (!c.source && ((c.kind === 'claim' && cl?.kind !== 'factory') || c.kind === 'release') && c.actor) {   // a contributor claim/release arrives as a real, unedited comment by that GitHub user
+      const text = c.kind === 'claim' ? '/warden claim' : '/warden release';
+      const prior = (await world.view(c.actor).listComments(c.item)).find((x) => x.author === c.actor && x.body === text);   // the same comment is the same source event (idempotent redelivery)
+      const cid = prior ? prior.id : (await world.view(c.actor).createComment(c.item, text)).id;
+      c = { ...c, source: { kind: 'gh-comment', id: String(cid), observedAt: new Date(world.now()).toISOString() } };
+    }
+    return (await submit(submitStore, inbox, intent(c), null)).commentId;
+  };
   const comment = async (as: string, issue: number, body: string) => (await world.view(as).createComment(issue, body)).id;
   return { world, inbox, control, policy, cfg, writerStore: (f) => world.view(WRITER, f), submitStore, writer, opStore, intent, send, comment };
 }
