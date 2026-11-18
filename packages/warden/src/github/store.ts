@@ -37,6 +37,8 @@ export interface Store {
   closeIssue(n: number): Promise<void>;
   /** Merge bound to the head the caller decided on: GitHub refuses (409) when the head moved. Never a fallback to a different head. */
   mergePull(n: number, expectedHead: string): Promise<void>;
+  /** Tip commit of a branch (read-only). The factory starts from the TRUSTED default-branch tip, never from a contributor branch. */
+  getBranchHead(branch: string): Promise<string>;
 }
 
 /** Write methods of Store; used by ReadOnlyStore and tests. */

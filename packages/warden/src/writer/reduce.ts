@@ -87,6 +87,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'carry-accounting': return carryAccounting(l, i, c);
     case 'critical-escape': return criticalEscape(l, i, c);
     case 'resume-scope': return resumeScope(l, i, c);
+    case 'link-pr': return linkPr(l, i, c);
   }
 }
 
@@ -377,4 +378,22 @@ function resumeScope(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!l.paused) return rej('not-paused', 'Resume rejected: this item is not paused.');
   const reason = String((i.payload as { reason?: string }).reason ?? '').trim(); if (!reason) return rej('resume-reason-required', 'Resume rejected: a reason is required.');
   return { accept: true, plan: [note(`Paused scope resumed by ${i.actor} (${reason.slice(0, 200)}). Nothing was restarted automatically; the earlier evidence stays in the ledger history.`)], apply: (led) => { delete led.paused; } };
+}
+
+/** Link a factory PR and its issue. On the issue (factory-owned, claimed or implementing) it records the PR and moves the issue to in-review; on the PR it
+ *  records the issue it closes. Links are facts the writer checks against the ledger; they never merge or close anything. */
+function linkPr(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'deterministic') return silent('link-origin');
+  const pl = i.payload as { pr?: number; issue?: number };
+  if (l.kind === 'issue') {
+    if (!Number.isInteger(pl.pr) || l.owner?.kind !== 'factory') return silent('link-needs-factory-owned-issue');
+    if (!['claimed', 'implementing'].includes(l.state)) return silent(`link-wrong-state:${l.state}`);
+    if (l.linked.includes(pl.pr as number)) return silent('already-linked');
+    const from = l.state;
+    return { accept: true, plan: [...project(c.policy, from, 'in-review'), note(`Factory pull request #${pl.pr} was opened for this issue. It still needs review and the merge gates; nothing is claimed as reviewed or merged.`)], apply: (led) => { led.linked = [...led.linked, pl.pr as number]; moveTo(led, 'in-review', undefined, c.now); } };
+  }
+  if (!Number.isInteger(pl.issue)) return silent('link-needs-issue');
+  if (l.linked.includes(pl.issue as number)) return silent('already-linked');
+  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; } };
 }
