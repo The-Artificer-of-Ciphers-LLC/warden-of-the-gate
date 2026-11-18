@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OpenCodeRunner, classifyBaseURL, extractJson } from '../src/runner/opencode.ts';
+import { OpenCodeRunner, classifyBaseURL, extractJson, parseVersion } from '../src/runner/opencode.ts';
 
 test('classifyBaseURL accepts only loopback literals and rejects lookalike hosts and userinfo tricks', () => {
   assert.equal(classifyBaseURL('http://127.0.0.1:1235/v1').local, true);
@@ -19,4 +19,8 @@ test('preflight fails closed when the harness is missing or the endpoint is not 
   assert.equal(missing.ok, false); assert.ok(missing.failures.some((f) => /not runnable/.test(f)));
   const remote = await new OpenCodeRunner({ bin: '/nonexistent/opencode', modelId: 'm', baseURL: 'https://api.example.com/v1' }).preflight();
   assert.equal(remote.ok, false); assert.ok(remote.failures.some((f) => /not loopback/.test(f)));
+});
+
+test('parseVersion reads the real `opencode --version` output shape and rejects garbage', () => {
+  assert.equal(parseVersion('opencode v2.2.7\n'), '2.2.7'); assert.equal(parseVersion('2.2.7'), '2.2.7'); assert.equal(parseVersion('no version'), undefined);
 });

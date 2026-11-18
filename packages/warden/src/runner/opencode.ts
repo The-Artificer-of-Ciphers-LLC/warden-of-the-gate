@@ -30,6 +30,9 @@ export function classifyBaseURL(raw: string): { local: boolean; host: string; po
   return { local: true, host: u.hostname, port: Number(u.port || (u.protocol === 'https:' ? 443 : 80)) };
 }
 
+/** `opencode --version` prints e.g. "opencode v2.2.7"; compare only the semantic version. */
+export function parseVersion(out: string): string | undefined { return out.match(/(\d+\.\d+\.\d+)/)?.[1]; }
+
 export function extractJson(text: string): { value?: unknown; error?: string } {
   const t = text.trim(); const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = fence ? fence[1] : t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1);
@@ -102,7 +105,7 @@ export class OpenCodeRunner implements AgentRunner {
 
   async preflight(): Promise<PreflightReport> {
     const failures: string[] = []; const rep: PreflightReport = { ok: false, failures };
-    try { rep.harnessVersion = execFileSync(this.o.bin, ['--version'], { encoding: 'utf8', timeout: 10_000 }).trim().replace(/^v/, ''); } catch { failures.push(`opencode not runnable at ${this.o.bin}`); }
+    try { rep.harnessVersion = parseVersion(execFileSync(this.o.bin, ['--version'], { encoding: 'utf8', timeout: 10_000 })); } catch { failures.push(`opencode not runnable at ${this.o.bin}`); }
     if (rep.harnessVersion && rep.harnessVersion !== this.o.pinned) failures.push(`opencode ${rep.harnessVersion} != pinned ${this.o.pinned}`);
     const st = await containmentSelfTest().catch((e) => ({ ok: false, observed: {}, failures: [String(e)] }));
     if (st.ok) rep.isolation = 'seatbelt'; else failures.push(`containment not verified: ${st.failures.join('; ')}`);
