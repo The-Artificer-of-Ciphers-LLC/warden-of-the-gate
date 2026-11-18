@@ -18,7 +18,8 @@ export type MaintainerCommand =
   | { kind: 'approval-decision'; payload: { approvalId: string; decision: 'approve' | 'deny'; bind?: string; reason?: string } }
   | { kind: 'override'; payload: { to: string; reason: string } }
   | { kind: 'hold'; payload: { reason: string } }
-  | { kind: 'hold-release'; payload: { reason?: string } };
+  | { kind: 'hold-release'; payload: { reason?: string } }
+  | { kind: 'resume-scope'; payload: { reason: string } };
 export function parseMaintainerCommand(body: string): MaintainerCommand | null {
   const line = body.split('\n').map((l) => l.trim()).find((l) => l.startsWith('/warden'));
   if (!line) return null;
@@ -28,6 +29,8 @@ export function parseMaintainerCommand(body: string): MaintainerCommand | null {
   if (hold) return { kind: 'hold', payload: { reason: hold[1].trim() } };
   const rel = /^\/warden\s+release-hold(?:\s+(.*))?$/.exec(line);
   if (rel) return { kind: 'hold-release', payload: { reason: rel[1]?.trim() || undefined } };
+  const resume = /^\/warden\s+resume-scope\s+(.+)$/.exec(line);
+  if (resume) return { kind: 'resume-scope', payload: { reason: resume[1].trim() } };
   const override = /^\/warden\s+override\s+([a-z-]+)\s+(.+)$/.exec(line);
   return override ? { kind: 'override', payload: { to: override[1], reason: override[2].trim() } } : null;
 }

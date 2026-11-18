@@ -11,7 +11,7 @@ import { bindingFor, evaluateMerge } from '../merge/gates.ts';
 import { decideIntake } from '../tasks/intake.ts';
 import { clockItemFrom, isFresh, type SweepObs } from '../sweep/derive.ts';
 
-export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState; /** For `submission`: the linked PR as GitHub shows it now. */ linkedPr?: IssueState; /** For `merge-request`: the pull request as GitHub shows it now. */ pull?: PullInfo }
+export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState; /** For `submission`: the linked PR as GitHub shows it now. */ linkedPr?: IssueState; /** For `merge-request`: the pull request as GitHub shows it now. */ pull?: PullInfo; /** For `carry-accounting`: the replaced PR's ledger, read by the writer (never taken from the intent). */ replaced?: Ledger }
 const note = (text: string): Effect => ({ t: 'comment', text });
 const rej = (reason: string, text: string): Decision => ({ accept: false, reason, plan: [note(text)] });
 
@@ -83,6 +83,10 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'adopt': return adopt(l, i, c);
     case 'review-record': return reviewRecord(l, i, c);
     case 'merge-request': return mergeRequest(l, i, c);
+    case 'rework-attempt': return reworkAttempt(l, i, c);
+    case 'carry-accounting': return carryAccounting(l, i, c);
+    case 'critical-escape': return criticalEscape(l, i, c);
+    case 'resume-scope': return resumeScope(l, i, c);
   }
 }
 
@@ -314,4 +318,63 @@ function mergeRequest(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (v.action !== 'merge') return silent(`merge-${v.action}:${v.reasons.join('; ')}`);
   const b = bindingFor(input, v);
   return { accept: true, plan: [note(`Merge requested for head ${b.expectedHead.slice(0, 8)} (${v.via}${v.approvalId ? ' ' + v.approvalId : ''}). The merge is bound to that head and recorded only after GitHub confirms it.`), { t: 'merge', expectedHead: b.expectedHead }, ...project(c.policy, 'merge-ready', 'merged'), { t: 'mark-merged' }] };
+}
+
+/** Persistent rework accounting (three cycles, configurable). A COMPLETED attempt consumes a cycle even with no progress; a failed LAUNCH consumes the
+ *  separate retry budget instead. Success on the last cycle may proceed to Review; unresolved findings after the last cycle escalate to a maintainer.
+ *  Counts live on the ledger, so a restart cannot reset them and `carry-accounting` carries them to a replacement PR. */
+function reworkAttempt(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'deterministic') return silent('rework-origin');
+  if (l.kind !== 'pr') return silent('rework-on-issue');
+  const sw = c.policy.sweep; if (!sw) return silent('sweep-policy-missing');
+  if (l.state !== 'needs-rework') return silent(`not-awaiting-rework:${l.state}`);
+  const pl = i.payload as { outcome?: string; openFindings?: number };
+  const limit = sw.reworkCycles;
+  if (pl.outcome === 'launch-failed') {
+    const used = l.attempts.launchRetries + 1;
+    if (used >= c.policy.maxAttempts) {
+      return { accept: true, plan: [...project(c.policy, 'needs-rework', 'blocked'), note(`Rework could not be launched after ${used} attempts (a separate budget from rework cycles). A maintainer decides what happens next.`)],
+        apply: (led) => { led.attempts.launchRetries = used; moveTo(led, 'blocked', { reason: 'rework launch retries exhausted', resumeTo: 'needs-rework' }, c.now); } };
+    }
+    return { accept: true, plan: [], apply: (led) => { led.attempts.launchRetries = used; } };
+  }
+  if (pl.outcome !== 'completed' || !Number.isInteger(pl.openFindings) || (pl.openFindings as number) < 0) return silent('rework-malformed');
+  const cycles = l.attempts.reworkCycles + 1; const open = pl.openFindings as number;
+  if (cycles >= limit && open > 0) {
+    return { accept: true, plan: [...project(c.policy, 'needs-rework', 'needs-decision'), note(`Rework cycle ${cycles} of ${limit} finished with ${open} finding(s) still unresolved. A maintainer decides what happens next; nothing is retried automatically.`)],
+      apply: (led) => { led.attempts.reworkCycles = cycles; moveTo(led, 'needs-decision', undefined, c.now); } };
+  }
+  return { accept: true, plan: [...project(c.policy, 'needs-rework', 'needs-review'), note(`Rework cycle ${cycles} of ${limit} finished${open ? ` with ${open} finding(s) still open` : ''}; the pull request returns to Review.`)],
+    apply: (led) => { led.attempts.reworkCycles = cycles; moveTo(led, 'needs-review', undefined, c.now); } };
+}
+
+/** A replacement PR inherits the replaced PR's accounting (the writer reads the old ledger itself): a fresh PR never resets the cycles. */
+function carryAccounting(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'deterministic') return silent('carry-origin'); if (l.kind !== 'pr') return silent('carry-on-issue');
+  const old = c.replaced; if (!old) return silent('carry-unobserved'); if (old.item === l.item) return silent('carry-self');
+  const next = { reworkCycles: Math.max(l.attempts.reworkCycles, old.attempts.reworkCycles), launchRetries: Math.max(l.attempts.launchRetries, old.attempts.launchRetries) };
+  if (next.reworkCycles === l.attempts.reworkCycles && next.launchRetries === l.attempts.launchRetries) return silent('carry-nothing-to-do');
+  return { accept: true, plan: [note(`This replacement carries the rework accounting of #${old.item}: ${next.reworkCycles} cycle(s) and ${next.launchRetries} launch retr${next.launchRetries === 1 ? 'y' : 'ies'} already used.`)], apply: (led) => { led.attempts.reworkCycles = next.reworkCycles; led.attempts.launchRetries = next.launchRetries; led.linked = [...new Set([...led.linked, old.item])]; } };
+}
+
+/** Critical escape / unauthorized effect: pause the affected scope (the item), preserve the evidence in the ledger and alert maintainers. Resuming needs an explicit,
+ *  source-verified maintainer command; it never restarts work by itself. */
+function criticalEscape(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (i.origin !== 'deterministic') return { accept: false, reason: 'escape-origin', plan: [] };
+  const pl = i.payload as { summary?: string; evidence?: unknown };
+  const evidence = Array.isArray(pl.evidence) ? (pl.evidence as unknown[]).map((e) => String(e).slice(0, 300)).slice(0, 20) : [];
+  if (!pl.summary || !evidence.length) return { accept: false, reason: 'escape-needs-summary-and-evidence', plan: [] };
+  if (l.paused) return { accept: false, reason: 'already-paused', plan: [] };
+  const who = c.policy.maintainers.map((m) => '@' + m).join(' ');
+  return { accept: true, plan: [note(`CRITICAL: ${String(pl.summary).slice(0, 300)}. This item is paused: no further effects are accepted until a maintainer resumes it. Evidence is preserved in the item ledger. ${who}`)],
+    apply: (led) => { led.paused = { reason: String(pl.summary).slice(0, 300), at: iso(c.now), evidence }; } };
+}
+function resumeScope(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Resume rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Resume by ${i.actor} rejected: not an authorized maintainer.`);
+  if (!l.paused) return rej('not-paused', 'Resume rejected: this item is not paused.');
+  const reason = String((i.payload as { reason?: string }).reason ?? '').trim(); if (!reason) return rej('resume-reason-required', 'Resume rejected: a reason is required.');
+  return { accept: true, plan: [note(`Paused scope resumed by ${i.actor} (${reason.slice(0, 200)}). Nothing was restarted automatically; the earlier evidence stays in the ledger history.`)], apply: (led) => { delete led.paused; } };
 }

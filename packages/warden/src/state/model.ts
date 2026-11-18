@@ -77,6 +77,8 @@ export interface Ledger {
   draftDecision?: 'keep';
   /** Latest accepted AI review summary, recorded through a live-mode `review-record` intent (never in shadow). Severities only: no finding text is copied. */
   review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; policyDigest?: string; acceptedAt: string };
+  /** Critical escape / unauthorized effect: the affected scope is paused (only notes and an explicit maintainer resume are accepted) and evidence is preserved. */
+  paused?: { reason: string; at: string; evidence: string[] };
   /** Adoption receipt reference (the inventory/receipt file is NOT a second canonical ledger). */
   adoptedAt?: string;
 }

@@ -13,7 +13,7 @@ export interface PolicySnapshot {
   /** P4 merge facts from approved config. Absent => merge requests are rejected (fail closed). */
   merge?: { gates: { blocker: true; major: boolean; minor: boolean; nit: boolean }; automationLogins: string[]; factoryLogins: string[]; requiredApprovals: number };
   /** P2 sweep windows from approved config. Absent => sweep actions are rejected (fail closed). */
-  sweep?: { clocks: ClockConfig; keepOpenLabel: string; deliveryHours: number; fixWindowHours: number; contributorFixRounds: number };
+  sweep?: { clocks: ClockConfig; keepOpenLabel: string; deliveryHours: number; fixWindowHours: number; contributorFixRounds: number; reworkCycles: number };
 }
 export function buildPolicy(w: WardenConfig, o: Orders | null): PolicySnapshot {
   const orders: Orders = o ?? { schemaVersion: 1, programs: [] };
@@ -24,6 +24,6 @@ export function buildPolicy(w: WardenConfig, o: Orders | null): PolicySnapshot {
     maxAttempts: w.runtime.budgets.maxOperationRetries, dedupeHorizon: w.inbox.dedupeHorizon, maxIntentAgeMs: w.inbox.maxIntentAgeHours * 3600_000, maxIntentBytes: w.inbox.maxIntentBytes,
     draftsAllowed: w.drafts.allowed,
     merge: { gates: { blocker: true, major: w.gates.major, minor: w.gates.minor, nit: w.gates.nit }, automationLogins: [...w.merge.automationLogins], factoryLogins: [...w.merge.factoryLogins], requiredApprovals: w.merge.requiredApprovals },
-    sweep: { clocks: clockConfigOf(w), keepOpenLabel: w.labels.keepOpen, deliveryHours: w.clocks.initialDeliveryHours, fixWindowHours: w.clocks.fixWindowHours, contributorFixRounds: w.clocks.contributorFixRounds },
+    sweep: { clocks: clockConfigOf(w), keepOpenLabel: w.labels.keepOpen, deliveryHours: w.clocks.initialDeliveryHours, fixWindowHours: w.clocks.fixWindowHours, contributorFixRounds: w.clocks.contributorFixRounds, reworkCycles: w.clocks.reworkCycles },
   };
 }

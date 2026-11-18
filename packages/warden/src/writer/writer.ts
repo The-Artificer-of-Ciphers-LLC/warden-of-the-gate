@@ -68,6 +68,11 @@ export class Writer {
     if (this.cfg.ledgerKey && !macValid(l, this.cfg.ledgerKey)) throw new Anomaly(`ledger #${item} failed integrity check (edited by something other than the writer)`);
     return l;
   }
+  /** Read another item's ledger WITHOUT touching the per-item comment-id cache (used to carry accounting across replacement PRs). */
+  private async loadLedgerReadOnly(item: number): Promise<Ledger | undefined> {
+    const c = (await this.store.listComments(item)).find((x) => x.body.startsWith(LEDGER_MARK) && this.cfg.writerIdentities.includes(x.author));
+    const l = c ? parseLedger(c.body) : null; return l && l.repository === this.cfg.repository ? l : undefined;
+  }
   private async commit(l: Ledger, why: string): Promise<void> {
     await this.lease.assertHeld(this.cfg.fenceMarginMs, this.cfg.fenceCacheMs);
     await this.faults.stall('between-fence-and-write');
@@ -192,15 +197,17 @@ export class Writer {
         if (dep.status !== 'applied') return this.finalizeReject(c, intent, l, 'causal-predecessor-' + dep.status, null);
       }
       expireApprovals(l, this.store.now());
+      if (l.paused && !['note', 'resume-scope', 'critical-escape'].includes(intent.kind)) return this.finalizeReject(c, intent, l, 'scope-paused', null);   // a paused scope accepts only notes and an explicit maintainer resume
       if (iss.state === 'closed' && intent.kind !== 'note' && intent.kind !== 'reconcile') return this.finalizeReject(c, intent, l, 'item-closed', null);
       let dec;
       if (intent.origin === 'ai' && pol.mode === 'shadow') dec = { accept: false, reason: 'shadow-mode-ai-effects-disabled', plan: [] as Effect[] };
       else {
         const sourceVerified = await this.verifySource(intent);
         const linkedPr = intent.kind === 'submission' && typeof (intent.payload as { pr?: unknown }).pr === 'number' ? await this.store.getIssue((intent.payload as { pr: number }).pr).catch(() => undefined) : undefined;
+        const replaced = intent.kind === 'carry-accounting' && typeof (intent.payload as { replaces?: unknown }).replaces === 'number' ? await this.loadLedgerReadOnly((intent.payload as { replaces: number }).replaces) : undefined;
         const pullObs = intent.kind === 'merge-request' ? await this.store.getPull(intent.item).catch(() => undefined) : undefined;
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
-        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr, pull: pullObs });
+        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr, pull: pullObs, replaced });
       }
       const rec: OpRec = { status: 'applying', decision: dec.accept ? 'accept' : 'reject', reason: dec.reason, plan: dec.plan, step: 0, attempts: 0, epoch: this.lease.epoch, intentCommentId: c.id };
       dec.apply?.(l);
@@ -219,7 +226,7 @@ export class Writer {
   }
   /** Reconstruct maintainer authority from the target item's source comment, not the submitter's interpretation. */
   private async verifySource(i: Intent): Promise<boolean> {
-    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release') return true;
+    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release' && i.kind !== 'resume-scope') return true;
     if (i.source.kind !== 'gh-comment') return false;
     const sc = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
     if (!sc || sc.author !== i.actor || sc.updatedAt !== sc.createdAt) return false;
