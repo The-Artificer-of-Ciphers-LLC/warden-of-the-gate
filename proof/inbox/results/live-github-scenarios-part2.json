@@ -1,0 +1,262 @@
+{
+  "proof": "PROOF-inbox scenarios",
+  "backend": "github",
+  "repo": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "node": "v26.13.0",
+  "gitCommit": "3c3df5a",
+  "at": "2026-11-18T06:40:23.019Z",
+  "leaseTtlMs": 7000,
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": []
+  },
+  "results": [
+    {
+      "id": "S13",
+      "title": "Zombie writer: stalls past lease expiry; fenced; stale write detected and repaired from receipts",
+      "covers": "actual serialization under pause; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "taker B ran at a higher epoch and applied claim then release",
+          "pass": true,
+          "observed": {
+            "zombie": 123,
+            "taker": 124
+          }
+        },
+        {
+          "desc": "(a) zombie woke, base check failed, it wrote nothing and halted fenced",
+          "pass": true,
+          "observed": "FENCED: stale base on #153: expected seq 4, found 13"
+        },
+        {
+          "desc": "(b) stale write DID land (honest residual window): ledger regressed from ready to claimed, detected by the post-write fence",
+          "pass": true,
+          "observed": {
+            "zombie": "FENCED: epoch 126 superseded by 127",
+            "before": {
+              "state": "ready",
+              "seq": 13
+            },
+            "afterZombie": {
+              "state": "claimed",
+              "owner": "trek-e",
+              "seq": 5
+            }
+          }
+        },
+        {
+          "desc": "zombie performed no externally visible effect (effects only follow a verified commit)",
+          "pass": true,
+          "observed": {
+            "effectsAfterZombie": 1
+          }
+        },
+        {
+          "desc": "(b) next drain detects ledger/receipt divergence and repairs: owner resurrected by zombie is cleared",
+          "pass": true,
+          "observed": {
+            "before": {
+              "state": "claimed",
+              "owner": "trek-e"
+            },
+            "after": {
+              "state": "ready"
+            },
+            "repairs": 2
+          }
+        },
+        {
+          "desc": "no acknowledged claim ever had two owners: only one claim notice for the item",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 108874
+    },
+    {
+      "id": "S14",
+      "title": "Zombie creating a ledger concurrently is fenced and removes its own duplicate ledger",
+      "covers": "one item-ledger authority; no competing ledger",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "zombie fenced at ledger creation",
+          "pass": true,
+          "observed": "FENCED: epoch 129 superseded by 130"
+        },
+        {
+          "desc": "exactly one ledger comment exists afterwards",
+          "pass": true,
+          "observed": 1
+        },
+        {
+          "desc": "a competing second ledger comment halts the writer (fail closed, visible), no guess about which is canonical",
+          "pass": true,
+          "observed": "ANOMALY: item #158 has 2 ledger comments (competing ledger) - failing closed"
+        }
+      ],
+      "pass": true,
+      "ms": 31064
+    },
+    {
+      "id": "S15",
+      "title": "Mac write-ahead journal: crash before post, lost reply after post, reconcile",
+      "covers": "durable local intent; acknowledgements; enumeration/recovery",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "crash before post left a durable pending journal entry and nothing on GitHub for it",
+          "pass": true
+        },
+        {
+          "desc": "lost reply: the entry is still \"pending\" locally though GitHub has it",
+          "pass": true
+        },
+        {
+          "desc": "reconcile resubmits the never-posted intent and adopts the posted one (no duplicate post)",
+          "pass": true,
+          "observed": {
+            "rec1": {
+              "resubmitted": 1,
+              "adopted": 1,
+              "acked": 0
+            },
+            "inboxIntents": 2
+          }
+        },
+        {
+          "desc": "after the writer acknowledges, journal entries become acked from receipts",
+          "pass": true,
+          "observed": {
+            "resubmitted": 0,
+            "adopted": 0,
+            "acked": 2
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 24177
+    },
+    {
+      "id": "S17",
+      "title": "Retention/compaction: terminal pairs expire, pending and failed are kept, replays stay harmless",
+      "covers": "retention; dedupe horizon",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "retention used (ms): 1500"
+      ],
+      "checks": [
+        {
+          "desc": "applied intent+receipt pairs deleted after retention",
+          "pass": true,
+          "observed": {
+            "deleted": 4,
+            "kept": 1
+          }
+        },
+        {
+          "desc": "quarantined pair kept (4x retention), pending intent never deleted",
+          "pass": true,
+          "observed": 3
+        },
+        {
+          "desc": "late redelivery of a compacted op is a duplicate (ledger dedupe horizon), no second effect",
+          "pass": true,
+          "observed": {
+            "notes": 3,
+            "p": [
+              "applied",
+              "duplicate"
+            ]
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 46114
+    },
+    {
+      "id": "S16",
+      "title": "Overlap proof: lost updates without the lease, none with it; non-atomic primitive control",
+      "covers": "ACTUAL serialization (not a concurrency setting or revision number)",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "{\"none\":{\"mode\":\"nolease\",\"workers\":4,\"perWorker\":3,\"expected\":12,\"final\":3,\"lostUpdates\":9,\"distinctEpochsUsed\":0,\"epochsStrictlyDistinctPerIncrement\":null,\"commentId\":6971186449},\"lease\":{\"mode\":\"lease\",\"workers\":4,\"perWorker\":3,\"expected\":12,\"final\":12,\"lostUpdates\":0,\"distinctEpochsUsed\":12,\"epochsStrictlyDistinctPerIncrement\":true,\"commentId\":6971187613}}"
+      ],
+      "checks": [
+        {
+          "desc": "control: without mutual exclusion concurrent read-modify-write LOSES updates (test can detect overlap)",
+          "pass": true,
+          "observed": {
+            "mode": "nolease",
+            "workers": 4,
+            "perWorker": 3,
+            "expected": 12,
+            "final": 3,
+            "lostUpdates": 9,
+            "distinctEpochsUsed": 0,
+            "epochsStrictlyDistinctPerIncrement": null,
+            "commentId": 6971186449
+          }
+        },
+        {
+          "desc": "with the lease: zero lost updates, every increment under a distinct epoch",
+          "pass": true,
+          "observed": {
+            "mode": "lease",
+            "workers": 4,
+            "perWorker": 3,
+            "expected": 12,
+            "final": 12,
+            "lostUpdates": 0,
+            "distinctEpochsUsed": 12,
+            "epochsStrictlyDistinctPerIncrement": true,
+            "commentId": 6971187613
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 28377
+    }
+  ]
+}

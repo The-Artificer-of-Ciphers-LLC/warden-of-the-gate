@@ -1,0 +1,6 @@
+PASS S13 Zombie writer: stalls past lease expiry; fenced; stale write detected and repaired from receipts (108874ms)
+PASS S14 Zombie creating a ledger concurrently is fenced and removes its own duplicate ledger (31064ms)
+PASS S15 Mac write-ahead journal: crash before post, lost reply after post, reconcile (24177ms)
+PASS S17 Retention/compaction: terminal pairs expire, pending and failed are kept, replays stay harmless (46114ms)
+PASS S16 Overlap proof: lost updates without the lease, none with it; non-atomic primitive control (28377ms)
+exit=0

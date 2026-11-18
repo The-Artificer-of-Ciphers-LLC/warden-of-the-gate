@@ -21,6 +21,10 @@ The first design never merged: every PR ended at a human gate. The owner redefin
 - One-time action approvals expire after 24 hours by default, configurable, or earlier on invalidated inputs. Approved design/scope persists until materially changed; silence and expiry never grant consent.
 - Routine verified automation-origin dependency/CVE fixes auto-approve/merge within authority. Breaking, migration and high-impact changes escalate unless specifically preauthorized.
 
+## P0 `PROOF-inbox` note: stop and decision authority
+
+Evidence in [`proof/inbox/RESULTS.md`](../../proof/inbox/RESULTS.md). Stop (global and instance) is a control label whose state is derived from operator-attributed GitHub events; every writer re-reads it before each task and each effect, an unreadable control means stopped, and each environment posts a stop acknowledgement so status can report local versus remotely confirmed state. A maintainer's approval or denial must likewise be accepted only from an identity on the operator/maintainer list as recorded by GitHub's own event attribution, never from comment text alone. Cross-repository global stop remains unverified until the GitHub App exists (ADR 0011).
+
 ## Consequences
 
 - The human gate shrinks to escalations; success metrics track auto-merge rate and revert/escape rate on auto-merges to keep the thresholds honest.

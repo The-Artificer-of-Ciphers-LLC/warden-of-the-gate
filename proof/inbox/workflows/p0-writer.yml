@@ -1,0 +1,41 @@
+# P0 PROOF workflow (sandbox only). The shared writer path: doorbell triggers + backstop sweep, all call the same drain.
+# NOTE: concurrency below is a *throughput hint*, not the correctness mechanism. Correctness comes from the label-epoch lease
+# + fenced ledger commits in src/writer.ts (see p0-overlap.yml, which disables concurrency entirely and still shows no overlap).
+name: p0-writer
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'drain | tamper-stop | facts'
+        default: drain
+  schedule:
+    - cron: '*/15 * * * *'
+concurrency:
+  group: warden-writer
+  cancel-in-progress: false
+permissions:
+  issues: write
+  contents: read
+jobs:
+  drain:
+    # doorbell only for the inbox issue (number injected at install time); other triggers always run
+    if: github.event_name != 'issue_comment' || github.event.issue.number == __INBOX__
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - name: run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WARDEN_P0_LOGIN: __LOGIN__
+        run: |
+          node --version
+          case "${{ github.event.inputs.mode || 'drain' }}" in
+            tamper-stop) node proof/inbox/src/cli.ts tamper-stop ;;
+            facts) node proof/inbox/src/cli.ts actions-facts ;;
+            *) node proof/inbox/src/cli.ts drain --env actions ;;
+          esac

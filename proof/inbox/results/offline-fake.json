@@ -1,0 +1,1025 @@
+{
+  "proof": "PROOF-inbox scenarios",
+  "backend": "fake",
+  "repo": "in-memory fake",
+  "node": "v26.13.0",
+  "gitCommit": "3c3df5a",
+  "at": "2026-11-18T05:51:06.759Z",
+  "leaseTtlMs": 350,
+  "summary": {
+    "total": 17,
+    "passed": 17,
+    "failed": []
+  },
+  "results": [
+    {
+      "id": "S01",
+      "title": "Baseline claim end to end (admission, decision, effects, receipt)",
+      "covers": "request admission; immutable identity; acknowledgements",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [
+        "[{\"commentId\":1000,\"opid\":\"op_b4b0deb0454790c12ab025708effa526\",\"result\":\"applied\"}]"
+      ],
+      "checks": [
+        {
+          "desc": "claim applied exactly once",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 1000,
+              "opid": "op_b4b0deb0454790c12ab025708effa526",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "ledger records single owner and op",
+          "pass": true,
+          "observed": {
+            "id": "alice",
+            "kind": "contributor",
+            "opid": "op_b4b0deb0454790c12ab025708effa526"
+          }
+        },
+        {
+          "desc": "GitHub assignment confirmed (assignable claimant)",
+          "pass": true,
+          "observed": [
+            "alice"
+          ]
+        },
+        {
+          "desc": "projection label applied",
+          "pass": true,
+          "observed": [
+            "warden:claimed"
+          ]
+        },
+        {
+          "desc": "one receipt keyed to the intent comment",
+          "pass": true,
+          "observed": [
+            {
+              "id": 1003,
+              "by": "writer-57178m",
+              "epoch": 1,
+              "intentCommentId": 1000,
+              "item": 104,
+              "opid": "op_b4b0deb0454790c12ab025708effa526",
+              "post": {
+                "owner": {
+                  "id": "alice",
+                  "kind": "contributor",
+                  "opid": "op_b4b0deb0454790c12ab025708effa526"
+                },
+                "state": "claimed"
+              },
+              "result": "applied",
+              "seq": 6
+            }
+          ]
+        },
+        {
+          "desc": "exactly one ledger comment (no competing ledger)",
+          "pass": true
+        },
+        {
+          "desc": "operation identity is content-derived and stable",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 125
+    },
+    {
+      "id": "S02",
+      "title": "Two claims for one issue, concurrent submitters, two concurrent writers (Mac + Actions)",
+      "covers": "two claims; serialization; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "exactly one accepted, one rejected",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "rejected": 1
+          }
+        },
+        {
+          "desc": "ledger has exactly one owner and it is the accepted op",
+          "pass": true,
+          "observed": {
+            "id": "factory",
+            "kind": "factory",
+            "opid": "op_a3d8260b34767b91b2d33aa2b683a68b"
+          }
+        },
+        {
+          "desc": "only one \"Claim accepted\" notice was ever posted",
+          "pass": true
+        },
+        {
+          "desc": "loser was told why (explanatory comment)",
+          "pass": true
+        },
+        {
+          "desc": "receipt epochs never decrease by receipt order (no overlapping writers)",
+          "pass": true,
+          "observed": [
+            2,
+            2
+          ]
+        },
+        {
+          "desc": "both writers ran without error; one processed, the other idle or sequential",
+          "pass": true,
+          "observed": [
+            {
+              "env": "mac",
+              "epoch": 2,
+              "n": 2
+            },
+            {
+              "env": "actions",
+              "epoch": 3,
+              "n": 0
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 390
+    },
+    {
+      "id": "S03",
+      "title": "Contributor vs factory ownership race (repeated rounds)",
+      "covers": "contributor/factory ownership race",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "each of 8 rounds has exactly one confirmed owner, one notice, GitHub assignment consistent with ledger",
+          "pass": true,
+          "observed": [
+            {
+              "item": 112,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            },
+            {
+              "item": 113,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 114,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 115,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 116,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 117,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 118,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 119,
+              "winner": "alice",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "alice"
+              ],
+              "consistent": true
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 2273
+    },
+    {
+      "id": "S04",
+      "title": "Crash before an effect, then recovery by a new writer after lease expiry",
+      "covers": "crash before effect; lease takeover",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "writer crashed before the first effect (and held the lease)",
+          "pass": true,
+          "observed": "CRASH@before-effect:0"
+        },
+        {
+          "desc": "decision already durable in ledger (applying, step 0) and intent still pending",
+          "pass": true,
+          "observed": {
+            "st": {
+              "attempts": 0,
+              "decision": "accept",
+              "epoch": 20,
+              "intentCommentId": 1067,
+              "plan": [
+                {
+                  "add": [
+                    "warden:claimed"
+                  ],
+                  "remove": [
+                    "warden:ready"
+                  ],
+                  "t": "label"
+                },
+                {
+                  "t": "comment",
+                  "text": "Claim accepted: factory factory now owns this item."
+                }
+              ],
+              "status": "applying",
+              "step": 0
+            },
+            "pend": 1
+          }
+        },
+        {
+          "desc": "no external effect leaked before the crash",
+          "pass": true
+        },
+        {
+          "desc": "new writer waited out the dead lease, took a higher epoch, resumed the op",
+          "pass": true,
+          "observed": {
+            "epoch": 21,
+            "p": [
+              {
+                "commentId": 1067,
+                "opid": "op_1bb9ea030eb9dd1815e6164c32791674",
+                "result": "applied"
+              }
+            ]
+          }
+        },
+        {
+          "desc": "each effect applied exactly once",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 593
+    },
+    {
+      "id": "S05",
+      "title": "Effect applied but reply lost / crash after effect before progress recorded",
+      "covers": "effect applied reply lost",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "reply loss surfaced as a retry (attempt counted), not a duplicate or a silent success",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 1071,
+              "opid": "op_cafb1fa2dfcd80003ab8bd567c153b85",
+              "result": "retry",
+              "reason": "Error: reply lost after effect comment"
+            },
+            {
+              "commentId": 1071,
+              "opid": "op_cafb1fa2dfcd80003ab8bd567c153b85",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "notice posted exactly once despite the retry (marker reconciliation)",
+          "pass": true,
+          "observed": 1
+        },
+        {
+          "desc": "attempt counter persisted in ledger",
+          "pass": true,
+          "observed": 1
+        },
+        {
+          "desc": "crash after effect/before progress record left the effect applied and the op unfinished",
+          "pass": true,
+          "observed": {
+            "rr": "CRASH@after-effect:1",
+            "before": 1
+          }
+        },
+        {
+          "desc": "recovery did not repeat the already-applied effect",
+          "pass": true,
+          "observed": 1
+        }
+      ],
+      "pass": true,
+      "ms": 649
+    },
+    {
+      "id": "S06",
+      "title": "Duplicate and out-of-order triggers",
+      "covers": "duplicate/out-of-order triggers; immutable identity",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [
+        "{\"applied\":2,\"duplicate\":2}"
+      ],
+      "checks": [
+        {
+          "desc": "out-of-order release is deferred (stays pending, visible), not applied or dropped",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 1079,
+              "opid": "op_6ac90a54ab9cd4577228b914cb2629cb",
+              "result": "deferred",
+              "reason": "waiting for op_195f89460a27fafc7380917523e930fd"
+            }
+          ]
+        },
+        {
+          "desc": "three identical claim deliveries => one applied, two duplicates",
+          "pass": true,
+          "observed": {
+            "applied": 2,
+            "duplicate": 2
+          }
+        },
+        {
+          "desc": "deferred release applied after its predecessor within the same drain",
+          "pass": true,
+          "observed": {
+            "state": "ready",
+            "owner": null
+          }
+        },
+        {
+          "desc": "claim notice posted once",
+          "pass": true
+        },
+        {
+          "desc": "nothing left pending",
+          "pass": true,
+          "observed": []
+        }
+      ],
+      "pass": true,
+      "ms": 242
+    },
+    {
+      "id": "S07",
+      "title": "Interrupted multi-effect application (3 effects, crash after the second)",
+      "covers": "interrupted multi-effect application",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "crashed mid-plan: earlier effects visible, ledger step lags at most one",
+          "pass": true,
+          "observed": {
+            "r1": "CRASH@after-effect:1",
+            "step": 1
+          }
+        },
+        {
+          "desc": "no acknowledgement (receipt) existed before completion",
+          "pass": true
+        },
+        {
+          "desc": "resumed to completion: all effects present exactly once",
+          "pass": true,
+          "observed": {
+            "assignees": [
+              "alice"
+            ],
+            "labels": [
+              "warden:claimed"
+            ]
+          }
+        },
+        {
+          "desc": "receipt posted only after completion",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 569
+    },
+    {
+      "id": "S08",
+      "title": "Actions outage: intents accepted and visible while no writer runs; no local mutation fallback",
+      "covers": "Actions outage; failure visibility",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "all 5 intents durable on GitHub and enumerable while the writer is down",
+          "pass": true,
+          "observed": 5
+        },
+        {
+          "desc": "no ledger or item mutation occurred (no unsynchronized local write path)",
+          "pass": true
+        },
+        {
+          "desc": "local journal agrees: 5 submitted, 0 acked => status shows 5 uncertain/pending",
+          "pass": true
+        },
+        {
+          "desc": "after recovery all 5 applied exactly once, in inbox order",
+          "pass": true,
+          "observed": [
+            "applied",
+            "applied",
+            "applied",
+            "applied",
+            "applied"
+          ]
+        },
+        {
+          "desc": "Mac journal reconciled all 5 to acked from receipts",
+          "pass": true,
+          "observed": {
+            "resubmitted": 0,
+            "adopted": 0,
+            "acked": 5
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 378
+    },
+    {
+      "id": "S09",
+      "title": "Trigger flood beyond pending-queue capacity (doorbells collapse to 2 runs; every intent still applied)",
+      "covers": "triggers exceeding pending-queue capacity",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "60 triggers, only 2 runs survived (model), yet all 60 intents were applied (durable inbox, not queue, carries the work)",
+          "pass": true,
+          "observed": {
+            "receipts": {
+              "applied": 60
+            },
+            "effects": 60
+          }
+        },
+        {
+          "desc": "per-run cap respected (second run needed to finish)",
+          "pass": true,
+          "observed": [
+            30,
+            30
+          ]
+        },
+        {
+          "desc": "nothing pending after the surviving runs",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 3357
+    },
+    {
+      "id": "S10",
+      "title": "Stop: global/instance, before and during application, operator authority, fail closed",
+      "covers": "global/instance stop visibility; stop during effect; resume",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "instance stop: writer halts before any effect, intent stays pending, stop-ack posted",
+          "pass": true,
+          "observed": "instance: stop label present"
+        },
+        {
+          "desc": "non-operator removing the stop label does NOT resume (derived from operator-attributed events)",
+          "pass": true,
+          "observed": "ignored unlabeled by non-operator mallory; instance: label removed by non-operator; operator stop still in force"
+        },
+        {
+          "desc": "global stop (separate control scope) halts a running-instance writer",
+          "pass": true,
+          "observed": "ignored unlabeled by non-operator mallory; global: stop label present"
+        },
+        {
+          "desc": "stop mid-plan: halted between effects; op remains applying (recoverable), no receipt",
+          "pass": true,
+          "observed": {
+            "halted": "stop",
+            "st": {
+              "attempts": 0,
+              "decision": "accept",
+              "epoch": 32,
+              "intentCommentId": 1291,
+              "plan": [
+                {
+                  "login": "alice",
+                  "t": "assign"
+                },
+                {
+                  "add": [
+                    "warden:claimed"
+                  ],
+                  "remove": [
+                    "warden:ready"
+                  ],
+                  "t": "label"
+                },
+                {
+                  "t": "comment",
+                  "text": "Claim accepted: contributor alice now owns this item."
+                }
+              ],
+              "status": "applying",
+              "step": 2
+            }
+          }
+        },
+        {
+          "desc": "explicit resume completes the interrupted op exactly once",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 1291,
+              "opid": "op_0ad5a275143f5e2758e7e428cb5b8b40",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "unreadable stop control => fail closed (no effects), reported as unknown",
+          "pass": true,
+          "observed": "instance: control state unreadable (Error: control unreadable) => fail closed"
+        }
+      ],
+      "pass": true,
+      "ms": 226
+    },
+    {
+      "id": "S11",
+      "title": "Admission: authorization, edits, forged identity, oversize, malformed",
+      "covers": "request admission; authorization; payload limits; failure visibility",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "oversize intent rejected at the submission edge (never truncated)",
+          "pass": true
+        },
+        {
+          "desc": "forged identity, malformed, oversize, edited => all quarantined with a visible receipt (none silently ignored)",
+          "pass": true,
+          "observed": [
+            "identity-mismatch",
+            "malformed-json",
+            "payload-too-large",
+            "edited-after-admission"
+          ]
+        },
+        {
+          "desc": "the one valid intent still applied",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "quarantined": 4
+          }
+        },
+        {
+          "desc": "quarantined intents produced no ledger op",
+          "pass": true
+        },
+        {
+          "desc": "intent from a non-allow-listed author is quarantined, never applied",
+          "pass": true,
+          "observed": [
+            "unauthorized-author:mallory"
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 1286
+    },
+    {
+      "id": "S12",
+      "title": "Retry bound: poison effect becomes visible failure, never an infinite loop",
+      "covers": "retry bounds; failure visibility",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "op fails permanently after exactly 5 attempts with a visible 'failed' receipt",
+          "pass": true,
+          "observed": {
+            "attempts": 5,
+            "rc": [
+              "failed"
+            ]
+          }
+        },
+        {
+          "desc": "attempt budget is persisted: a cold-start writer cannot reset it",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 178
+    },
+    {
+      "id": "S13",
+      "title": "Zombie writer: stalls past lease expiry; fenced; stale write detected and repaired from receipts",
+      "covers": "actual serialization under pause; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "taker B ran at a higher epoch and applied claim then release",
+          "pass": true,
+          "observed": {
+            "zombie": 39,
+            "taker": 40
+          }
+        },
+        {
+          "desc": "(a) zombie woke, base check failed, it wrote nothing and halted fenced",
+          "pass": true,
+          "observed": "FENCED: stale base on #161: expected seq 4, found 13"
+        },
+        {
+          "desc": "(b) stale write DID land (honest residual window): ledger regressed from ready to claimed, detected by the post-write fence",
+          "pass": true,
+          "observed": {
+            "zombie": "FENCED: epoch 42 superseded by 43",
+            "before": {
+              "state": "ready",
+              "seq": 13
+            },
+            "afterZombie": {
+              "state": "claimed",
+              "owner": "alice",
+              "seq": 5
+            }
+          }
+        },
+        {
+          "desc": "zombie performed no externally visible effect (effects only follow a verified commit)",
+          "pass": true,
+          "observed": {
+            "effectsAfterZombie": 1
+          }
+        },
+        {
+          "desc": "(b) next drain detects ledger/receipt divergence and repairs: owner resurrected by zombie is cleared",
+          "pass": true,
+          "observed": {
+            "before": {
+              "state": "claimed",
+              "owner": "alice"
+            },
+            "after": {
+              "state": "ready"
+            },
+            "repairs": 2
+          }
+        },
+        {
+          "desc": "no acknowledged claim ever had two owners: only one claim notice for the item",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 1473
+    },
+    {
+      "id": "S14",
+      "title": "Zombie creating a ledger concurrently is fenced and removes its own duplicate ledger",
+      "covers": "one item-ledger authority; no competing ledger",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "zombie fenced at ledger creation",
+          "pass": true,
+          "observed": "FENCED: epoch 45 superseded by 46"
+        },
+        {
+          "desc": "exactly one ledger comment exists afterwards",
+          "pass": true,
+          "observed": 1
+        },
+        {
+          "desc": "a competing second ledger comment halts the writer (fail closed, visible), no guess about which is canonical",
+          "pass": true,
+          "observed": "ANOMALY: item #166 has 2 ledger comments (competing ledger) - failing closed"
+        }
+      ],
+      "pass": true,
+      "ms": 520
+    },
+    {
+      "id": "S15",
+      "title": "Mac write-ahead journal: crash before post, lost reply after post, reconcile",
+      "covers": "durable local intent; acknowledgements; enumeration/recovery",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "crash before post left a durable pending journal entry and nothing on GitHub for it",
+          "pass": true
+        },
+        {
+          "desc": "lost reply: the entry is still \"pending\" locally though GitHub has it",
+          "pass": true
+        },
+        {
+          "desc": "reconcile resubmits the never-posted intent and adopts the posted one (no duplicate post)",
+          "pass": true,
+          "observed": {
+            "rec1": {
+              "resubmitted": 1,
+              "adopted": 1,
+              "acked": 0
+            },
+            "inboxIntents": 2
+          }
+        },
+        {
+          "desc": "after the writer acknowledges, journal entries become acked from receipts",
+          "pass": true,
+          "observed": {
+            "resubmitted": 0,
+            "adopted": 0,
+            "acked": 2
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 194
+    },
+    {
+      "id": "S17",
+      "title": "Retention/compaction: terminal pairs expire, pending and failed are kept, replays stay harmless",
+      "covers": "retention; dedupe horizon",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [
+        "retention used (ms): 562"
+      ],
+      "checks": [
+        {
+          "desc": "applied intent+receipt pairs deleted after retention",
+          "pass": true,
+          "observed": {
+            "deleted": 4,
+            "kept": 1
+          }
+        },
+        {
+          "desc": "quarantined pair kept (4x retention), pending intent never deleted",
+          "pass": true,
+          "observed": 3
+        },
+        {
+          "desc": "late redelivery of a compacted op is a duplicate (ledger dedupe horizon), no second effect",
+          "pass": true,
+          "observed": {
+            "notes": 3,
+            "p": [
+              "applied",
+              "duplicate"
+            ]
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 1414
+    },
+    {
+      "id": "S16",
+      "title": "Overlap proof: lost updates without the lease, none with it; non-atomic primitive control",
+      "covers": "ACTUAL serialization (not a concurrency setting or revision number)",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [
+        "{\"none\":{\"mode\":\"nolease\",\"workers\":6,\"perWorker\":5,\"expected\":30,\"final\":6,\"lostUpdates\":24,\"distinctEpochsUsed\":0,\"epochsStrictlyDistinctPerIncrement\":null,\"commentId\":1366},\"lease\":{\"mode\":\"lease\",\"workers\":6,\"perWorker\":5,\"expected\":30,\"final\":30,\"lostUpdates\":0,\"distinctEpochsUsed\":30,\"epochsStrictlyDistinctPerIncrement\":true,\"commentId\":1367}}"
+      ],
+      "checks": [
+        {
+          "desc": "control: without mutual exclusion concurrent read-modify-write LOSES updates (test can detect overlap)",
+          "pass": true,
+          "observed": {
+            "mode": "nolease",
+            "workers": 6,
+            "perWorker": 5,
+            "expected": 30,
+            "final": 6,
+            "lostUpdates": 24,
+            "distinctEpochsUsed": 0,
+            "epochsStrictlyDistinctPerIncrement": null,
+            "commentId": 1366
+          }
+        },
+        {
+          "desc": "with the lease: zero lost updates, every increment under a distinct epoch",
+          "pass": true,
+          "observed": {
+            "mode": "lease",
+            "workers": 6,
+            "perWorker": 5,
+            "expected": 30,
+            "final": 30,
+            "lostUpdates": 0,
+            "distinctEpochsUsed": 30,
+            "epochsStrictlyDistinctPerIncrement": true,
+            "commentId": 1367
+          }
+        },
+        {
+          "desc": "negative control: the SAME lease over a non-atomic create primitive (like GitHub milestones) loses updates",
+          "pass": true,
+          "observed": {
+            "mode": "lease",
+            "workers": 6,
+            "perWorker": 5,
+            "expected": 30,
+            "final": 22,
+            "lostUpdates": 8,
+            "distinctEpochsUsed": 16,
+            "epochsStrictlyDistinctPerIncrement": false,
+            "commentId": 1368
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 1581
+    }
+  ]
+}

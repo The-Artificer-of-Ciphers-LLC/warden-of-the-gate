@@ -1,0 +1,268 @@
+{
+  "proof": "PROOF-inbox Actions-side",
+  "repo": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "node": "v26.13.0",
+  "at": "2026-11-18T06:40:23.153Z",
+  "config": {
+    "inbox": 86,
+    "control": 87,
+    "global": 88,
+    "item": 89,
+    "counterIssue": 90,
+    "holdMs": 12000,
+    "operators": [
+      "trek-e"
+    ],
+    "allowed": [
+      "trek-e",
+      "github-actions[bot]"
+    ],
+    "ttlMs": 20000
+  },
+  "sections": [
+    {
+      "id": "A1",
+      "title": "Facts established on a real Actions runner",
+      "covers": "actor attribution; variables not usable for stop",
+      "checks": [
+        {
+          "desc": "runner executed the TypeScript proof under Node >= 22 with GITHUB_TOKEN only",
+          "pass": true,
+          "observed": {
+            "actor": "trek-e",
+            "event": "workflow_dispatch",
+            "runner": "Linux",
+            "node": "v24.22.2",
+            "tokenSource": "env:GITHUB_TOKEN",
+            "variablesReadable": "HTTP 403",
+            "variablesWritable": "HTTP 403"
+          }
+        },
+        {
+          "desc": "GITHUB_TOKEN cannot read or write repo Actions variables (so stop is not stored in a variable)",
+          "pass": true,
+          "observed": {
+            "read": "HTTP 403",
+            "write": "HTTP 403"
+          }
+        }
+      ],
+      "observed": {
+        "actor": "trek-e",
+        "event": "workflow_dispatch",
+        "runner": "Linux",
+        "node": "v24.22.2",
+        "tokenSource": "env:GITHUB_TOKEN",
+        "variablesReadable": "HTTP 403",
+        "variablesWritable": "HTTP 403"
+      }
+    },
+    {
+      "id": "B1",
+      "title": "Real Actions: 12 doorbells vs concurrency queue; every intent still applied",
+      "covers": "triggers exceeding pending-queue capacity",
+      "checks": [
+        {
+          "desc": "12 intents submitted; Actions collapsed the doorbells (12 runs: {\"success\":2,\"cancelled\":10})",
+          "pass": true,
+          "observed": {
+            "runs": 12,
+            "success": 2,
+            "cancelled": 10,
+            "pendingIntents": 0
+          }
+        },
+        {
+          "desc": "queue capacity was genuinely exceeded: GitHub cancelled some of the triggers",
+          "pass": true,
+          "observed": {
+            "success": 2,
+            "cancelled": 10
+          }
+        },
+        {
+          "desc": "all 12 intents applied exactly once (effects counted by marker) after the surviving runs + one backstop sweep",
+          "pass": true,
+          "observed": {
+            "pend": 0,
+            "eff": 12
+          }
+        }
+      ],
+      "observed": {
+        "submitted": 12,
+        "queue": {
+          "runs": 12,
+          "success": 2,
+          "cancelled": 10,
+          "pendingIntents": 0
+        },
+        "afterBackstop": {
+          "pendingIntents": 0,
+          "effects": 12
+        }
+      }
+    },
+    {
+      "id": "C1",
+      "title": "Actions outage (workflow disabled): intents durable, visible; recovery by backstop; no local write path",
+      "covers": "Actions outage",
+      "checks": [
+        {
+          "desc": "no workflow run happened while disabled (events are not queued by GitHub)",
+          "pass": true,
+          "observed": {
+            "newRuns": 0
+          }
+        },
+        {
+          "desc": "all 5 intents still durable and enumerable",
+          "pass": true,
+          "observed": {
+            "pend": 5
+          }
+        },
+        {
+          "desc": "no effect was applied during the outage (no unsynchronized local write)",
+          "pass": true
+        },
+        {
+          "desc": "after the next trigger (dispatch standing in for the scheduled sweep) all 5 applied exactly once",
+          "pass": true,
+          "observed": {
+            "eff": 5
+          }
+        }
+      ],
+      "observed": {
+        "effectsAfterRecovery": 5
+      }
+    },
+    {
+      "id": "D1",
+      "title": "Overlap: 4 Actions runners + 2 Mac processes hammer one comment, no Actions concurrency setting",
+      "covers": "ACTUAL serialization across Mac and Actions",
+      "checks": [
+        {
+          "desc": "control (no lease): concurrent Mac+Actions workers lose updates (11 lost of 18)",
+          "pass": true,
+          "observed": {
+            "mode": "nolease",
+            "withMac": true,
+            "expected": 18,
+            "final": 7,
+            "lost": 11,
+            "workflowConclusion": "success",
+            "seconds": 23,
+            "macWorkers": 2
+          }
+        },
+        {
+          "desc": "with lease: 18 increments from 4 Actions runners + 2 Mac processes, zero lost",
+          "pass": true,
+          "observed": {
+            "mode": "lease",
+            "withMac": true,
+            "expected": 18,
+            "final": 18,
+            "lost": 0,
+            "workflowConclusion": "success",
+            "seconds": 57,
+            "macWorkers": 2
+          }
+        }
+      ],
+      "observed": {
+        "control": {
+          "mode": "nolease",
+          "withMac": true,
+          "expected": 18,
+          "final": 7,
+          "lost": 11,
+          "workflowConclusion": "success",
+          "seconds": 23,
+          "macWorkers": 2
+        },
+        "lease": {
+          "mode": "lease",
+          "withMac": true,
+          "expected": 18,
+          "final": 18,
+          "lost": 0,
+          "workflowConclusion": "success",
+          "seconds": 57,
+          "macWorkers": 2
+        }
+      }
+    },
+    {
+      "id": "E1",
+      "title": "Stop visibility across Mac and Actions; non-operator tamper ignored; explicit resume",
+      "covers": "global/instance stop visibility",
+      "checks": [
+        {
+          "desc": "Actions writer (triggered by the inbox comments) halted on stop and the Mac writer halted too",
+          "pass": true,
+          "observed": {
+            "macHalted": "stop"
+          }
+        },
+        {
+          "desc": "status shows both environments acknowledged the stop",
+          "pass": true,
+          "observed": [
+            "actions",
+            "mac",
+            "actions",
+            "mac"
+          ]
+        },
+        {
+          "desc": "github-actions[bot] removing the stop label does not resume: still stopped, tamper recorded",
+          "pass": true,
+          "observed": {
+            "stopped": true,
+            "unknown": false,
+            "reasons": [
+              "ignored unlabeled by non-operator github-actions[bot]",
+              "ignored unlabeled by non-operator github-actions[bot]",
+              "instance: label removed by non-operator; operator stop still in force"
+            ],
+            "lastOperatorEvent": 36495994839
+          }
+        },
+        {
+          "desc": "a drain after the tamper still applies nothing",
+          "pass": true
+        },
+        {
+          "desc": "explicit operator resume: pending intents applied exactly once by Actions",
+          "pass": true,
+          "observed": {
+            "effects": 2
+          }
+        }
+      ],
+      "observed": {
+        "tamper": {
+          "actor": "trek-e",
+          "afterNonOperatorUnlabel": {
+            "stopped": true,
+            "unknown": false,
+            "reasons": [
+              "ignored unlabeled by non-operator github-actions[bot]",
+              "ignored unlabeled by non-operator github-actions[bot]",
+              "instance: label removed by non-operator; operator stop still in force"
+            ],
+            "lastOperatorEvent": 36495994839
+          }
+        }
+      }
+    }
+  ],
+  "summary": {
+    "checks": 16,
+    "passed": 16,
+    "failed": []
+  }
+}

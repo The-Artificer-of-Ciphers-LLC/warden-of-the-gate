@@ -1,0 +1,180 @@
+{
+  "node": "v26.13.0",
+  "at": "2026-11-18T05:52:03.464Z",
+  "repo": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "auth": "gh auth token",
+  "skewMs": -463,
+  "apiCalls": {
+    "calls": 197,
+    "retries": 0,
+    "rateLimited": 0
+  },
+  "results": [
+    {
+      "name": "label-create-is-atomic",
+      "observed": {
+        "rounds": 6,
+        "parallel": 6,
+        "perRound": [
+          {
+            "created": 1,
+            "exists": 5,
+            "other": 0
+          },
+          {
+            "created": 1,
+            "exists": 5,
+            "other": 0
+          },
+          {
+            "created": 1,
+            "exists": 5,
+            "other": 0
+          },
+          {
+            "created": 1,
+            "exists": 5,
+            "other": 0
+          },
+          {
+            "created": 1,
+            "exists": 5,
+            "other": 0
+          },
+          {
+            "created": 1,
+            "exists": 5,
+            "other": 0
+          }
+        ]
+      },
+      "pass": true,
+      "note": "ADOPTED: label name uniqueness holds under parallel create => valid lease/fence primitive (issues:write only)."
+    },
+    {
+      "name": "milestone-create-is-atomic",
+      "observed": {
+        "rounds": 6,
+        "parallel": 6,
+        "perRound": [
+          {
+            "created": 6,
+            "exists": 0,
+            "other": 0
+          },
+          {
+            "created": 6,
+            "exists": 0,
+            "other": 0
+          },
+          {
+            "created": 6,
+            "exists": 0,
+            "other": 0
+          },
+          {
+            "created": 6,
+            "exists": 0,
+            "other": 0
+          },
+          {
+            "created": 6,
+            "exists": 0,
+            "other": 0
+          },
+          {
+            "created": 6,
+            "exists": 0,
+            "other": 0
+          }
+        ]
+      },
+      "pass": false,
+      "note": "EXPECTED FAIL / REJECTED: title uniqueness is a validation, not an atomic constraint; parallel creators all succeed. Must not be used as a lock."
+    },
+    {
+      "name": "git-ref-create-is-atomic (needs contents:write; fallback only)",
+      "observed": {
+        "created": 1,
+        "exists": 7,
+        "other": 0
+      },
+      "pass": true,
+      "note": "Atomic, but requires contents:write."
+    },
+    {
+      "name": "git-ref-advance-is-compare-and-swap (needs contents:write; fallback only)",
+      "observed": {
+        "siblings": 5,
+        "created": 1,
+        "exists": 4,
+        "other": 0
+      },
+      "pass": true,
+      "note": "Non-force ref update behaves as CAS on a commit chain, but requires contents:write."
+    },
+    {
+      "name": "actions-variable-create-is-atomic (needs Variables permission; rejected for the posting identity)",
+      "observed": {
+        "created": 1,
+        "exists": 5,
+        "other": 0
+      },
+      "pass": true,
+      "note": "Atomic, but the posting identity must not hold variable-write authority."
+    },
+    {
+      "name": "list-after-create-visibility",
+      "observed": {
+        "trials": 12,
+        "firstListMissedEntry": 0,
+        "maxCreateToVisibleMs": 971
+      },
+      "pass": true,
+      "note": "Informational: if >0 the first list can miss a just-created label; safety must rest on atomic create + fence re-check, never on one list read."
+    },
+    {
+      "name": "comment-ids-total-order",
+      "observed": {
+        "posted": 8,
+        "uniqueIds": 8,
+        "listedImmediately": 8
+      },
+      "pass": true,
+      "note": "Server assigns unique increasing ids; list order by id is the inbox total order."
+    },
+    {
+      "name": "comment-patch-has-compare-and-swap",
+      "observed": {
+        "staleIfMatchStatus": 400,
+        "staleWriteApplied": false
+      },
+      "pass": false,
+      "note": "Expected FAIL (no CAS): confirms a comment revision/etag cannot be the serialization proof. (If the header is ignored the stale write succeeds.)"
+    },
+    {
+      "name": "edit-detectable",
+      "observed": {
+        "created": "2026-11-18T05:51:47Z",
+        "updated": "2026-11-18T05:51:48Z"
+      },
+      "pass": true,
+      "note": "Edited intents are detectable (updated_at != created_at) and quarantined."
+    },
+    {
+      "name": "label-events-attribute-actor",
+      "observed": [
+        {
+          "event": "labeled",
+          "actor": "trek-e"
+        },
+        {
+          "event": "unlabeled",
+          "actor": "trek-e"
+        }
+      ],
+      "pass": true,
+      "note": "Issue events record the acting identity; stop/resume authority can be derived from authorized actors only."
+    }
+  ]
+}

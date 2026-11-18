@@ -1,0 +1,13 @@
+{
+  "name": "warden-p0-proof-inbox",
+  "private": true,
+  "type": "module",
+  "description": "P0 PROOF-inbox spike: durable inbox, lease-fenced serialized writer, recovery. Evidence, not a production module.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "proof:offline": "node src/cli.ts scenarios --backend fake",
+    "proof:live": "node src/cli.ts scenarios --backend github",
+    "probe": "node src/cli.ts probe"
+  },
+  "engines": { "node": ">=22.18" }
+}

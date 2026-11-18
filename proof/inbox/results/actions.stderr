@@ -1,0 +1,17 @@
+  ok A1 runner executed the TypeScript proof under Node >= 22 with GITHUB_TOKEN only
+  ok A1 GITHUB_TOKEN cannot read or write repo Actions variables (so stop is not stored in a variable)
+  ok B1 12 intents submitted; Actions collapsed the doorbells (12 runs: {"success":2,"cancelled":10})
+  ok B1 queue capacity was genuinely exceeded: GitHub cancelled some of the triggers
+  ok B1 all 12 intents applied exactly once (effects counted by marker) after the surviving runs + one backstop sweep
+  ok C1 no workflow run happened while disabled (events are not queued by GitHub)
+  ok C1 all 5 intents still durable and enumerable
+  ok C1 no effect was applied during the outage (no unsynchronized local write)
+  ok C1 after the next trigger (dispatch standing in for the scheduled sweep) all 5 applied exactly once
+  ok D1 control (no lease): concurrent Mac+Actions workers lose updates (11 lost of 18)
+  ok D1 with lease: 18 increments from 4 Actions runners + 2 Mac processes, zero lost
+  ok E1 Actions writer (triggered by the inbox comments) halted on stop and the Mac writer halted too
+  ok E1 status shows both environments acknowledged the stop
+  ok E1 github-actions[bot] removing the stop label does not resume: still stopped, tamper recorded
+  ok E1 a drain after the tamper still applies nothing
+  ok E1 explicit operator resume: pending intents applied exactly once by Actions
+exit=0

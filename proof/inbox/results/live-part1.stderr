@@ -1,0 +1,28 @@
+PASS S01 Baseline claim end to end (admission, decision, effects, receipt) (20163ms)
+PASS S02 Two claims for one issue, concurrent submitters, two concurrent writers (Mac + Actions) (25041ms)
+PASS S03 Contributor vs factory ownership race (repeated rounds) (79827ms)
+PASS S04 Crash before an effect, then recovery by a new writer after lease expiry (20364ms)
+PASS S05 Effect applied but reply lost / crash after effect before progress recorded (40607ms)
+PASS S06 Duplicate and out-of-order triggers (33169ms)
+PASS S07 Interrupted multi-effect application (3 effects, crash after the second) (26380ms)
+PASS S08 Actions outage: intents accepted and visible while no writer runs; no local mutation fallback (49898ms)
+PASS S09 Trigger flood beyond pending-queue capacity (doorbells collapse to 2 runs; every intent still applied) (170754ms)
+PASS S10 Stop: global/instance, before and during application, operator authority, fail closed (33200ms)
+PASS S11 Admission: authorization, edits, forged identity, oversize, malformed (30382ms)
+PASS S12 Retry bound: poison effect becomes visible failure, never an infinite loop (25576ms)
+FAIL S13 Zombie writer: stalls past lease expiry; fenced; stale write detected and repaired from receipts (171765ms)
+   ERROR Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createComment (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:65:64)
+
+FAIL S14 Zombie creating a ledger concurrently is fenced and removes its own duplicate ledger (106774ms)
+   ERROR Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)
+
+FAIL S15 Mac write-ahead journal: crash before post, lost reply after post, reconcile (107005ms)
+   ERROR Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)
+
+FAIL S17 Retention/compaction: terminal pairs expire, pending and failed are kept, replays stay harmless (107009ms)
+   ERROR Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)
+
+FAIL S16 Overlap proof: lost updates without the lease, none with it; non-atomic primitive control (106983ms)
+   ERROR Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)
+
+exit=1
