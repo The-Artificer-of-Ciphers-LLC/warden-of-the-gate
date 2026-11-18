@@ -4,6 +4,7 @@
 - **Date:** 2026-11-17
 - **Contract:** [Owner-reviewed PRD](0001-warden-of-the-gate.md) and [twelve draft ADRs](../../README.md#design-documents)
 - **Workflow evidence:** Owner provisionally accepted the [offline prototype](https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate/blob/415f762b6e6db1b702c5a78b2be186c40be46193/docs/prd/0001-warden-of-the-gate.prototype.html); capture branch [`prototype/workflow-2026-11-17`](https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate/tree/prototype/workflow-2026-11-17), commit `415f762`.
+- **Review-slice evidence:** Owner accepted the single shadow-review logic model on 2026-11-17; capture branch [`prototype/review-slice-2026-11-17`](https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate/tree/prototype/review-slice-2026-11-17), commit `21e7eea`. See the first P3 checkpoint below.
 - **Coverage:** [Decision/capability trace](0001-warden-of-the-gate.implementation-trace.json). IDs below identify delivery ownership, not new product requirements.
 
 ## What this plan commits to
@@ -105,6 +106,19 @@ This is the delivery order, not a requirement to put each phase into one large P
 ## P3 - Useful local shadow scans, Triage and Review
 
 **Owns:** `AI-adapter`, `AI-local`, `AI-scans`, `AI-queue`, `AI-triage`, `AI-review`, `AI-verification`, `AI-lookup`, `AI-graph`, `AI-sdk`, `AI-decisions`; `UX-run`, `UX-triage`, `UX-review`.
+
+### First checkpoint: one live shadow review
+
+Before the rest of P3, deliver the thinnest useful slice: a maintainer manually runs one Review scan against one pull request in the disposable repository, and a pinned OpenCode session on the local model produces a read-only review. This is a development milestone, not a live-ready MVP; no AI post, merge or contributor-branch write is possible. Its behavior is the accepted [review-slice prototype](https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate/tree/prototype/review-slice-2026-11-17); lift the validated pure model, never the HTML shell.
+
+- Preflight refuses to start when stopped, containment is unverified, the resolved model is remote, or the local model is unavailable; there is no hosted fallback.
+- A fresh serial session receives a prefetched snapshot bound to one head. The result is accepted only after Ajv validation and independent scope/identity validation, and only if the head has not moved. Rejections are whole, never partial.
+- The review marker advances only on an accepted review. The attempt budget is persisted and survives restart; it resets only on acceptance. The prototype's budget of 3 is a guess to settle in P3.
+- Unchanged head and checks reuse the accepted review with no model call; a checks-only change re-evaluates gates with no model call; a new head gets a delta review that revalidates earlier findings.
+- Stop cancels and checkpoints the running scan, and resume starts nothing and resets nothing.
+- The result is a draft decision card visible only to the maintainer.
+
+**Checkpoint gate:** the prototype's seven walkthroughs are reproduced against real components in the disposable repository, with observed evidence rather than narrative.
 
 ### Work and acceptance
 
