@@ -36,7 +36,7 @@ Raw evidence: [RESULTS.md](RESULTS.md) (generated from `results/*.json`). Mechan
 
 | Item | Status | Consequence |
 |---|---|---|
-| GitHub App identity, installation tokens, key custody, revoked-trust-root recovery | Production issuer, scoped issuance/renewal, protected local key and installation-token revocation verified. Trust-root replacement remains a separate unverified gate. | Replacement requires specific owner approval before creating or revoking a key |
+| GitHub App identity, installation tokens, key custody, revoked-trust-root recovery | **Verified:** production scoped issuance/renewal, protected key, provider-supported root replacement and explicit audited recovery | Original key revoked only after replacement validation; no automatic recovery from deliberate revocation |
 | Cross-repository global stop | **Production integration demonstrated:** human CLI stop/resume reaches the private control repository; actual Actions P1 writer halts and acknowledges; revoked reads fail closed | Repo-scoped `GITHUB_TOKEN` cannot substitute for the read-only App token |
 | Submit-only versus writer separation | Distinct App submit and Actions writer authors verified; production writer rejects a tampered ledger on HMAC integrity | Permission-level append-only isolation is **not claimed** |
 | Second GitHub identity (real contributor vs operator) | **Passed:** S02/S03/S10/S11 with real human and App credentials; supplemental non-operator stop-removal check passed | Both scenario writers ran locally; separate real Actions checks are linked below |
@@ -65,7 +65,7 @@ App `warden-p0-sandbox-app` (ID `5819526`), installation `183378787`, is organiz
 
 **Failures are preserved, not converted to green reports.** [Attempt 1](results/live-app-2026-11-18-attempt1.json) exposed a test-fixture assumption: disabling assignment shortened S10's plan and put the pause before its final effect. A failing offline regression was added and the pause moved earlier; writer behavior did not change. Attempt 2 passed all scenarios but dispatched before GitHub registered the workflow. The [Actions-only report](results/live-app-2026-11-18.json) passed all runner checks but recorded a redundant-disable cleanup error against an already-disabled schedule. The harness now waits for registration and verifies state before disabling. Raw reports remain `pass: false`; the closeout records the separately verified outcomes and final state.
 
-**Historical scope:** this P0 proof used the P1 HTTP transport with proof-supplied credentials, not an enabled production GitHub backend. The production integration was subsequently implemented and exercised below; scheduled execution and trust-root replacement remain independently gated.
+**Historical scope:** this P0 proof used the P1 HTTP transport with proof-supplied credentials, not an enabled production GitHub backend. The production integration and trust-root recovery were subsequently implemented and exercised below; scheduled execution remains independently gated.
 
 ## Production P1 acceptance (2026-11-18)
 
@@ -84,4 +84,15 @@ The [first attempt](results/p1-live-2026-11-18-attempt1.json) retains `pass: fal
 
 Offline checks: **72/72 tests**, package typecheck/build, proof typecheck and whitespace checks passed. Additional red/green regressions cover permission-scope sharing through single-flight/cache, revocation of a cached token, and an in-flight issuer completion trying to overwrite revocation. These injected cases are not claimed as naturally occurring GitHub outages.
 
-**P1 is not declared complete yet:** provider-supported revoked-trust-root replacement needs separate approval and observed evidence. Scheduled execution is being observed independently; a manual dispatch is not a cron result. P2's actual Sweep task and shipped housekeeping/token-delivery workflow are not implemented or activated by this work.
+**P1 is not declared complete yet:** scheduled execution is being observed independently; a manual dispatch is not a cron result. Trust-root recovery passed separately below. P2's actual Sweep task and shipped housekeeping/token-delivery workflow are not implemented or activated by this work.
+
+## Trust-root replacement and recovery (2026-11-18)
+
+The owner separately approved one replacement key on the existing sandbox App, validation before original-key revocation, explicit recovery, and at most six additional sandbox-only Issues-write/Metadata-read tokens lasting at most one hour. The owner completed GitHub administrative reauthentication directly; the agent never entered a password, verification code or private key.
+
+- [Validation](results/p1-root-validation-2026-11-18.json): **two checks passed**, two issued tokens revoked, no cleanup errors. Both roots authenticated and performed authorized sandbox reads before the original was deleted. Public-key fingerprints matched GitHub's key list.
+- Only the original key was then deleted in GitHub. The key list was independently checked: one key remained, matching the validated replacement. The replacement is protected outside the repository at `~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem` (directory 0700, file 0600). The original local file is retained only as revoked-key negative evidence; it no longer authenticates.
+- [Recovery](results/p1-root-recovery-2026-11-18.json): **five checks passed**, two issued tokens revoked, no cleanup errors. The actual old-key request returned 401 and persisted revocation. A cold start and replacement configuration alone could not issue a token. Explicit `credentials ack-revocation --confirm --as trek-e` restored scoped issuance and an authorized read. Revoking that cached token caused the actual HTTP store to observe 401 and latch across processes without automatic replacement; a second explicit acknowledgement restored authorized issuance.
+- The recorded lifecycle audit was `revoked`, `revocation-acknowledged`, `issued`, `revoked`, `revocation-acknowledged`, `issued`. No provider response body, private key or token was recorded.
+- The [first recovery attempt](results/p1-root-recovery-2026-11-18-attempt1.json) remains `pass: false`: its first three trust-root checks passed, but it assumed a read immediately after a successful revocation DELETE must return 401. The corrected observation allowed at most one minute of read-only propagation polling, with no replacement issuance. It recorded **200, 200, 401** before confirming the latch. This is a provider propagation limit, not a claim of instantaneous revocation.
+- Across validation and both recovery attempts, **five of six separately approved tokens** were issued; all were revoked. No new GitHub fixtures, secrets or workflows were created by the root proof. The valid replacement key was never printed or uploaded.

@@ -1,0 +1,28 @@
+{
+  "at": "2026-11-18T18:44:08.612Z",
+  "mode": "--validate-replacement",
+  "checks": [
+    {
+      "name": "both original and replacement authenticate before any original-key revocation",
+      "observed": {
+        "original": "SHA256:XXi7MGM7mivVmKW9uahmy2yizTCR7pKYySx683U0NAI=",
+        "replacement": "SHA256:5/a2cHIue6Pdel+b8fZdGYqIGGqg1Dvrz5Qv0aMmjXc="
+      }
+    },
+    {
+      "name": "replacement issues only sandbox-scoped one-hour credentials and performs an authorized read",
+      "observed": true
+    }
+  ],
+  "issuanceStatuses": [
+    201,
+    201
+  ],
+  "minted": 2,
+  "cleanupErrors": [],
+  "pass": true,
+  "fingerprints": {
+    "original": "SHA256:XXi7MGM7mivVmKW9uahmy2yizTCR7pKYySx683U0NAI=",
+    "replacement": "SHA256:5/a2cHIue6Pdel+b8fZdGYqIGGqg1Dvrz5Qv0aMmjXc="
+  }
+}

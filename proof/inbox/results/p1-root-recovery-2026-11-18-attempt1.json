@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-18T18:44:59.277Z",
+  "mode": "--recover",
+  "checks": [
+    {
+      "name": "provider rejects the revoked original signing key (HTTP 401), persisting revoked state",
+      "observed": true
+    },
+    {
+      "name": "cold start and replacement reference alone cannot restore revoked authority",
+      "observed": true
+    },
+    {
+      "name": "explicit operator acknowledgement plus validated replacement restores authorized issuance and read",
+      "observed": true
+    }
+  ],
+  "issuanceStatuses": [
+    401,
+    201
+  ],
+  "minted": 1,
+  "cleanupErrors": [],
+  "pass": false,
+  "error": "AssertionError [ERR_ASSERTION]: Missing expected rejection."
+}

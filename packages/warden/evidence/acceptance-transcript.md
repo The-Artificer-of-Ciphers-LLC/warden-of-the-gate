@@ -1,7 +1,7 @@
 # P1 acceptance transcript
 
-warden 0.1.0-p1, node v26.13.0, backend: **simulated GitHub** (`sim:`), generated 2026-11-18T14:43:50.436Z.
-This is NOT a live GitHub result. Live sandbox verification of the HTTP store/App credentials is listed as unverified in the README.
+warden 0.1.0-p1, node v26.13.0, backend: **simulated GitHub** (`sim:`), generated 2026-11-18T18:39:50.893Z.
+This is NOT a live GitHub result. Separate production CLI/App/Actions acceptance evidence and remaining trust-root/scheduled-execution gates are linked from the README.
 
 ## Disposable simulated world (inbox #1, control #2)
 
@@ -96,7 +96,7 @@ task review: UNSUPPORTED: task "review" is not implemented yet (owned by P3); no
 
 ```
 $ warden approvals request --item 4 --item-kind pr --action merge --revision rev1 --evidence-digest e1 --subject-author dev1 --drain
-approval requested: apr_42ba029c78bf (intent op_42ba029c78bfda509d5dd1bb7ba41e43). Maintainers decide on GitHub with the command the writer posts on #4.
+approval requested: apr_1c68696ac464 (intent op_1c68696ac46476248a6a4f1cc3cbfd3e). Maintainers decide on GitHub with the command the writer posts on #4.
 [exit 0]
 ```
 
@@ -104,7 +104,7 @@ approval requested: apr_42ba029c78bf (intent op_42ba029c78bfda509d5dd1bb7ba41e43
 
 ```
 $ warden approvals list --item 4
-apr_42ba029c78bf action/merge pending expires 2026-11-19T14:43:50.461Z
+apr_1c68696ac464 action/merge pending expires 2026-11-19T18:39:50.933Z
 [exit 0]
 ```
 
@@ -120,7 +120,7 @@ decisions recorded locally: 0
 remote: sim; stop off; global dry-run off; ack envs: none
 inbox: 0 pending, 0 failed/quarantined
   #3 issue not-adopted
-  #4 pr needs-review approvals apr_42ba029c78bf:pending
+  #4 pr needs-review approvals apr_1c68696ac464:pending
 last sweep: {"state":"none recorded (sweep lands in P2)"}
 [exit 0]
 ```
@@ -141,7 +141,7 @@ stop requested and confirmed on GitHub; writers act on it before their next task
 
 ```
 $ warden run --task intake --dry-run
-run blocked: local stop in force (since 2026-11-18T14:43:50.469Z, by maint1). No model or verification work starts. Use `warden resume --confirm`.
+run blocked: local stop in force (since 2026-11-18T18:39:50.944Z, by maint1). No model or verification work starts. Use `warden resume --confirm`.
 [exit 4]
 ```
 
@@ -149,7 +149,7 @@ run blocked: local stop in force (since 2026-11-18T14:43:50.469Z, by maint1). No
 
 ```
 $ warden writer drain
-writer actions/writer-62531 epoch 0: 0 processed {}; pending after: 0; repairs 0; creates 1
+writer actions/writer-24983 epoch 0: 0 processed {}; pending after: 0; repairs 0; creates 1
 HALTED (stop): instance: warden:stop present
 [exit 5]
 ```
@@ -159,14 +159,14 @@ HALTED (stop): instance: warden:stop present
 ```
 $ warden status
 warden 0.1.0-p1 status for acme/widgets (instance acme-widgets-d782c874, mode shadow)
-local stop: STOPPED since 2026-11-18T14:43:50.469Z by maint1
+local stop: STOPPED since 2026-11-18T18:39:50.944Z by maint1
 credentials: automation enabled; none issued yet; ceiling present
 journal: 0 unacknowledged local operation(s)
 decisions recorded locally: 0
 remote: sim; stop IN FORCE; global dry-run off; ack envs: actions
 inbox: 0 pending, 0 failed/quarantined
   #3 issue not-adopted
-  #4 pr needs-review approvals apr_42ba029c78bf:pending
+  #4 pr needs-review approvals apr_1c68696ac464:pending
 last sweep: {"state":"none recorded (sweep lands in P2)"}
 [exit 0]
 ```
@@ -206,7 +206,7 @@ WARNING: the shared stop is NOT confirmed. Global success is not claimed; writer
 ```
 $ warden status
 warden 0.1.0-p1 status for acme/widgets (instance acme-widgets-d782c874, mode shadow)
-local stop: STOPPED since 2026-11-18T14:43:50.472Z by maint1
+local stop: STOPPED since 2026-11-18T18:39:50.953Z by maint1
 credentials: automation enabled; none issued yet; ceiling present
 journal: 0 unacknowledged local operation(s)
 decisions recorded locally: 0

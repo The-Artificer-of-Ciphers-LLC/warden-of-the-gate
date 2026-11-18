@@ -38,9 +38,9 @@ node src/cli.ts status                      # pending, receipts, lease, stop sta
 `src/app-live-proof.ts` is a separate, explicitly live proof for the approved `warden-p0-sandbox-app` installation. It is not the production credential issuer and does not enable the P1 CLI's GitHub backend.
 
 ```bash
-node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18.pem
+node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem
 # Retry just the runner checks after separately recorded scenario results:
-node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18.pem --actions-only
+node src/app-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem --actions-only
 ```
 
 Requires explicit owner approval for both tokens and the temporary Actions resources:
@@ -61,7 +61,7 @@ The separate harness exercises the actual P1 CLI, issuer/controller and serializ
 
 ```bash
 # Repository root; requires the owner's specific live-token and temporary-resource approvals:
-node proof/inbox/src/p1-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18.pem
+node proof/inbox/src/p1-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18-replacement.pem
 ```
 
 Only the two disposable repositories are used. App installation tokens have a one-hour maximum and the same narrow repository/Issues scopes as above; the batch budget is 40, including preserved attempts. Tokens remain in memory except for the approved temporary submit/control-read Actions secrets. A third temporary secret is a random writer-only ledger HMAC key; the App private key is never uploaded. The temporary, dispatch-only workflow uses the explicitly selected runner token as the distinct writer identity.
@@ -69,6 +69,14 @@ Only the two disposable repositories are used. App installation tokens have a on
 The harness uploads a source-hashed copy of the P1 package to `.warden-p1-proof/` in the sandbox, checks actual CLI setup/config/dry-run/status, proactive renewal, journal recovery, bound maintainer approval, global stop/resume, tamper rejection and revoked-control fail-closed behavior, then removes the code/workflow/secrets, revokes installation tokens and closes fixtures. Existing resources are not overwritten. Original lease-epoch metadata remains governed by the shared lease protocol; newly created projection labels are removed. A failure or cleanup error fails the report; old reports are never rewritten as successes.
 
 `src/schedule-proof.ts --live` separately enables the original sandbox writer, waits at most 59 minutes for a successful **schedule-triggered** run, and disables it in cleanup. A manual dispatch does not satisfy this check. Neither proof implements the P2 Sweep task or authorizes production AI.
+
+## Owner-approved trust-root recovery
+
+`src/p1-root-proof.ts` has two ordered modes, each taking the original and replacement key paths: `--validate-replacement` verifies both roots before revocation; `--recover` runs only after the owner-approved original-key revocation. Creating a replacement and deleting the original are separately authorized GitHub administrative actions, not actions performed by this script.
+
+The recovery proof uses the actual CLI, issuer/controller and HTTP store to check original-key HTTP 401, persisted revocation across cold starts, replacement configuration without implicit recovery, explicit operator acknowledgement, authorized reads, and installation-token revocation plus a second explicit acknowledgement. Read-only polling allows at most one minute for provider revocation propagation, without issuing a replacement token. Cleanup revokes all issued tokens and removes its unique temporary local profile. Public-key fingerprints, HTTP status observations and redacted lifecycle events are evidence; key/token values are never written to reports.
+
+The separate approval allowed six sandbox-only, one-hour Issues-write/Metadata-read tokens across validation and recovery attempts; five were issued and revoked. Reports are never overwritten, and prior root-proof reports count against that batch ceiling. The [results and preserved failed attempt](FINDINGS.md#trust-root-replacement-and-recovery-2026-11-18) are already recorded; rerunning is not implicitly authorized. The original key is now revoked; the `-replacement.pem` file is the only valid sandbox signing key.
 
 ## Scenario index
 

@@ -74,9 +74,11 @@ The App cannot become the writer. On the matching repository's Actions runner, `
 
 Trust-root replacement requires provider-supported operator reauthorization, provision of the replacement key reference, and `credentials ack-revocation --confirm`. Acknowledgement alone neither repairs a revoked key nor mints a credential. Installation-token revocation is not proof of trust-root replacement.
 
+The [approved sandbox recovery proof](../../proof/inbox/FINDINGS.md#trust-root-replacement-and-recovery-2026-11-18) exercised that procedure with a real replacement key, original-key revocation, cold starts and explicit acknowledgements. Revoking an installation token was not immediately visible to reads: the successful proof observed HTTP 200, 200, then 401. The controller latches when the provider reports revocation; instantaneous provider enforcement is not claimed.
+
 ## Known gaps and unverified items
 
-- The production App issuer and explicit live backend are implemented. The [P0 App proof](../../proof/inbox/FINDINGS.md#owner-approved-app-proof-2026-11-18) remains historical infrastructure evidence, not P1 acceptance. The production CLI/Actions proof is recorded separately; scheduled-run observation and provider-supported trust-root replacement remain independent gates until their observed results are recorded.
+- The production App issuer and explicit live backend are implemented. The [P0 App proof](../../proof/inbox/FINDINGS.md#owner-approved-app-proof-2026-11-18) remains historical infrastructure evidence, not P1 acceptance. Production CLI/Actions acceptance and trust-root recovery are recorded separately. Scheduled-run observation remains open.
 - Writer-side `assignable` is `() => true`; real GitHub assignability checks belong to P2 (Claim).
 - No OpenCode adapter (P3); `AgentRunner`, `BudgetMonitor` and `runValidated` are tested with scripted runners only.
 - Setup does not create the inbox/control issues or the Actions workflow; the writer workflow template is P2.
