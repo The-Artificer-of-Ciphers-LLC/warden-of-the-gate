@@ -1,0 +1,17 @@
+{
+  "startedAt": "2026-11-18T19:19:27.938Z",
+  "pass": false,
+  "experiment": "off-peak cron re-registration with verified personal commit identity; both variables change, so success does not isolate a cause",
+  "sourceSha256": "4659ef633f8da9188fcf0b6c3980874b51e02e02d74b2dd60009af1aed16a6f4",
+  "cronBefore": "*/15 * * * *",
+  "cronDuring": "7,22,37,52 * * * *",
+  "changeCommit": "d709acaf82cdb03095bc7a350876992cdace3631",
+  "registeredActor": "trek-e",
+  "observingAt": "2026-11-18T19:19:31.950Z",
+  "error": "observation interrupted",
+  "disabled": true,
+  "restoreCommit": "5b0ecbaa40728441da6bcee6e8bfc3f1f14e3700",
+  "restored": true,
+  "cleanupErrors": [],
+  "finishedAt": "2026-11-18T19:44:19.863Z"
+}

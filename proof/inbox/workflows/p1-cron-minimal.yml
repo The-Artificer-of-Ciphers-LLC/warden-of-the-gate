@@ -1,0 +1,16 @@
+name: p1-cron-minimal
+run-name: Minimal cron diagnostic / ${{ github.event_name }}
+on:
+  schedule:
+    - cron: '2/5 * * * *'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Record actual trigger
+        env:
+          P1_CRON_SCHEDULE: ${{ github.event.schedule }}
+        run: printf '[DEBUG-cron-p1] event=%s schedule=%s\n' "$GITHUB_EVENT_NAME" "$P1_CRON_SCHEDULE"
