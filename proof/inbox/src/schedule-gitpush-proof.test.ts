@@ -68,6 +68,7 @@ else if (args.includes('commit')) {
 else if (args[0] === 'pull') { /* up to date */ }
 else if (args[0] === 'push') {
   state.git.push('push ' + args.slice(1).join(' '));
+  if (state.pushHangs && !state.hung) { state.hung = true; save(); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000); }
   const it = itemOf(dir);
   if (fs.existsSync(wf(dir))) { it.source = fs.readFileSync(wf(dir), 'utf8'); it.active = true; it.writes++; } else { delete it.source; }
 } else { console.error('unexpected git ' + args.join(' ')); process.exit(2); }
@@ -78,7 +79,7 @@ const mockSsh = (identity: string) => `#!/usr/bin/env node
 process.stderr.write('Hi ${identity}! You\\'ve successfully authenticated, but GitHub does not provide shell access.\\n'); process.exit(1);
 `;
 
-function run(options: { manualFailure?: boolean; verifyFails?: boolean; sshAs?: string } = {}) {
+function run(options: { manualFailure?: boolean; verifyFails?: boolean; sshAs?: string; pushHangs?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'warden-gitpush-test-'));
   try {
     const proof = join(root, 'proof/inbox');
@@ -94,9 +95,9 @@ function run(options: { manualFailure?: boolean; verifyFails?: boolean; sshAs?: 
       { id: 101, commit: 'a'.repeat(40), active: false, writes: 0 }, { id: 102, commit: 'b'.repeat(40), active: false, writes: 0 },
     ] }));
     const result = spawnSync(process.execPath, [join(proof, 'src/schedule-gitpush-proof.ts'), '--live'],
-      { encoding: 'utf8', timeout: 30_000, env: { ...process.env, MOCK_STATE: stateFile, PATH: join(root, 'bin') + ':' + process.env.PATH } });
+      { encoding: 'utf8', timeout: 30_000, env: { ...process.env, GITPUSH_STEP_TIMEOUT_MS: options.pushHangs ? '1500' : '90000', MOCK_STATE: stateFile, PATH: join(root, 'bin') + ':' + process.env.PATH } });
     assert.ifError(result.error);
-    return { status: result.status, stderr: result.stderr, report: JSON.parse(readFileSync(join(proof, 'results/schedule-gitpush-2026-11-18.json'), 'utf8')),
+    return { status: result.status, stderr: result.stderr, report: JSON.parse(readFileSync(join(proof, 'results/schedule-gitpush-2026-11-18.run2.json'), 'utf8')),
       state: JSON.parse(readFileSync(stateFile, 'utf8')) };
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
@@ -132,4 +133,13 @@ test('a push applied before a later failure is discovered and removed during cle
   assert.equal(status, 1); assert.equal(report.pass, false); assert.match(report.error, /simulated api failure after push/);
   assert.equal(report.cases[0].removed, true);
   assert.equal(state.cases[0].source, undefined); assert.equal(state.cases[0].active, false); assert.equal(state.cases[1].writes, 0);
+});
+
+test('a stalled git push is reported with the step, elapsed time and stderr tail, and cleanup still leaves no workflow behind', () => {
+  const { status, report, state } = run({ pushHangs: true });
+  assert.equal(status, 1); assert.equal(report.pass, false);
+  assert.match(report.error, /git push timed out after \d+ ms/);
+  assert.ok(report.gitSteps.some((s: { step: string; timedOut: boolean }) => s.step.startsWith('push') && s.timedOut));
+  assert.deepEqual(report.cleanupErrors, []);
+  assert.equal(state.cases[1].writes, 0, 'the second repository is never reached after a stall');
 });

@@ -17,7 +17,8 @@ const source = readFileSync(new URL('../workflows/p1-cron-minimal.yml', import.m
 const EXPECTED_BLOB = '013aaace843aeeabbd069596dbabe846c38f802a';
 const blobSha = createHash('sha1').update(`blob ${Buffer.byteLength(source)}\0`).update(source).digest('hex');
 assert.equal(blobSha, EXPECTED_BLOB, 'the workflow must be byte-identical to the previously tested one');
-const file = new URL('../results/schedule-gitpush-2026-11-18.json', import.meta.url);
+// Second and last owner-approved attempt: the first attempt's raw report (schedule-gitpush-2026-11-18.json, a git ETIMEDOUT) is preserved unchanged.
+const file = new URL('../results/schedule-gitpush-2026-11-18.run2.json', import.meta.url);
 assert.ok(!existsSync(file), 'never overwrite earlier evidence');
 const identity = { name: 'trek-e', email: 'trekkie@nomorestars.com' };
 const COAUTHOR = 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
@@ -27,7 +28,7 @@ interface Case {
   manual?: Run; scheduled?: Run; signals: string[]; removed?: boolean; disabled?: boolean; dir?: string;
 }
 const report: { method: 'git-push-ssh'; startedAt: string; finishedAt?: string; sourceSha256: string; observerSha256: string; workflowBlob: string; cases: Case[];
-  pass: boolean; symptom?: string; error?: string; cleanupErrors: string[] } = {
+  pass: boolean; symptom?: string; error?: string; cleanupErrors: string[]; gitSteps?: typeof gitSteps } = {
   method: 'git-push-ssh', startedAt: new Date().toISOString(), sourceSha256: createHash('sha256').update(source).digest('hex'),
   observerSha256: createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'), workflowBlob: blobSha,
   cases: repositories.map((repository) => ({ repository, signals: [] })), pass: false, cleanupErrors: [],
@@ -35,9 +36,20 @@ const report: { method: 'git-push-ssh'; startedAt: string; finishedAt?: string; 
 function gh(args: string[], input?: string): string {
   return execFileSync('gh', args, { input, encoding: 'utf8', timeout: 10_000, stdio: ['pipe', 'pipe', 'pipe'] });
 }
-const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' };
+const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -v -o BatchMode=yes' };
+const STEP_TIMEOUT_MS = Number(process.env.GITPUSH_STEP_TIMEOUT_MS ?? 90_000);
+const gitSteps: Array<{ step: string; ms: number; status: number | null; timedOut: boolean }> = [];
+/** Every git step is timed and recorded; a stall reports which step, how long, and the tail of git/ssh stderr (the first attempt only said ETIMEDOUT). */
 function git(dir: string | null, args: string[]): string {
-  return execFileSync('git', dir ? ['-C', dir, ...args] : args, { encoding: 'utf8', timeout: 45_000, stdio: ['pipe', 'pipe', 'pipe'], env: gitEnv });
+  const t = Date.now();
+  const r = spawnSync('git', dir ? ['-C', dir, ...args] : args, { encoding: 'utf8', timeout: STEP_TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'], env: gitEnv });
+  const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+  gitSteps.push({ step: args.filter((a) => !a.startsWith('-') && !a.includes('=')).slice(0, 2).join(' '), ms: Date.now() - t, status: r.status, timedOut });
+  if (timedOut || r.status !== 0) {
+    const tail = (r.stderr || '').split('\n').filter((l) => !/^debug1: (Reading|Connecting|identity|Authenticating|Offering|Trying|kex|SSH2|Remote|Local|compat|Host|Server host|rekey|pledge|Sending env)/.test(l)).slice(-8).join(' | ');
+    throw new Error(redact(`git ${args[0]} ${timedOut ? `timed out after ${Date.now() - t} ms` : `exited ${r.status}`}: ${tail.slice(0, 600)}`));
+  }
+  return r.stdout;
 }
 function api<T>(path: string, method = 'GET', body?: unknown): T {
   const out = gh(['api', '--method', method, path, ...(body ? ['--input', '-'] : [])], body ? JSON.stringify(body) : undefined);
@@ -116,7 +128,7 @@ function finish(): Promise<void> {
       } catch (e) { report.cleanupErrors.push(redact(`${item.repository} remove: ${String(e)}`)); }
     }
     for (const item of report.cases) if (item.dir) { try { rmSync(item.dir, { recursive: true, force: true }); } catch { /* temp dir only */ } delete item.dir; }
-    report.finishedAt = new Date().toISOString();
+    report.gitSteps = gitSteps; report.finishedAt = new Date().toISOString();
     report.pass = report.pass && !report.error && report.cleanupErrors.length === 0;
     writeFileSync(file, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
   })();
