@@ -45,3 +45,14 @@ Verdict and blockers: [`proof/inbox/FINDINGS.md`](../../proof/inbox/FINDINGS.md)
 This preserves housekeeping availability without adding a separate always-on database service, at the cost of Actions round trips and an explicit dependency on Actions for live control-plane mutations. A capability spike must establish the concrete durable inbox and prove recovery before live posting is enabled.
 
 See the [concurrency research](../research/PRD-BEST-PRACTICES.md#shared-actionslocal-writer-follow-up).
+
+## P1 implementation record (2026-11-18, `CORE-state`, `CORE-writer`, `CORE-storage`)
+
+Code: [`packages/warden/src/writer`](../../packages/warden/src/writer/writer.ts), [`state`](../../packages/warden/src/state/model.ts); tests `test/writer.test.ts`, `test/approvals.test.ts`, `test/e2e.test.ts` (offline fake GitHub; **not yet run against the live sandbox**).
+
+- The P0 mechanism is implemented as production code over a typed ledger (issue/PR workflow states, independent facets, ownership, processing lease, attempts, evidence identity with PR-only `head`, obligations, approvals, applied ops). Reductions are pure functions (`reduce.ts`); all effects, including maintainer overrides and approval decisions, go through the one writer.
+- **Closed P0 open item:** a redelivery older than `inbox.maxIntentAgeHours` once the ledger has dropped its dedupe horizon is rejected `beyond-dedupe-horizon`.
+- **Changed from the spike:** receipts are no longer re-listed per receipt; a content-creation budget per run halts a drain with intents pending; fence-check caching is opt-in; the ledger carries `repository` and the writer refuses a foreign ledger; ledger/receipt authors must be writer identities; optional HMAC ledger integrity.
+- **Operating modes:** `shadow` rejects AI-origin intents visibly; a global/instance `warden:dry-run` control makes the writer halt (and acknowledge) before applying any queued or deterministic effect; unreadable controls mean stopped.
+- **Protected local state:** per-instance directory (0700/0600, redaction on first write, instance identity pinned), write-ahead journal, decision corpus, separate transcript (30d) and security-audit retention.
+- Not yet demonstrated live: everything in "Proof results and blockers" above remains open (cross-repo stop, real throughput, scheduled sweep).

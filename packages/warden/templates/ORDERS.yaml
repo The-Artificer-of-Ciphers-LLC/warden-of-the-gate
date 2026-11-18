@@ -1,0 +1,5 @@
+# Warden standing orders (schema version 1). Declarative, narrow by default, never executable.
+# Denial and human-approval requirements prevail over allowance. Changes to this file always need a maintainer
+# and a PR cannot authorize itself: only the default-branch copy is evaluated.
+schemaVersion: 1
+programs: []
