@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Warden single-review slice (PROTOTYPE)</title>
+<style>
+  :root { --ink:#172433; --muted:#526170; --line:#d7dfe7; --accent:#245cbd; --soft:#edf3fd; --bad:#81382f; --badbg:#fff5f4; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#f5f7f9; color:var(--ink); font:15px/1.55 system-ui,sans-serif; }
+  main { max-width:1200px; margin:auto; padding:34px 28px 60px; }
+  h1 { font-size:clamp(26px,4vw,38px); letter-spacing:-.03em; line-height:1.15; margin:8px 0 10px; }
+  h2 { font-size:17px; margin:0 0 12px; }
+  h3 { font-size:14px; margin:0 0 8px; }
+  p { margin:6px 0 14px; }
+  .eyebrow { color:var(--accent); font-size:11px; font-weight:750; letter-spacing:.13em; text-transform:uppercase; }
+  .intro { max-width:880px; color:var(--muted); }
+  .question { background:#fff; border:1px solid var(--line); border-left:3px solid var(--accent); padding:12px 16px; margin:18px 0; max-width:880px; }
+  .small { color:var(--muted); font-size:13px; }
+  button { font:inherit; font-size:13px; font-weight:580; background:#fff; border:1px solid #bac7d4; color:var(--ink); padding:7px 11px; border-radius:6px; cursor:pointer; text-align:left; }
+  button:hover { border-color:var(--accent); background:var(--soft); }
+  button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  button.refuse { border-style:dashed; }
+  button[aria-selected="true"], button.next { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .panel,.card { background:#fff; border:1px solid var(--line); border-radius:9px; padding:16px; }
+  .card h2 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .big { font-size:19px; font-weight:720; margin-bottom:8px; overflow-wrap:anywhere; }
+  .field { border-top:1px solid #edf0f3; padding:6px 0; font-size:13px; display:flex; justify-content:space-between; gap:10px; }
+  .field span:first-child { color:var(--muted); }
+  .field span:last-child { text-align:right; overflow-wrap:anywhere; }
+  .changed { background:#fff8d6; outline:3px solid #fff8d6; }
+  #notice { position:sticky; top:8px; z-index:2; padding:12px 16px; border-radius:7px; background:var(--soft); border:1px solid #c6d8fa; margin:14px 0 20px; min-height:48px; }
+  #notice[data-blocked="true"] { background:var(--badbg); border-color:#e6bab5; color:var(--bad); }
+  .layout { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr); gap:18px; align-items:start; margin-top:18px; }
+  .stack { display:grid; gap:18px; }
+  .group { padding:12px 0; border-top:1px solid var(--line); }
+  .group:first-child { border:0; padding-top:0; }
+  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .tabs button { font-size:12px; flex:1 1 140px; }
+  #steps { list-style:none; padding:0; margin:14px 0 0; display:grid; gap:6px; }
+  #steps button { width:100%; }
+  #steps .done { color:var(--muted); background:#f6f8fa; }
+  .n { display:inline-block; width:24px; font-variant-numeric:tabular-nums; }
+  #log { padding-left:20px; font-size:12px; max-height:280px; overflow:auto; margin:0; }
+  #log li { margin-bottom:8px; }
+  ul.f { margin:6px 0 0; padding-left:18px; font-size:13px; }
+  footer { color:var(--muted); font-size:12px; margin-top:24px; }
+  @media (max-width:1000px) { .cards { grid-template-columns:1fr 1fr; } .layout { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Prototype · throwaway · no network · no persistence</div>
+  <h1>One live shadow review, start to finish</h1>
+  <p class="intro">A maintainer starts a manual scan; Warden picks up one pull request, a local model reviews it read-only, Warden checks the result, and the maintainer sees a draft decision card. Nothing is posted to the pull request.</p>
+  <div class="question"><strong>Question this answers.</strong> Is the thinnest useful MVP slice, a single read-only review run against one real pull request, well-defined? Which gates stop it, what survives a failure, and when is the model never called at all? Assumption: this slice sits between the plan's P2 and P3 (local Review in shadow mode); the plan has no such milestone yet.</div>
+
+  <div id="notice" role="status" aria-live="polite"></div>
+
+  <section class="cards" id="cards"></section>
+
+  <div class="layout">
+    <div class="stack">
+      <section class="panel">
+        <h2>Guided walkthroughs</h2>
+        <p class="small">Choosing a tab resets to a known start. Press each step in order. A refused action is part of the lesson, not a broken button.</p>
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <h3 id="stitle"></h3><p class="small" id="sdesc"></p>
+        <p class="small" id="progress"></p>
+        <ol id="steps"></ol>
+      </section>
+      <section class="panel">
+        <h2>Free play</h2>
+        <div class="group"><h3>Maintainer / Warden</h3><div class="row" id="g-op"></div></div>
+        <div class="group"><h3>What the local model hands back</h3><div class="row" id="g-model"></div></div>
+        <div class="group"><h3>Things in the outside world</h3><div class="row" id="g-world"></div></div>
+        <div class="group"><h3>Things Warden must refuse</h3><div class="row" id="g-refuse"></div></div>
+      </section>
+    </div>
+    <section class="panel"><h2>What happened</h2><ol id="log" reversed></ol></section>
+  </div>
+  <footer>Rules encoded here come from the PRD and implementation plan: P0 containment, P1 stop/resume, P3 shadow review (read-only, fresh serial sessions, finite budgets, Ajv then independent validation, marker advances only on an accepted review, no AI posts in shadow). The retry-budget size (3) and delta-review wording are this prototype's guesses.</footer>
+</main>
+
+<script>
+/* ---------- Pure logic module: liftable, no DOM ---------- */
+const Slice = (() => {
+  const MAX_ATTEMPTS = 3;
+  const HEADS = ["a1b2c3","d4e5f6","789abc","def012","345678","9abcde"];
+  const CLEAN = [];
+  const BLOCKER = [{severity:"blocker", where:"src/auth/refresh.ts:48", what:"Two refreshes can race and reuse a revoked token."}];
+  const initial = () => ({
+    env:{stopped:false, localModelUp:true, routedRemote:false, contained:true},
+    pr:{number:412, title:"Fix token refresh race", author:"outside contributor", commit:0, ci:"passing", files:["src/auth/refresh.ts","test/refresh.test.ts"]},
+    attempts:{used:0, max:MAX_ATTEMPTS},
+    run:null,        // {phase, mode, snapshotHead, candidate}
+    marker:null,     // {head, verdict, findings, ci}
+    card:null,
+  });
+  const head = s => HEADS[s.pr.commit];
+  const escalated = s => s.attempts.used >= s.attempts.max;
+
+  function reduce(prev, a) {
+    const s = structuredClone(prev);
+    const ok = t => ({state:s, notice:t, blocked:false});
+    const no = t => ({state:prev, notice:t, blocked:true});
+    const fail = t => {
+      s.run = null;
+      const left = s.attempts.max - s.attempts.used;
+      return ok(t + (left > 0 ? ` Attempt kept on the record; ${left} left.` : " That was the last attempt: the item now waits for a maintainer, and a restart will not reset it."));
+    };
+    switch (a.type) {
+      case "START_SCAN": {
+        if (s.run) return no("A review is already running. Warden runs one fresh serial session at a time.");
+        if (s.env.stopped) return no("Stopped. No new model or verification work starts until a maintainer explicitly resumes.");
+        const m = s.marker;
+        if (m && m.head === head(s)) {
+          if (m.ci === s.pr.ci) return ok("Same code, same checks, already reviewed: the accepted review is reused. No model call.");
+          m.ci = s.pr.ci;
+          return ok(`Same code; only the checks changed (now ${s.pr.ci}). Merge gates re-evaluated by plain rules. No model call.`);
+        }
+        if (escalated(s)) return no(`Retry budget used up (${s.attempts.used} of ${s.attempts.max}). The item waits for a maintainer; restarting does not reset it.`);
+        if (!s.env.contained) return no("No verified isolation boundary. Unknown containment blocks execution; nothing was run.");
+        if (s.env.routedRemote) return no("The model actually resolved to a remote provider. 'Configured local' does not allow that, so the run is rejected.");
+        if (!s.env.localModelUp) return no("The local model is unavailable. No hosted-model request is made and no fallback is tried.");
+        s.attempts.used++;
+        s.run = {phase:"snapshot", mode: m ? "delta" : "full", snapshotHead:null, candidate:null};
+        return ok(`Scan started for pull request #${s.pr.number} (${s.run.mode} review, attempt ${s.attempts.used} of ${s.attempts.max}).`);
+      }
+      case "TAKE_SNAPSHOT": {
+        if (!s.run || s.run.phase !== "snapshot") return no("There is no scan waiting for a snapshot.");
+        s.run.snapshotHead = head(s); s.run.phase = "session";
+        const extra = s.run.mode === "delta" ? ` Delta review: only changes since ${s.marker.head}, plus ${s.marker.findings.length} earlier finding(s) to re-check.` : "";
+        return ok(`Captured #${s.pr.number} at ${s.run.snapshotHead}, read-only. The model will be given prefetched inputs and no write access.${extra}`);
+      }
+      case "MODEL_RESULT": {
+        if (!s.run || s.run.phase !== "session") return no("No model session is waiting for a result.");
+        if (!s.env.localModelUp) return fail("The local model went away mid-session. No hosted fallback was attempted.");
+        if (s.env.routedRemote) return fail("Routing was re-checked at execution time and now points to a remote provider. Result discarded.");
+        s.run.candidate = a.kind; s.run.phase = "validating";
+        return ok("The model returned a result. It is not trusted yet: Warden still has to validate it.");
+      }
+      case "MODEL_CRASH": {
+        if (!s.run || s.run.phase !== "session") return no("No model session is running.");
+        return fail("The local model crashed mid-session.");
+      }
+      case "VALIDATE": {
+        if (!s.run || s.run.phase !== "validating") return no("There is no model result to validate.");
+        const c = s.run.candidate;
+        if (c === "malformed") return fail("The result failed the schema check. It is rejected whole; nothing is applied as partial success.");
+        if (c === "outOfScope") return fail("The schema was fine, but a finding cites src/billing/charge.ts, which is not in this pull request. Warden's separate scope check rejected the whole result.");
+        if (s.run.snapshotHead !== head(s)) return fail(`The contributor pushed ${head(s)} while the review ran on ${s.run.snapshotHead}. A review is bound to the code it saw, so it is rejected as stale.`);
+        const findings = c === "blocker" ? BLOCKER : CLEAN;
+        const prior = s.marker ? s.marker.findings.length : 0;
+        s.marker = {head:s.run.snapshotHead, verdict: findings.length ? "changes needed" : "no findings", findings, ci:s.pr.ci};
+        s.card = {text: findings.length ? "Recommend: request changes (1 blocker)." : "Recommend: no review findings. Merge still needs checks and authority.", posted:false};
+        s.attempts.used = 0; s.run = null;
+        const re = prior ? ` ${prior} earlier finding(s) re-checked: ${findings.length ? "still open" : "resolved"}.` : "";
+        return ok(`Accepted. The review marker now points at ${s.marker.head}. A draft decision card exists for the maintainer; nothing was posted.${re}`);
+      }
+      case "STOP": {
+        s.env.stopped = true;
+        if (s.run) { s.run = null; return ok("Stop requested. The running scan was cancelled and checkpointed: its attempt stays counted, the review marker is unchanged, and no external model request was in flight (local only)."); }
+        return ok("Stopped. Nothing was running.");
+      }
+      case "RESUME": {
+        if (!s.env.stopped) return no("Not stopped.");
+        s.env.stopped = false;
+        return ok("Resumed by the maintainer. No AI work started on its own; attempt counts are unchanged and nothing was reset.");
+      }
+      case "RESTART": {
+        const lost = !!s.run; s.run = null;
+        return ok(lost ? "Process restarted. The in-flight session was lost, but the attempt it used is persisted and still counts." : "Process restarted. Persisted state (marker, attempts, stop) was kept.");
+      }
+      case "PUSH": {
+        if (s.pr.commit >= HEADS.length - 1) return no("Prototype only has a few commits.");
+        s.pr.commit++; s.pr.ci = "pending";
+        return ok(`The contributor pushed ${head(s)}. Checks restarted. Warden never touches the contributor's branch.`);
+      }
+      case "CI": { s.pr.ci = a.value; return ok(`Checks on ${head(s)} are now ${a.value}. This arrives from outside; no model is involved.`); }
+      case "TOGGLE": {
+        s.env[a.key] = !s.env[a.key];
+        const T = {
+          localModelUp:["The local model is back up.","The local model went down."],
+          routedRemote:["The model provider now resolves to a remote host.","Routing is back to the local model."],
+          contained:["Isolation boundary verified.","Isolation boundary is missing or unverifiable."]};
+        const i = a.key === "routedRemote" ? (s.env[a.key] ? 0 : 1) : (s.env[a.key] ? 0 : 1);
+        return ok(T[a.key][i]);
+      }
+      case "POST_REVIEW": return no("Refused. In shadow mode Warden does not post AI reviews; the result stays a draft card only a maintainer sees.");
+      case "EDIT_BRANCH": return no("Refused. Warden never writes to a contributor's branch.");
+      case "MERGE": return no("Refused. Merge needs the later merge-gate work and separate authority; production AI effects stay off in this slice.");
+    }
+    return no("Unknown action.");
+  }
+  return {initial, reduce, head, escalated};
+})();
+
+/* ---------- Throwaway page shell ---------- */
+const $ = id => document.getElementById(id);
+const A = (type, extra) => Object.assign({type}, extra);
+const S = (label, action) => ({label, action});
+const start = S("Maintainer starts a review scan", A("START_SCAN"));
+const snap = S("Warden captures the pull request snapshot", A("TAKE_SNAPSHOT"));
+const clean = S("Local model returns a clean review", A("MODEL_RESULT",{kind:"clean"}));
+const blocker = S("Local model returns a review with a blocker", A("MODEL_RESULT",{kind:"blocker"}));
+const validate = S("Warden validates the result", A("VALIDATE"));
+const push = S("Contributor pushes a new commit", A("PUSH"));
+
+const scenarios = [
+  {name:"One clean live review", text:"The happy path of the whole slice. Watch that the review marker only moves at the very end, and that posting and merging stay refused.", steps:[start,snap,clean,validate,S("Try to post the review to the pull request (refused)",A("POST_REVIEW")),S("Try to merge (refused)",A("MERGE"))]},
+  {name:"Model down or wrongly routed", text:"Local-only means local-only. A dead model or a provider that resolves remotely stops the run; there is no fallback to a hosted model.", steps:[S("Local model goes down",A("TOGGLE",{key:"localModelUp"})),S("Try to start a scan (blocked)",A("START_SCAN")),S("Local model comes back",A("TOGGLE",{key:"localModelUp"})),S("Provider now resolves to a remote host",A("TOGGLE",{key:"routedRemote"})),S("Try to start a scan (blocked)",A("START_SCAN")),S("Routing back to local",A("TOGGLE",{key:"routedRemote"})),start,snap,clean,validate]},
+  {name:"Bad output until the budget is gone", text:"Malformed and out-of-scope results are rejected whole. Attempts are persisted: a restart cannot buy more. After the last one, the item waits for a maintainer.", steps:[start,snap,S("Local model returns malformed output",A("MODEL_RESULT",{kind:"malformed"})),validate,start,snap,S("Local model cites a file outside the pull request",A("MODEL_RESULT",{kind:"outOfScope"})),validate,start,snap,S("Process restarts mid-session",A("RESTART")),S("Try another scan (blocked: budget gone)",A("START_SCAN"))]},
+  {name:"Code changes mid-review", text:"A review belongs to the code it saw. If the contributor pushes while the model works, the result is stale and rejected; the next scan reviews the new head.", steps:[start,snap,clean,push,S("Warden validates the result (stale, rejected)",A("VALIDATE")),start,snap,clean,validate]},
+  {name:"Reuse and delta", text:"Unchanged code costs no model call. New code gets a delta review that re-checks old findings. A checks-only change is settled by plain rules.", steps:[start,snap,blocker,validate,push,S("Contributor's fix is in; maintainer starts a scan (delta)",A("START_SCAN")),snap,clean,validate,S("Checks fail",A("CI",{value:"failing"})),S("Start a scan (checks-only change, no model)",A("START_SCAN")),S("Start a scan again (nothing new, reuse)",A("START_SCAN"))]},
+  {name:"Stop in the middle", text:"Stop cancels the running scan and blocks new ones until an explicit resume. Resume starts nothing by itself and resets nothing.", steps:[start,snap,S("Maintainer presses stop",A("STOP")),S("Try to start a scan (blocked)",A("START_SCAN")),S("Maintainer resumes",A("RESUME")),S("Start a scan (attempt 2, not a fresh budget)",A("START_SCAN")),snap,clean,validate]},
+  {name:"No isolation", text:"Without a verified boundary the repository's code could reach the Mac. Warden refuses to run rather than assume.", steps:[S("Isolation boundary missing",A("TOGGLE",{key:"contained"})),S("Try to start a scan (blocked)",A("START_SCAN")),S("Isolation verified",A("TOGGLE",{key:"contained"})),start,snap,clean,validate]},
+];
+
+let sel = 0, step = 0, detached = false, state = Slice.initial(), prevFlat = {}, log = [];
+const flat = s => ({
+  "Stop": s.env.stopped ? "stopped" : "running OK",
+  "Local model": s.env.localModelUp ? "up" : "down",
+  "Resolves to": s.env.routedRemote ? "remote host" : "local",
+  "Isolation": s.env.contained ? "verified" : "missing",
+  "Phase": s.run ? s.run.phase : "idle",
+  "Mode": s.run ? s.run.mode : "-",
+  "Attempts": `${s.attempts.used} of ${s.attempts.max}`,
+  "Snapshot": s.run && s.run.snapshotHead ? s.run.snapshotHead : "-",
+  "Code at head": Slice.head(s),
+  "Checks": s.pr.ci,
+  "Reviewed head": s.marker ? s.marker.head : "none",
+  "Verdict": s.marker ? s.marker.verdict : "-",
+  "Decision card": s.card ? s.card.text : "none",
+  "Posted": s.card ? "no (shadow)" : "-",
+});
+
+function apply(action) {
+  const before = flat(state);
+  const r = Slice.reduce(state, action);
+  state = r.state;
+  const after = flat(state);
+  const changed = Object.keys(after).filter(k => before[k] !== after[k]);
+  log.unshift({text:r.notice, blocked:r.blocked});
+  render(r.notice, r.blocked, r.blocked ? [] : changed);
+}
+
+function field(label, value, ch) { return `<div class="field ${ch.includes(label)?"changed":""}"><span>${label}</span><span>${value}</span></div>`; }
+function render(notice, blocked, changed = []) {
+  const f = flat(state);
+  $("notice").textContent = notice || "Pick a walkthrough tab below, or use free play.";
+  $("notice").dataset.blocked = String(!!blocked);
+  const esc = Slice.escalated(state) && !state.run;
+  const card = (title, big, keys) => `<div class="card"><h2>${title}</h2><div class="big">${big}</div>${keys.map(k=>field(k,f[k],changed)).join("")}</div>`;
+  $("cards").innerHTML =
+    card("Current scan", f["Phase"] + (esc ? " (waiting for maintainer)" : ""), ["Mode","Attempts","Snapshot"]) +
+    card("Pull request #" + state.pr.number, f["Code at head"], ["Checks"]) .replace("</div></div>", `${field("Author",state.pr.author,[])}</div></div>`) +
+    card("Safety switches", f["Stop"], ["Local model","Resolves to","Isolation"]) +
+    card("Review marker", f["Reviewed head"], ["Verdict","Decision card","Posted"]) +
+    (state.marker && state.marker.findings.length ? `` : ``);
+  const fl = state.marker && state.marker.findings.length ? `<div class="panel" style="grid-column:1/-1"><h2>Findings in the accepted review</h2><ul class="f">${state.marker.findings.map(x=>`<li><strong>${x.severity}</strong> · ${x.where} · ${x.what}</li>`).join("")}</ul></div>` : "";
+  $("cards").insertAdjacentHTML("beforeend", fl);
+  $("log").innerHTML = log.map(l => `<li style="${l.blocked?"color:var(--bad)":""}">${l.blocked?"Refused: ":""}${l.text}</li>`).join("");
+  renderTabs();
+}
+
+function mk(label, action, cls) { const b = document.createElement("button"); b.textContent = label; if (cls) b.className = cls; b.onclick = () => { detached = true; apply(action); }; return b; }
+function renderTabs() {
+  $("tabs").replaceChildren(...scenarios.map((sc, i) => { const b = document.createElement("button"); b.textContent = sc.name; b.setAttribute("role","tab"); b.setAttribute("aria-selected", String(i===sel)); b.onclick = () => choose(i); return b; }));
+  const sc = scenarios[sel];
+  $("stitle").textContent = sc.name; $("sdesc").textContent = sc.text;
+  $("progress").textContent = detached ? "Free play used - re-select the tab to restart guided steps." : step === sc.steps.length ? "Walkthrough complete. Try free play or another tab." : `Step ${step+1} of ${sc.steps.length}`;
+  $("steps").replaceChildren(...sc.steps.map((st, i) => { const li = document.createElement("li"); const b = document.createElement("button"); b.innerHTML = `<span class="n">${i+1}.</span>${st.label}`; b.disabled = detached || i !== step; if (i < step) b.className = "done"; else if (i === step && !detached) b.classList.add("next"); b.onclick = () => { step++; apply(st.action); }; li.append(b); return li; }));
+}
+function choose(i) { sel = i; step = 0; detached = false; state = Slice.initial(); log = []; render("Reset to a known start. Press step 1.", false); }
+
+$("g-op").append(mk("Start a review scan",A("START_SCAN")), mk("Capture snapshot",A("TAKE_SNAPSHOT")), mk("Validate result",A("VALIDATE")), mk("Stop",A("STOP")), mk("Resume",A("RESUME")), mk("Restart process",A("RESTART")));
+$("g-model").append(mk("Clean review",A("MODEL_RESULT",{kind:"clean"})), mk("Review with a blocker",A("MODEL_RESULT",{kind:"blocker"})), mk("Malformed output",A("MODEL_RESULT",{kind:"malformed"})), mk("Cites a file outside the PR",A("MODEL_RESULT",{kind:"outOfScope"})), mk("Model crashes",A("MODEL_CRASH")));
+$("g-world").append(mk("Contributor pushes a commit",A("PUSH")), mk("Checks pass",A("CI",{value:"passing"})), mk("Checks fail",A("CI",{value:"failing"})), mk("Toggle: local model up/down",A("TOGGLE",{key:"localModelUp"})), mk("Toggle: provider resolves remote",A("TOGGLE",{key:"routedRemote"})), mk("Toggle: isolation verified/missing",A("TOGGLE",{key:"contained"})));
+$("g-refuse").append(mk("Post the review to the PR",A("POST_REVIEW"),"refuse"), mk("Edit the contributor's branch",A("EDIT_BRANCH"),"refuse"), mk("Merge the PR",A("MERGE"),"refuse"));
+choose(0);
+</script>
+</body>
+</html>
