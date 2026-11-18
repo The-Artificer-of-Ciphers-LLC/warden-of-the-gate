@@ -12,6 +12,8 @@ import { resume, stop } from './commands/control.ts';
 import { eventHandle, journalReconcile, writerDrain } from './commands/writer.ts';
 import { approvals } from './commands/approvals.ts';
 import { adopt } from './commands/adopt.ts';
+import { data } from './commands/data.ts';
+import { upgrade } from './commands/upgrade.ts';
 import { credentials } from './commands/credentials.ts';
 import { sim } from './commands/sim.ts';
 import { redact } from './util.ts';
@@ -29,6 +31,8 @@ const HELP = `warden ${CLI_VERSION}  (warden.yml schema v${WARDEN_SCHEMA_VERSION
   event handle --event-path file            (Actions doorbell: /warden approve|deny|override comments)
   adopt --dry-run [--out FILE]              (inventory existing items; read-only)
   adopt --selection FILE --confirm          (adopt ONLY the selected items; never part of setup/run)
+  data status | export --scope S --out FILE [--confirm] | purge --scope S [--older-than-days N] [--include-decisions] [--confirm]
+  upgrade --dry-run                         (report changes; nothing is applied)
   approvals request|list|check --item N ...
   credentials configure --confirm --app-id N --installation-id N --app-login LOGIN [--key-path FILE] [--approve-control-read] [--replace]
   credentials status | ack-revocation --confirm
@@ -55,6 +59,8 @@ export async function main(argv: string[], io: { env?: NodeJS.ProcessEnv; cwd?: 
     else if (a === 'journal' && b === 'reconcile') r = await journalReconcile(c);
     else if (a === 'event' && b === 'handle') r = await eventHandle(c);
     else if (a === 'adopt') r = await adopt(c);
+    else if (a === 'data') r = await data(c, b ?? '');
+    else if (a === 'upgrade') r = await upgrade(c);
     else if (a === 'approvals') r = await approvals(c, b ?? '');
     else if (a === 'credentials') r = await credentials(c, b ?? '');
     else if (a === 'sim') r = await sim(c, b ?? '');

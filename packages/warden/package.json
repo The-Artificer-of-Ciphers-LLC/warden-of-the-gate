@@ -1,6 +1,6 @@
 {
   "name": "warden-core-unpublished",
-  "version": "0.1.0-p1",
+  "version": "0.1.0-p4",
   "private": true,
   "type": "module",
   "description": "Warden of the Gate P1 walking skeleton: versioned CLI, schemas, state model, serialized writer, stop/approvals. Not published; package scope is a P6 release gate.",
