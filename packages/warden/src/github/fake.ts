@@ -1,7 +1,7 @@
-import type { Comment, IssueEvent, IssueState, Label, Store } from './store.ts';
+import type { Comment, IssueEvent, IssueState, Label, PullInfo, Store } from './store.ts';
 import { Faults, NetworkError, iso, jitter, sleep } from '../util.ts';
 
-interface FakeIssue extends IssueState { events: IssueEvent[] }
+interface FakeIssue extends IssueState { events: IssueEvent[]; pull?: Omit<PullInfo, 'number' | 'title' | 'author' | 'draft' | 'state'> }
 export interface WorldSnapshot { nextId: number; nextEvent: number; nextIssue: number; comments: { issue: number; c: Comment }[]; labels: Label[]; issues: FakeIssue[]; clock?: number }
 
 /** Shared in-memory "GitHub": monotonic comment ids, edit timestamps, atomic unique label create, labeled/unlabeled events with
@@ -58,6 +58,11 @@ export class FakeStore implements Store {
   private issue(n: number): FakeIssue { const i = this.w.issues.get(n); if (!i) { const e: Error & { status?: number } = new Error('404 issue ' + n); e.status = 404; throw e; } return i; }
   private view(i: FakeIssue): IssueState { const { events: _e, ...s } = i; return { ...s, assignees: [...i.assignees], labels: [...i.labels] }; }
   async getIssue(n: number) { await this.lat(); return this.view(this.issue(n)); }
+  async getPull(n: number): Promise<PullInfo> {
+    await this.lat(); const i = this.issue(n);
+    if (!i.isPr || !i.pull) { const e: Error & { status?: number } = new Error('404 pull ' + n); e.status = 404; throw e; }
+    return { number: n, title: i.title, author: i.author, draft: !!i.draft, state: i.state, head: i.pull.head, base: i.pull.base, ci: i.pull.ci, files: i.pull.files.map((f) => ({ ...f })) };
+  }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { await this.lat(); return [...this.w.issues.values()].filter((i) => !o.state || o.state === 'all' || i.state === o.state).map((i) => this.view(i)); }
   async addAssignee(n: number, login: string) { await this.lat(); const i = this.issue(n); if (!i.assignees.includes(login)) i.assignees.push(login); this.touch(); await this.maybeLost('addAssignee'); }
   async addLabel(n: number, label: string) {

@@ -1,4 +1,4 @@
-import type { Comment, IssueEvent, IssueState, Label, Store } from './store.ts';
+import type { Comment, IssueEvent, IssueState, Label, PullInfo, Store } from './store.ts';
 import { NetworkError, sleep } from '../util.ts';
 import type { CredentialProvider, CredentialRequest } from '../credentials/types.ts';
 
@@ -39,6 +39,13 @@ export class HttpStore implements Store {
   async getComment(id: number) { return this.cm((await this.req('GET', `/issues/comments/${id}`)).json); }
   async updateComment(id: number, body: string) { return this.cm((await this.req('PATCH', `/issues/comments/${id}`, { body })).json); }
   async deleteComment(id: number) { await this.req('DELETE', `/issues/comments/${id}`); }
+  async getPull(n: number): Promise<PullInfo> {
+    const p = (await this.req('GET', `/pulls/${n}`)).json;
+    const files = (await this.paged(`/pulls/${n}/files`)).map((f: any) => ({ path: f.filename, status: f.status, patch: f.patch }));
+    const runs = (await this.req('GET', `/commits/${p.head.sha}/check-runs`, undefined, { query: 'per_page=100' })).json?.check_runs ?? [];
+    const ci: PullInfo['ci'] = !runs.length ? 'none' : runs.some((r: any) => r.status !== 'completed') ? 'pending' : runs.every((r: any) => ['success', 'neutral', 'skipped'].includes(r.conclusion)) ? 'passing' : 'failing';
+    return { number: n, head: p.head.sha, base: p.base.sha, title: p.title, author: p.user?.login ?? 'unknown', draft: !!p.draft, state: p.state, ci, files };
+  }
   async getIssue(n: number) { return this.is((await this.req('GET', `/issues/${n}`)).json); }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { return (await this.paged('/issues', `state=${o.state ?? 'open'}`)).map(this.is); }
   async addAssignee(n: number, login: string) { await this.req('POST', `/issues/${n}/assignees`, { assignees: [login] }); }

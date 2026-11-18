@@ -1,0 +1,193 @@
+{
+  "startedAt": "2026-11-18T22:54:14.352Z",
+  "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "pull": 217,
+  "model": "warden-proof-qwen",
+  "sourceSha256": "1fce567141bdabc2d6028baf2156b2d69ca35e064ea2da9b9f23e53b2438fbe8",
+  "steps": {
+    "0-baseline-accepted-review": {
+      "result": {
+        "kind": "accepted",
+        "mode": "full",
+        "notice": "Accepted. The review marker now points at 76126979. A draft decision card exists for the maintainer; nothing was posted.",
+        "attempts": {
+          "used": 0,
+          "max": 3
+        },
+        "markerHead": "76126979",
+        "findings": [
+          "major test/sum.test.ts:2 test-console-assert-noop"
+        ]
+      },
+      "ms": 93518,
+      "warden": {
+        "writesToGitHubByWarden": 0
+      },
+      "snapshotBefore": {
+        "head": "76126979",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      },
+      "snapshotAfter": {
+        "head": "76126979",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      }
+    },
+    "D-model-unreachable": {
+      "result": {
+        "kind": "reused",
+        "notice": "Same code, same checks, already reviewed: the accepted review is reused. No model call.",
+        "attempts": {
+          "used": 0,
+          "max": 3
+        },
+        "markerHead": "76126979",
+        "findings": [
+          "major test/sum.test.ts:2 test-console-assert-noop"
+        ]
+      },
+      "attemptsUnchanged": true,
+      "ms": 2699,
+      "warden": {
+        "writesToGitHubByWarden": 0
+      },
+      "snapshotBefore": {
+        "head": "76126979",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      },
+      "snapshotAfter": {
+        "head": "76126979",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      }
+    },
+    "A-delta-review-after-contributor-fix": {
+      "contributorPushed": "1d52ee0e",
+      "result": {
+        "kind": "accepted",
+        "mode": "delta",
+        "notice": "Accepted. The review marker now points at 1d52ee0e. A draft decision card exists for the maintainer; nothing was posted. 1 earlier finding(s) re-checked: 1 still open.",
+        "attempts": {
+          "used": 0,
+          "max": 3
+        },
+        "markerHead": "1d52ee0e",
+        "findings": [
+          "major test/sum.test.ts:2 test-console-assert-noop",
+          "minor src/sum.ts:4 off-by-one-loop"
+        ]
+      },
+      "ms": 121171,
+      "warden": {
+        "writesToGitHubByWarden": 0
+      },
+      "snapshotBefore": {
+        "head": "76126979",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      },
+      "snapshotAfter": {
+        "head": "1d52ee0e",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      }
+    },
+    "B-stop-mid-review": {
+      "contributorPushed": "5d65da9d",
+      "lmStudioBeforeStop": "generating",
+      "lmStudioAfterStop": "idle",
+      "result": {
+        "kind": "interrupted",
+        "mode": "delta",
+        "reason": "session interrupted: session interrupted",
+        "notice": "The running scan was cancelled and checkpointed: its attempt stays counted, the review marker is unchanged, and no external model request was in flight.",
+        "attempts": {
+          "used": 1,
+          "max": 3
+        },
+        "markerHead": "1d52ee0e",
+        "findings": [
+          "major test/sum.test.ts:2 test-console-assert-noop",
+          "minor src/sum.ts:4 off-by-one-loop"
+        ]
+      },
+      "ms": 31948,
+      "warden": {
+        "writesToGitHubByWarden": 0
+      },
+      "snapshotBefore": {
+        "head": "1d52ee0e",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      },
+      "snapshotAfter": {
+        "head": "5d65da9d",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      }
+    },
+    "C-head-moves-mid-review": {
+      "pushedDuringReview": "84fe7288",
+      "staleResult": {
+        "kind": "rejected",
+        "mode": "delta",
+        "reason": "head-moved",
+        "notice": "The contributor pushed 84fe7288 while the review ran on 5d65da9d. A review is bound to the code it saw, so it is rejected as stale. Attempt kept on the record; 1 left.",
+        "attempts": {
+          "used": 2,
+          "max": 3
+        },
+        "markerHead": "1d52ee0e",
+        "findings": [
+          "major test/sum.test.ts:2 test-console-assert-noop",
+          "minor src/sum.ts:4 off-by-one-loop"
+        ]
+      },
+      "nextScan": {
+        "kind": "accepted",
+        "mode": "delta",
+        "notice": "Accepted. The review marker now points at 84fe7288. A draft decision card exists for the maintainer; nothing was posted. 2 earlier finding(s) re-checked: 2 still open.",
+        "attempts": {
+          "used": 0,
+          "max": 3
+        },
+        "markerHead": "84fe7288",
+        "findings": [
+          "major test/sum.test.ts:2 test-console-assert-noop",
+          "minor src/sum.ts:4 off-by-one-loop",
+          "minor README.md:1 readme-out-of-scope"
+        ]
+      },
+      "ms": 275741,
+      "warden": {
+        "writesToGitHubByWarden": 0
+      },
+      "snapshotBefore": {
+        "head": "5d65da9d",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      },
+      "snapshotAfter": {
+        "head": "84fe7288",
+        "comments": 0,
+        "reviews": 0,
+        "labels": 0
+      }
+    }
+  },
+  "finalAttemptsRecord": {
+    "used": 0
+  },
+  "finishedAt": "2026-11-18T23:03:01.597Z"
+}

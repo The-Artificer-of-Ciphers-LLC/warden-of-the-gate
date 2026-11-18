@@ -1,0 +1,59 @@
+{
+  "startedAt": "2026-11-18T22:50:04.131Z",
+  "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "pull": 217,
+  "model": "warden-proof-qwen",
+  "harness": "opencode 2.2.7",
+  "sourceSha256": "b9983ff4e281fe9683c9e354fb09f30d69523e09b812e35ffcd7fc192b446078",
+  "before": {
+    "head": "76126979f34548a9d6783ffb7cddd81f961f2a89",
+    "state": "open",
+    "labels": [],
+    "comments": 0,
+    "reviews": 0,
+    "updatedAt": "2026-11-18T22:49:53Z",
+    "commits": 2
+  },
+  "preflight": {
+    "ok": false,
+    "failures": [
+      "opencode opencode v2.2.7 != pinned 2.2.7"
+    ],
+    "harnessVersion": "opencode v2.2.7",
+    "isolation": "seatbelt"
+  },
+  "first": {
+    "kind": "blocked",
+    "notice": "The local model or harness is unavailable (opencode opencode v2.2.7 != pinned 2.2.7). No hosted-model request is made and no fallback is tried.",
+    "attempts": {
+      "used": 0,
+      "max": 3
+    },
+    "marker": null,
+    "card": null,
+    "reason": "preflight",
+    "ms": 1237
+  },
+  "second": {
+    "kind": "blocked",
+    "notice": "The local model or harness is unavailable (opencode opencode v2.2.7 != pinned 2.2.7). No hosted-model request is made and no fallback is tried.",
+    "attempts": {
+      "used": 0,
+      "max": 3
+    },
+    "marker": null,
+    "card": null,
+    "reason": "preflight"
+  },
+  "after": {
+    "head": "76126979f34548a9d6783ffb7cddd81f961f2a89",
+    "state": "open",
+    "labels": [],
+    "comments": 0,
+    "reviews": 0,
+    "updatedAt": "2026-11-18T22:49:53Z",
+    "commits": 2
+  },
+  "nothingWritten": true,
+  "finishedAt": "2026-11-18T22:50:07.355Z"
+}

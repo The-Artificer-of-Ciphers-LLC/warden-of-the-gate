@@ -1,0 +1,17 @@
+{
+  "at": "2026-11-18T23:04:25.762Z",
+  "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "pull": 217,
+  "contributorPushed": "b347ba2f",
+  "result": {
+    "kind": "blocked",
+    "reason": "preflight",
+    "notice": "The local model or harness is unavailable (local endpoint unreachable: TypeError). No hosted-model request is made and no fallback is tried.",
+    "attempts": {
+      "used": 0,
+      "max": 3
+    }
+  },
+  "commentsBefore": 0,
+  "commentsAfter": 0
+}
