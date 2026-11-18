@@ -87,6 +87,8 @@ warden run --task review --runner opencode                # bounded scan: finite
 - **Implement / Rework** (factory): `warden run --task implement --item N --runner opencode` works from a trusted checkout of the default-branch tip, lets the model edit files only inside that workspace with no shell, runs your checks in the boundary, and requires fail-before/pass-after evidence for a bug. Weakened gates, edits to workflow/access/orders paths and oversize diffs are refused. The result goes to a **local outbox** branch; opening a real PR needs contents and pull-request write permission that the App ceiling in step 3 does not grant, and granting it is an explicit owner action **[verified against real git and the real executor; not run against GitHub]**.
 - **Merge** exists only in live mode, bound to the head that was reviewed, and only after eligibility: blocker always gates, risk is assessed separately from severity, high or uncertain risk and workflow/access/orders edits need a maintainer, and required independent approvals are never bypassed. Enqueueing is not merging; GitHub must confirm before the ledger says merged **[verified against the simulated GitHub]**.
 
+- **Retro** (manual, local): `warden run --task retro [--window-days 30] [--runner opencode] [--source REPO_PATH]` gathers this instance's own decisions, denials, critical escapes and review/triage/implement/rework outcomes, and asks the local model for NARROW proposals (design change first, then a static check, a test, and only then a rule). Every proposal must cite evidence ids; "no change is justified" is a valid answer, and with no evidence no model is called. A proposal that would expand authority is only text for a maintainer and, if it touches an action that was denied before, must cite the old ruling and newer evidence. Nothing is applied, merged or trained on; with `--source` the report is prepared as a `warden/retro-DATE` branch in the local outbox **[verified with a fake model; not run with the real model]**.
+
 ## 8. Stop, resume and recover
 
 ```bash
@@ -114,4 +116,4 @@ Scopes are explicit; credentials are never exported; decisions are kept until yo
 
 ## What this release does not include
 
-Discord approval cards and the helper; the Retro task; a published package; a GitHub publisher for factory PRs; live activation and the qualification replay (P7); Linux or Windows hosts; non-TypeScript lookup. See `docs/handoff/2026-11-18-p3-progress.md` for the current state and the P1 gate.
+Discord approval cards and the helper; a published package; a GitHub publisher for factory PRs; live activation and the qualification replay (P7); Linux or Windows hosts; non-TypeScript lookup. See `docs/handoff/2026-11-18-p3-progress.md` for the current state and the P1 gate.

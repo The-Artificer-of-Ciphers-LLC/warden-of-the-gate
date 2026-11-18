@@ -2,6 +2,10 @@
 
 All notable changes to `@taoc/warden`. This file is a release-candidate record: nothing here has been published, tagged or activated.
 
+## Unreleased
+
+- Retro task: deterministic evidence packet, validated proposals-only output, local-outbox report branch.
+
 ## 0.1.0-p4 (release candidate, unpublished)
 
 - P1 walking skeleton: CLI, schemas, serialized writer, stop/resume, approvals, credential controller with a GitHub App issuer.
