@@ -1,0 +1,24 @@
+{
+  "method": "git-push-ssh",
+  "startedAt": "2026-11-18T22:21:44.850Z",
+  "sourceSha256": "2ffdf260586e65e6ff1e7991f60937ea5dda26c8869aa626cd31a6b81a8d866d",
+  "observerSha256": "398e69fd6d3da32e364e09fc16d2ee2c75b5da3700bc826ebb1bce3b2c7ba70a",
+  "workflowBlob": "013aaace843aeeabbd069596dbabe846c38f802a",
+  "cases": [
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+      "signals": [],
+      "installAttempted": true,
+      "installCommit": "963655b7161fd6ac9bfb3da9d06259dcbaee29ca",
+      "removed": true
+    },
+    {
+      "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-control",
+      "signals": []
+    }
+  ],
+  "pass": false,
+  "cleanupErrors": [],
+  "error": "Error: spawnSync git ETIMEDOUT",
+  "finishedAt": "2026-11-18T22:22:33.201Z"
+}
