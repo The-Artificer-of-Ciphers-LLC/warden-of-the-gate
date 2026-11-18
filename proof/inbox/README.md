@@ -55,6 +55,21 @@ The script writes non-secret evidence to `results/live-app-2026-11-18.json`, wit
 
 The November 18 run passed four live scenarios and three real Actions checks across separate attempts. The raw reports retain their failed assertions and orchestration/cleanup errors; the independent final-state verification and remaining gates are in [`live-app-2026-11-18-closeout.json`](results/live-app-2026-11-18-closeout.json) and [FINDINGS.md](FINDINGS.md). An Actions-only result never claims the scenarios were rerun.
 
+## Owner-approved production P1 acceptance
+
+The separate harness exercises the actual P1 CLI, issuer/controller and serialized writer, not the P0 writer:
+
+```bash
+# Repository root; requires the owner's specific live-token and temporary-resource approvals:
+node proof/inbox/src/p1-live-proof.ts --live ~/.warden-p0/warden-p0-sandbox-app-2026-11-18.pem
+```
+
+Only the two disposable repositories are used. App installation tokens have a one-hour maximum and the same narrow repository/Issues scopes as above; the batch budget is 40, including preserved attempts. Tokens remain in memory except for the approved temporary submit/control-read Actions secrets. A third temporary secret is a random writer-only ledger HMAC key; the App private key is never uploaded. The temporary, dispatch-only workflow uses the explicitly selected runner token as the distinct writer identity.
+
+The harness uploads a source-hashed copy of the P1 package to `.warden-p1-proof/` in the sandbox, checks actual CLI setup/config/dry-run/status, proactive renewal, journal recovery, bound maintainer approval, global stop/resume, tamper rejection and revoked-control fail-closed behavior, then removes the code/workflow/secrets, revokes installation tokens and closes fixtures. Existing resources are not overwritten. Original lease-epoch metadata remains governed by the shared lease protocol; newly created projection labels are removed. A failure or cleanup error fails the report; old reports are never rewritten as successes.
+
+`src/schedule-proof.ts --live` separately enables the original sandbox writer, waits at most 59 minutes for a successful **schedule-triggered** run, and disables it in cleanup. A manual dispatch does not satisfy this check. Neither proof implements the P2 Sweep task or authorizes production AI.
+
 ## Scenario index
 
 | Id | Exercises |

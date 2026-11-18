@@ -2,7 +2,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameS
 import { join } from 'node:path';
 import { CredentialUnavailable, IssuerError } from './types.ts';
 import type { AuthorityCeiling, CredentialProvider, CredentialRequest, CredentialState, CredentialStatus, IssuedCredential, Issuer, Operation, PermLevel, Permissions } from './types.ts';
-import { iso, redact } from '../util.ts';
+import { canonical, iso, redact } from '../util.ts';
 import { readJsonFile, StorageError } from '../storage/instance.ts';
 
 interface Persisted { failures: number; nextAttemptAt?: number; lastError?: string; state: CredentialState; revokedAt?: number; expiresAt?: number }
@@ -11,6 +11,14 @@ export interface AuditEntry { at: string; event: string; operation: string; repo
 
 const lvl = (p?: PermLevel) => (p === 'write' ? 2 : p === 'read' ? 1 : 0);
 const keyOf = (r: { operation: Operation; repository: string }) => `${r.operation}@${r.repository}`;
+export function credentialDenial(ceiling: AuthorityCeiling, r: CredentialRequest): string | null {
+  if (r.operation === 'read-control' && ceiling.controlRepositories?.includes(r.repository)) {
+    return Object.entries(r.permissions).every(([k, v]) => ['issues', 'metadata'].includes(k) && v === 'read') ? null : 'control repository grants read access only';
+  }
+  if (!ceiling.repositories.includes(r.repository)) return `repository ${r.repository} is outside the operator ceiling`;
+  for (const [name, level] of Object.entries(r.permissions)) if (lvl(level) > lvl(ceiling.maxPermissions[name])) return `permission ${name}:${level} exceeds the operator ceiling`;
+  return null;
+}
 
 function validPersisted(value: unknown): value is Persisted {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -57,21 +65,19 @@ export class CredentialController implements CredentialProvider {
     if (!existsSync(this.auditPath)) return [];
     return readFileSync(this.auditPath, 'utf8').split('\n').filter(Boolean).slice(-limit).map((l) => JSON.parse(l) as AuditEntry);
   }
-  private withinCeiling(r: CredentialRequest): string | null {
-    if (!this.ceiling.repositories.includes(r.repository)) return `repository ${r.repository} is outside the operator ceiling`;
-    for (const [name, level] of Object.entries(r.permissions)) if (lvl(level) > lvl(this.ceiling.maxPermissions[name])) return `permission ${name}:${level} exceeds the operator ceiling`;
-    return null;
-  }
-
   token(req: CredentialRequest): Promise<string> {
-    const k = keyOf(req); this.seen.set(k, req);
+    const k = keyOf(req);
+    if (this.ceiling.automation === 'opt-out' || credentialDenial(this.ceiling, req)) return this.acquire(req, k);
+    const prior = this.seen.get(k);
+    if (prior && canonical(prior.permissions) !== canonical(req.permissions)) return Promise.reject(new CredentialUnavailable('denied', 'credential scope cannot change within the same operation'));
+    this.seen.set(k, req);
     const running = this.inflight.get(k); if (running) return running;
     const p = this.acquire(req, k).finally(() => this.inflight.delete(k));
     this.inflight.set(k, p); return p;
   }
   private async acquire(req: CredentialRequest, k: string): Promise<string> {
     if (this.ceiling.automation === 'opt-out') { this.audit('opted-out', req, 'refused'); throw new CredentialUnavailable('opted-out', 'credential automation is opted out by the operator'); }
-    const over = this.withinCeiling(req);
+    const over = credentialDenial(this.ceiling, req);
     if (over) { this.audit('ceiling-denied', req, 'refused', over); throw new CredentialUnavailable('denied', over); }
     const st = this.load()[k];
     if (st?.state === 'revoked') { this.cache.delete(k); throw new CredentialUnavailable('revoked', 'credential trust was revoked; operator acknowledgement and provider-supported reauthorization required'); }
@@ -84,6 +90,7 @@ export class CredentialController implements CredentialProvider {
     }
     try {
       const c = await this.issuer.issue(req);
+      if (this.load()[k]?.state === 'revoked') throw new CredentialUnavailable('revoked', 'credential trust was revoked while issuance was in flight; issued credential was not adopted');
       const had = this.cache.get(k); this.cache.set(k, c);
       const recovered = (st?.failures ?? 0) > 0;
       this.patch(k, { failures: 0, nextAttemptAt: undefined, lastError: undefined, state: 'valid', expiresAt: c.expiresAt });
@@ -91,6 +98,7 @@ export class CredentialController implements CredentialProvider {
       return c.token;
     } catch (e) {
       if (!(e instanceof IssuerError)) throw e;
+      if (this.load()[k]?.state === 'revoked') throw new CredentialUnavailable('revoked', 'credential trust remains revoked; issuer completion cannot restore authority');
       const msg = redact(e.message);
       if (e.kind === 'revoked') { this.cache.delete(k); this.patch(k, { state: 'revoked', revokedAt: now, lastError: msg }); this.audit('revoked', req, 'sticky', msg); throw new CredentialUnavailable('revoked', 'credential trust was revoked'); }
       if (e.kind === 'denied') { this.patch(k, { state: 'denied', lastError: msg }); this.audit('denied', req, 'refused', msg); throw new CredentialUnavailable('denied', msg); }
@@ -101,6 +109,11 @@ export class CredentialController implements CredentialProvider {
       if (cached && cached.expiresAt > now) return cached.token;
       throw new CredentialUnavailable('backoff', `issuer unavailable (${msg}); retrying with bounded backoff`);
     }
+  }
+  reportUnauthorized(req: CredentialRequest) {
+    const k = keyOf(req); this.cache.delete(k);
+    this.patch(k, { state: 'revoked', revokedAt: this.now(), lastError: 'GitHub rejected the issued credential (HTTP 401)' });
+    this.audit('revoked', req, 'sticky', 'issued credential rejected by GitHub; explicit operator acknowledgement required');
   }
   /** Explicit operator action after deliberate revocation. Does NOT mint anything; the next token() may then try the issuer. */
   operatorAcknowledgeRevocation(actor: string) {

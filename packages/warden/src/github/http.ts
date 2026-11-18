@@ -19,6 +19,7 @@ export class HttpStore implements Store {
       catch (e) { if (method === 'GET' && attempt < 3) { await sleep(300 * (attempt + 1)); continue; } throw new NetworkError(String(e)); }
       const d = res.headers.get('date'); if (d) this.skew = Date.parse(d) - Date.now();
       const limited = (res.status === 403 || res.status === 429) && (res.headers.get('retry-after') || res.headers.get('x-ratelimit-remaining') === '0' || /secondary rate/i.test(await res.clone().text()));
+      if (res.status === 401) this.creds.reportUnauthorized?.(this.credReq);
       if (limited) { if (attempt >= 6) throw new Error('rate limited persistently'); await sleep((Number(res.headers.get('retry-after')) || Math.min(60, 5 * (attempt + 1))) * 1000); continue; }
       if (res.status >= 500 && method === 'GET' && attempt < 3) { await sleep(500 * (attempt + 1)); continue; }
       const text = await res.text(); let json: any = null; try { json = text ? JSON.parse(text) : null; } catch { json = text; }

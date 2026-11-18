@@ -1,0 +1,41 @@
+name: p1-proof
+run-name: P1 proof ${{ inputs.nonce }} (${{ inputs.expected }})
+on:
+  workflow_dispatch:
+    inputs:
+      expected:
+        type: choice
+        options: [drain, stopped, unknown, tamper]
+        required: true
+      inbox:
+        required: true
+      control:
+        required: true
+      global:
+        required: true
+      nonce:
+        required: true
+permissions:
+  contents: read
+  issues: write
+jobs:
+  proof:
+    if: github.repository == 'The-Artificer-of-Ciphers-LLC/warden-p0-sandbox'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: .warden-p1-proof/packages/warden
+      - run: node .warden-p1-proof/proof/inbox/src/p1-actions-proof.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WARDEN_SUBMIT_TOKEN: ${{ secrets.WARDEN_P1_SUBMIT_TOKEN }}
+          WARDEN_CONTROL_READ_TOKEN: ${{ secrets.WARDEN_P1_CONTROL_READ_TOKEN }}
+          WARDEN_LEDGER_KEY: ${{ secrets.WARDEN_P1_LEDGER_KEY }}
+          INBOX: ${{ inputs.inbox }}
+          CONTROL: ${{ inputs.control }}
+          GLOBAL: ${{ inputs.global }}
+          EXPECTED: ${{ inputs.expected }}

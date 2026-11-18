@@ -10,7 +10,8 @@ function ctx(c: Ctx) {
   const cfg = cfgs.warden; const st = openStorage(c, cfg.repository, false); const be = openBackend(c, cfg); const pol = buildPolicy(cfg, cfgs.orders);
   const global = !!c.flags.global;
   let target: ControlTarget | null = null; let note = be.unavailable;
-  const s = be.open('operator', global ? cfg.inbox.globalControl?.repository : undefined);
+  const s = be.name === 'github' && str(c.flags, 'operator-auth') !== 'gh' ? null : be.open('operator', global ? cfg.inbox.globalControl?.repository : undefined);
+  if (be.name === 'github' && !s) note = 'human remote control requires explicit --operator-auth gh (no App or ambient-token fallback)';
   if (global && !cfg.inbox.globalControl) { note = 'no global control location configured in warden.yml (inbox.globalControl)'; }
   else if (s) target = { store: s, issue: global ? cfg.inbox.globalControl!.issue : cfg.inbox.controlIssue, scope: global ? 'global' : 'instance' };
   return { cfg, st, pol, target, note, actor: str(c.flags, 'as') ?? cfg.maintainers[0] };

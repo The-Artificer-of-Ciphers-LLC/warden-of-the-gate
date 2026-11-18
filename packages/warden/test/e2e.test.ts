@@ -11,6 +11,18 @@ import { InstanceStorage } from '../src/storage/instance.ts';
 const h = (s: string) => createHash('sha256').update(s).digest('hex');
 const worldHash = (e: { world: string }) => h(readFileSync(e.world, 'utf8'));
 
+test('status reports a legacy or foreign ledger explicitly without claiming GitHub is unreachable or adopting it', async (t) => {
+  const e = await cliEnv(); t.after(() => rmSync(e.dir, { recursive: true, force: true }));
+  await e.sim('sim', 'issue', '--title', 'Legacy P0 item');
+  assert.equal((await e.sim('sim', 'comment', '--issue', '3', '--as', 'warden-writer', '--body',
+    '<!-- warden-ledger:v1 -->\n```json\n{"v":1,"item":3,"state":"ready","owner":null,"ops":{},"order":[],"seq":1,"epoch":1}\n```')).code, 0);
+  const result = await e.json('status');
+  assert.equal(result.data.remote.reachable, true);
+  const legacy = result.data.remote.items.find((i: { item: number }) => i.item === 3);
+  assert.equal(legacy.state, 'invalid-ledger');
+  assert.match(legacy.blocker.reason, /unsupported|malformed|another instance/);
+});
+
 test('corrupt local stop state blocks runs and status explicitly', async (t) => {
   const e = await cliEnv(); t.after(() => rmSync(e.dir, { recursive: true, force: true }));
   const st = InstanceStorage.open(e.home, 'acme/widgets', { create: false });

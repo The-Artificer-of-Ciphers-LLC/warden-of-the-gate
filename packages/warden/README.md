@@ -3,7 +3,7 @@
 Production TypeScript/Node package for Warden of the Gate, phase P1 (see [implementation plan](../../docs/prd/0001-warden-of-the-gate.implementation-plan.md)). **Private and unpublished** (`warden-core-unpublished`); the npm scope is a P6 release gate. Not live-ready: no AI effects exist in this phase.
 
 ```bash
-npm ci && npm run build && npm test          # 59 tests, no network, no credentials
+npm ci && npm run build && npm test          # no network, no credentials
 node scripts/evidence.ts                      # regenerates evidence/acceptance-transcript.md
 node dist/cli.js --help
 ```
@@ -20,9 +20,10 @@ Lifted deliberately from the P0 spikes (`proof/inbox`, `proof/p0-runtime`): the 
 | `warden status [--json]` | state, ownership, approvals+expiry, evidence freshness, pending/uncertain ops, credentials, stop + acks; no model, no secrets |
 | `warden stop [--global]` / `warden resume --confirm [--global]` | local stop first, then shared stop, confirmed by re-read; unconfirmed is reported as such |
 | `warden writer drain` | the one serialized effect path (Actions entry point) |
+| `warden journal reconcile` | resubmit/adopt durable local intents and acknowledge only matching unedited writer receipts; never acts as the writer |
 | `warden event handle --event-path f` | Actions doorbell: `/warden approve\|deny <id> bind=<digest>`, `/warden override <state> <reason>` become durable intents |
 | `warden approvals request\|revise\|list\|check` | action / feature-design approvals bound to revision+policy+evidence |
-| `warden credentials status\|ack-revocation` | credential controller state; explicit revocation acknowledgement |
+| `warden credentials configure\|status\|ack-revocation` | explicit protected App provisioning, controller state, revocation acknowledgement |
 | `warden sim ...` | simulated GitHub world for tests/evidence only (`--backend sim:<file>`) |
 
 Exit codes: 0 ok, 1 invalid/refused, 2 usage or unconfirmed, 3 unsupported task, 4 blocked, 5 writer halted.
@@ -51,10 +52,31 @@ Exit codes: 0 ok, 1 invalid/refused, 2 usage or unconfirmed, 3 unsupported task,
 6. **Maintainer source binding:** event intake and writer verification share one parser. Approval/denial and override intents must match the unedited GitHub-attributed comment on the target item, including command kind, approval/binding IDs and reason.
 7. **Journal recovery:** only unedited intents by the authenticated submit identity are adopted. Acknowledgement requires an unedited configured-writer receipt matching the source comment, operation ID and target item. Untrusted or mismatched records leave the operation pending; reconciliation errors are surfaced.
 
+## Explicit live credential sources
+
+Provisioning is an operator action, not a YAML authority grant. After `setup --approve-ceiling`, configure the already approved installation:
+
+```bash
+warden credentials configure --confirm \
+  --app-id <id> --installation-id <id> --app-login '<app>[bot]' \
+  --key-path /absolute/protected/signing.pem
+```
+
+This writes only an installation reference to the instance's protected local store. It creates no key and issues no token. The signing key must be an owner-held regular `0600` file in a directory inaccessible to other users; symlinked key files are rejected. No signing key belongs in repository configuration, an Actions secret, or a model session. Replacing an existing reference requires `--replace --confirm`.
+
+The default `--backend github` obtains repository-narrowed installation tokens through the App issuer and the controller's ceiling, renewal, audit, persisted backoff and sticky revocation. Returned repository scope, permissions and expiry are checked before use; an incorrectly scoped token is rejected and revocation attempted. A GitHub 401 for an issued credential latches revocation instead of automatically replacing it. Requests cannot borrow another request's permission scope through the cache or single-flight path.
+
+For `inbox.globalControl` in another private repository, `credentials configure --approve-control-read ...` separately approves Issues/Metadata **read only** on that configured repository. It does not expand the submit/write repository ceiling.
+
+Human remote stop/resume requires **explicit** `--operator-auth gh --as <configured-operator>`. This deliberately uses that operator's existing GitHub CLI login, verified against the maintainer/operator list; environment token overrides are excluded. It is direct human control, never a fallback for failed App issuance, submission or the writer. Without that selection, stop persists local protection and reports remote propagation unconfirmed.
+
+The App cannot become the writer. On the matching repository's Actions runner, `--writer-auth actions` explicitly selects `GITHUB_TOKEN` as `github-actions[bot]`. `--submit-auth actions-secret` and `--control-auth actions-secret` explicitly select pre-provisioned short-lived `WARDEN_SUBMIT_TOKEN` and `WARDEN_CONTROL_READ_TOKEN`; none are consumed implicitly. The approved ceiling and automation opt-out still apply. The writer-only `WARDEN_LEDGER_KEY` authenticates ledger bytes. A production workflow/token-delivery mechanism is not installed by setup; the P1 sandbox proof uses temporary resources, while the shipped housekeeping workflow belongs to P2.
+
+Trust-root replacement requires provider-supported operator reauthorization, provision of the replacement key reference, and `credentials ack-revocation --confirm`. Acknowledgement alone neither repairs a revoked key nor mints a credential. Installation-token revocation is not proof of trust-root replacement.
+
 ## Known gaps and unverified items
 
-- **Partial live transport evidence, not live P1 acceptance.** The [P0 App proof](../../proof/inbox/FINDINGS.md#owner-approved-app-proof-2026-11-18) exercised `HttpStore` against the sandboxes with scoped installation tokens supplied by the proof harness. The production credential issuer (GitHub App JWT -> installation token) is **not implemented**: `--backend github` still reports unavailable, without ambient-token fallback. Scheduled sweep, trust-root recovery and full P1 live acceptance remain gated.
-- Cross-repository global control reads and revoked-access fail-closed behavior are demonstrated by the App proof on Mac and Actions. The complete P1 writer's `inbox.globalControl` integration still needs live acceptance.
+- The production App issuer and explicit live backend are implemented. The [P0 App proof](../../proof/inbox/FINDINGS.md#owner-approved-app-proof-2026-11-18) remains historical infrastructure evidence, not P1 acceptance. The production CLI/Actions proof is recorded separately; scheduled-run observation and provider-supported trust-root replacement remain independent gates until their observed results are recorded.
 - Writer-side `assignable` is `() => true`; real GitHub assignability checks belong to P2 (Claim).
 - No OpenCode adapter (P3); `AgentRunner`, `BudgetMonitor` and `runValidated` are tested with scripted runners only.
 - Setup does not create the inbox/control issues or the Actions workflow; the writer workflow template is P2.

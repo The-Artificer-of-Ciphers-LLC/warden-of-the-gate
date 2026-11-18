@@ -8,7 +8,7 @@ import { CLI_VERSION } from '../src/version.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'warden-evidence-')); const repo = join(dir, 'repo'); const home = join(dir, 'home'); const world = join(dir, 'world.json'); mkdirSync(repo);
 const clock = { now: Date.now() }; const env: Record<string, string> = {};
-let md = `# P1 acceptance transcript\n\nwarden ${CLI_VERSION}, node ${process.version}, backend: **simulated GitHub** (\`sim:\`), generated ${new Date().toISOString()}.\nThis is NOT a live GitHub result. Live sandbox verification of the HTTP store/App credentials is listed as unverified in the README.\n`;
+let md = `# P1 acceptance transcript\n\nwarden ${CLI_VERSION}, node ${process.version}, backend: **simulated GitHub** (\`sim:\`), generated ${new Date().toISOString()}.\nThis is NOT a live GitHub result. Separate production CLI/App/Actions acceptance evidence and remaining trust-root/scheduled-execution gates are linked from the README.\n`;
 const common = ['--repo-dir', repo, '--home', home, '--backend', `sim:${world}`];
 async function step(title: string, argv: string[], extra: string[] = common) {
   let out = ''; const code = await main([...argv, ...extra], { cwd: dir, env: env as NodeJS.ProcessEnv, out: (s) => (out += s + '\n'), err: (s) => (out += s + '\n'), now: () => clock.now });

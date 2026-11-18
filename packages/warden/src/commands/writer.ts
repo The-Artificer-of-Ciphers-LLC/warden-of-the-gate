@@ -11,6 +11,16 @@ import type { Ctx, Result } from './common.ts';
 
 function optStorage(c: Ctx, repo: string): InstanceStorage | null { try { return openStorage(c, repo, false); } catch { return null; } }
 
+export async function journalReconcile(c: Ctx): Promise<Result> {
+  const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'journal: configuration invalid' };
+  const cfg = cfgs.warden; const st = openStorage(c, cfg.repository);
+  const be = openBackend(c, cfg); const store = be.open('submit');
+  if (!store) return { code: 4, data: {}, text: `journal: ${be.unavailable}; pending operations remain durable` };
+  const writers = (str(c.flags, 'writer-identities') ?? (be.name === 'sim' ? WRITER_LOGIN : 'github-actions[bot]')).split(',');
+  const report = await reconcileJournal(store, cfg.inbox.inboxIssue, new Journal(st.journalPath), writers, cfg.inbox.maxIntentBytes);
+  return { code: 0, data: { ...report }, text: `journal: ${report.resubmitted} resubmitted, ${report.adopted} adopted, ${report.acked} acknowledged` };
+}
+
 /** `warden writer drain`: the ONE serialized effect path (Actions entry point; also runnable on the Mac). Authenticates as the WRITER identity. */
 export async function writerDrain(c: Ctx): Promise<Result> {
   const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'writer: configuration invalid:\n' + cfgs.errors.join('\n') };
@@ -21,7 +31,7 @@ export async function writerDrain(c: Ctx): Promise<Result> {
   const keyFile = str(c.flags, 'ledger-key-file'); const ledgerKey = keyFile ? readFileSync(keyFile, 'utf8').trim() : c.env.WARDEN_LEDGER_KEY;
   const w = new Writer(store, defaultWriterConfig({
     repository: cfg.repository, inboxIssue: cfg.inbox.inboxIssue, controlIssue: cfg.inbox.controlIssue, global, policy: pol,
-    submitters: (str(c.flags, 'submitters') ?? SUBMIT_LOGIN).split(','), writerIdentities: (str(c.flags, 'writer-identities') ?? WRITER_LOGIN).split(','),
+    submitters: (str(c.flags, 'submitters') ?? be.submitLogin ?? SUBMIT_LOGIN).split(','), writerIdentities: (str(c.flags, 'writer-identities') ?? store.actor()).split(','),
     env: str(c.flags, 'env') ?? 'actions', holder: c.env.GITHUB_RUN_ID ? `run-${c.env.GITHUB_RUN_ID}` : 'writer-' + process.pid, ledgerKey, assignable: () => true,
     leaseTtlMs: 30_000, leaseWaitMs: Number(str(c.flags, 'lease-wait-ms') ?? 20_000), fenceMarginMs: 5000, fenceCacheMs: Number(str(c.flags, 'fence-cache-ms') ?? 0),
   }));
