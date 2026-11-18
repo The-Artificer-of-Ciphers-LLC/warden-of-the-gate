@@ -7,6 +7,10 @@ import type { Ctx, Result } from './common.ts';
 import { buildPolicy } from '../config/snapshot.ts';
 import { planReconcile, planSweep, submitIntake, submitReconcile, submitSweep } from '../tasks/registry.ts';
 import { Journal } from '../writer/journal.ts';
+import { NotReadyRunner } from '../runner/agent-runner.ts';
+import type { AgentRunner } from '../runner/agent-runner.ts';
+import { OpenCodeRunner } from '../runner/opencode.ts';
+import { fileKV, planReview, runReview } from '../review/slice.ts';
 import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
 
 /** `warden run --task <name> [--dry-run]`. Preflight refuses when stopped (local or shared) or when control state is unknown (fail closed).
@@ -47,6 +51,18 @@ export async function run(c: Ctx): Promise<Result> {
       const sw = await submitSweep(findings, { ...base, repo: cfg.repository });
       const rec = await submitReconcile(await planReconcile(store, cfg, { skip }), { ...base, repo: cfg.repository });
       return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred; run \`warden writer drain\` to apply` };
+    }
+    if (task === 'review') {
+      // P3 first checkpoint: ONE read-only shadow review of ONE pull request. Local only: nothing is posted, merged or written to the contributor's branch.
+      const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task review requires --item N (one pull request per scan)' };
+      const kv = fileKV(st); const maxAttempts = 3;   // the prototype's budget of 3 is a guess to settle with live evidence
+      if (c.flags['dry-run']) { const p = await planReview(store, item, kv, maxAttempts); return { code: p.action === 'blocked' ? 4 : 0, data: { task, outcome: 'proposed', mode: 'dry-run', plan: p, mutations: 0 }, text: `task review (dry-run) #${item}: ${p.action}: ${p.why} (attempts ${p.attempts.used} of ${p.attempts.max}); no model call, no repository mutation` }; }
+      // Live local AI is explicit opt-in (`--runner opencode`): the pinned OpenCode adapter on a loopback-only LM Studio model. Default stays the honest not-ready refusal.
+      const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url') }) : new NotReadyRunner();
+      const o = await runReview({ store, item, runner, kv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal,
+        cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets') } });
+      const code = o.kind === 'accepted' || o.kind === 'reused' || o.kind === 'checks-only' ? 0 : o.kind === 'rejected' ? 1 : 4;
+      return { code, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task review #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
     const out = await runTask(task, { dryRun: !!c.flags['dry-run'], store, cfg, items: str(c.flags, 'item') ? String(str(c.flags, 'item')).split(',').map(Number) : undefined, skip });
     const protection = { readOnlyStoreEnforced: !!c.flags['dry-run'], globalDryRun: ctl.dryRun ? 'present' : ctl.unknown ? 'unknown' : 'absent', backend: be.name };

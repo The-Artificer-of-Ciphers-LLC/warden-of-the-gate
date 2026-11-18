@@ -108,7 +108,7 @@ test('run --task intake --dry-run: proposed transitions, zero mutation; other ta
   const by = Object.fromEntries(r.data.proposals.map((p: any) => [p.item, p.to])); assert.deepEqual(by, { 3: 'needs-triage', 4: 'needs-info', 5: 'needs-review', 6: 'needs-review' });
   assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('close with explanation'));
   assert.equal(r.data.protection.readOnlyStoreEnforced, true);
-  for (const t of ['triage', 'claim', 'implement', 'review', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
+  for (const t of ['triage', 'claim', 'implement', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
   { const x = await e.json('run', '--task', 'sweep', '--dry-run'); assert.equal(x.code, 0, 'sweep dry-run is implemented (P2, offline)'); assert.equal(x.data.outcome, 'proposed'); assert.equal(x.data.mutations, 0); }
   assert.equal((await e.json('run', '--task', 'sweep')).code, 0, 'live sweep only SUBMITS intents (none here: no item has a ledger)');
   assert.equal((await e.json('run', '--task', 'intake')).code, 2, 'live intake never scans the backlog: --item is required');
@@ -188,4 +188,16 @@ test('live intake via the CLI submits only the named item, the writer applies it
   const done = await e.json('adopt', '--selection', 'repo/sel.json', '--confirm'); assert.equal(done.code, 0); assert.equal(done.data.receipt.submitted.length, 1);
   await e.json('writer', 'drain');
   const after = await e.json('adopt', '--dry-run'); assert.deepEqual(after.data.items.map((i: any) => i.item), [5], 'only the selected item was adopted');
+});
+
+
+test('run --task review: needs one --item, dry-run plans with no model call, and live refuses honestly until the OpenCode adapter exists (never a fabricated review)', async () => {
+  const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'Fix token refresh race', '--pr', '--as', 'outside');
+  assert.equal((await e.json('run', '--task', 'review')).code, 2, 'one pull request per scan');
+  const w = e.worldJson(); const pr = w.issues.find((i: any) => i.isPr); pr.pull = { head: 'a1b2c3d4e5f6', base: 'base000', ci: 'passing', files: [{ path: 'src/a.ts', status: 'modified', patch: '@@' }] };
+  writeFileSync(e.world, JSON.stringify(w));
+  const before = worldHash(e);
+  const plan = await e.json('run', '--task', 'review', '--item', String(pr.number), '--dry-run'); assert.equal(plan.code, 0); assert.equal(plan.data.plan.action, 'full'); assert.equal(plan.data.mutations, 0); assert.equal(worldHash(e), before);
+  const live = await e.json('run', '--task', 'review', '--item', String(pr.number)); assert.equal(live.code, 4); assert.equal(live.data.outcome, 'blocked'); assert.match(live.data.notice, /unavailable|unknown|isolation/i);
+  assert.equal(live.data.marker, null); assert.equal(worldHash(e), before, 'nothing posted or written');
 });

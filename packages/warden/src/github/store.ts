@@ -4,6 +4,10 @@ export interface Label { name: string; description: string }
 export interface IssueState { number: number; assignees: string[]; labels: string[]; state: 'open' | 'closed'; title: string; body: string; author: string; isPr: boolean; draft?: boolean; head?: string; createdAt: string; updatedAt: string }
 export interface IssueEvent { id: number; event: string; actor: string; label?: string; createdAt: string }
 
+/** Read-only pull request snapshot input. `head` is the commit the review is bound to; `ci` is a coarse summary of checks on that head. */
+export interface PullFile { path: string; status: string; patch?: string }
+export interface PullInfo { number: number; head: string; base: string; title: string; author: string; draft: boolean; state: 'open' | 'closed'; ci: 'passing' | 'failing' | 'pending' | 'none'; files: PullFile[] }
+
 export interface Store {
   readonly name: string;
   /** Server-corrected wall clock (ms). Lease expiry never trusts the local clock alone. */
@@ -16,6 +20,8 @@ export interface Store {
   updateComment(id: number, body: string): Promise<Comment>;
   deleteComment(id: number): Promise<void>;
   getIssue(n: number): Promise<IssueState>;
+  /** Read-only. Throws a 404-shaped error when the item is not a pull request. */
+  getPull(n: number): Promise<PullInfo>;
   listIssues(opts?: { state?: 'open' | 'closed' | 'all' }): Promise<IssueState[]>;
   addAssignee(n: number, login: string): Promise<void>;
   removeAssignee(n: number, login: string): Promise<void>;
