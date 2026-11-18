@@ -1,5 +1,5 @@
-import type { Effect, Ledger, WorkflowState } from '../state/model.ts';
-import { canOverride, canTransition } from '../state/model.ts';
+import type { Effect, Ledger, Obligation, WorkflowState } from '../state/model.ts';
+import { canOverride, canTransition, isTerminal } from '../state/model.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
 import type { Intent } from './protocol.ts';
 import { decideApproval, requestApproval, revisionUpdate } from '../approvals/approvals.ts';
@@ -8,9 +8,9 @@ import { iso } from '../util.ts';
 import { evaluateClock } from '../sweep/clocks.ts';
 import type { IssueState } from '../github/store.ts';
 import { decideIntake } from '../tasks/intake.ts';
-import { clockItemFrom, type SweepObs } from '../sweep/derive.ts';
+import { clockItemFrom, isFresh, type SweepObs } from '../sweep/derive.ts';
 
-export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState }
+export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState; /** For `submission`: the linked PR as GitHub shows it now. */ linkedPr?: IssueState }
 const note = (text: string): Effect => ({ t: 'comment', text });
 const rej = (reason: string, text: string): Decision => ({ accept: false, reason, plan: [note(text)] });
 
@@ -74,6 +74,12 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'revision-update': return revisionUpdate(l, i, c);
     case 'sweep-action': return sweepAction(l, i, c);
     case 'intake': return intake(l, i, c);
+    case 'review-round': return reviewRound(l, i, c);
+    case 'submission': return submission(l, i, c);
+    case 'hold': return hold(l, i, c);
+    case 'hold-release': return holdRelease(l, i, c);
+    case 'reconcile': return reconcile(l, i, c);
+    case 'adopt': return adopt(l, i, c);
   }
 }
 
@@ -103,6 +109,10 @@ function sweepAction(l: Ledger, i: Intent, c: ReduceCtx): Decision {
     const back = l.kind === 'pr' ? 'You can reopen this PR or open a new one when the requested changes are ready.' : 'Reply with the requested information and a maintainer or the sweep can reopen it.';
     return { accept: true, plan: [...project(c.policy, from, 'closed'), note(`Closing this ${l.kind === 'pr' ? 'PR' : 'issue'} automatically: ${why}.${retained} ${back}`), { t: 'close' }], apply: (led) => moveTo(led, 'closed', undefined, c.now) };
   }
+  if (due.kind === 'close-draft') {
+    const ok = canTransition(l.kind, l.state, 'closed'); if (!ok.ok) return rej(ok.reason, `Draft closure rejected: ${ok.reason}.`);
+    return { accept: true, plan: [...project(c.policy, l.state, 'closed'), note(DRAFT_NOTE(l)), { t: 'close' }], apply: (led) => moveTo(led, 'closed', undefined, c.now) };
+  }
   if (due.kind === 'expire-commitment') {
     const refs = l.linked.length ? ` Partial-work references retained: ${l.linked.map((n) => '#' + n).join(', ')}.` : '';
     const from = l.state;
@@ -129,15 +139,144 @@ function intake(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (i.origin !== 'deterministic') return rej('intake-origin', 'Intake is deterministic only.');
   if (!c.item) return rej('intake-unobserved', 'Intake rejected: the writer could not observe the item.');
   const initial = l.kind === 'issue' ? 'needs-triage' : 'needs-review';
-  if (Object.keys(l.ops).length || l.owner || l.obligations.length || l.state !== initial || l.dropped) return { accept: false, reason: 'already-adopted', plan: [] };
+  void initial; if (!isFresh(l)) return { accept: false, reason: 'already-adopted', plan: [] };
   const d = decideIntake({ title: c.item.title, body: c.item.body, isPr: c.item.isPr, draft: c.item.draft }, { draftsAllowed: c.policy.draftsAllowed ?? false });
   if (d.to !== pl.expect) return { accept: false, reason: `stale-intake:expected-${pl.expect}-found-${d.to}`, plan: [] };   // silent: not a contributor-facing event
   const days = c.policy.sweep?.clocks.otherInformationDays;
+  if (d.closeDraft) return { accept: true, plan: [note(DRAFT_NOTE(l)), { t: 'close' }], apply: (led) => moveTo(led, 'closed', undefined, c.now) };
   const add = c.policy.labelStates[d.to]; const drop = d.to === initial ? undefined : c.policy.labelStates[initial];   // a brand-new item has no state label yet
   const plan: Effect[] = c.policy.projection && (add || drop) ? [{ t: 'label', add: add ? [add] : [], remove: drop ? [drop] : [] }] : [];
   if (d.needsInfo) plan.push(note(`Thanks for opening this. Some required information is missing (${d.reasons[0].replace('missing required information ', '')}). Please add it${days ? ` within ${days} days` : ''}; if nothing arrives the issue is closed with a note on how to reopen it.`));
   return { accept: true, plan, apply: (led) => {
     if (d.to !== led.state) moveTo(led, d.to, undefined, c.now);
     if (d.needsInfo && days) led.obligations = [{ type: 'information', startedAt: iso(c.now), dueAt: iso(c.now + days * 86_400_000), source: 'metadata' }];
+  } };
+}
+
+const DRAFT_NOTE = (l: Ledger) => `Closing this PR: draft pull requests are not accepted by this repository's policy. Mark it ready for review when it is complete and reopen it or open a new PR. Nothing was marked ready on your behalf${l.owner ? '; any existing assignment or delivery commitment is unchanged' : ''}.`;
+const HOURS = 3_600_000;
+const open = (o: Obligation) => (o.type === 'delivery' || o.type === 'fix-window') && !o.satisfiedAt;
+
+/** A published substantive BLOCKING review starts a fresh fix window for the author; waiting on review/CI is never author time.
+ *  Beyond the configured number of timely rounds the PR goes to the maintainer (never auto-closed for that reason alone) unless an
+ *  `extra-fix-round` approval is in force. The review text itself is a P3 concern: this records the obligation and state only. */
+function reviewRound(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const pl = i.payload as { blocking?: boolean };
+  if (i.origin !== 'deterministic') return rej('review-round-origin', 'Review rounds are recorded deterministically only.');
+  if (l.kind !== 'pr') return rej('review-round-on-issue', 'Review rounds apply to PRs only.');
+  const sw = c.policy.sweep; if (!sw) return rej('sweep-policy-missing', 'No approved clock policy in the snapshot.');
+  if (pl.blocking !== true) return { accept: true, plan: [] };
+  const from = l.state; const rounds = l.attempts.contributorFixRounds + 1;
+  const extra = Object.values(l.approvals).some((a) => a.action === 'extra-fix-round' && a.status === 'approved');
+  const keep = (led: Ledger) => led.obligations.filter((o) => o.type !== 'fix-window' && o.type !== 'response');
+  if (rounds > sw.contributorFixRounds && !extra) {
+    const ok = canTransition('pr', from, 'needs-decision'); if (!ok.ok) return rej(ok.reason, `Routing to the maintainer rejected: ${ok.reason}.`);
+    return { accept: true, plan: [...project(c.policy, from, 'needs-decision'), note(`Contributor fix rounds are exhausted (${sw.contributorFixRounds} timely rounds). A maintainer decides what happens next; the PR is not closed for this reason alone.`)],
+      apply: (led) => { led.attempts.contributorFixRounds = rounds; led.obligations = keep(led); led.sweep = undefined; moveTo(led, 'needs-decision', undefined, c.now); } };
+  }
+  const to: WorkflowState = 'needs-author'; const ok = from === to ? { ok: true as const } : canTransition('pr', from, to); if (!ok.ok) return rej(ok.reason, `Review round rejected: ${ok.reason}.`);
+  const due = iso(c.now + sw.fixWindowHours * HOURS);
+  return { accept: true, plan: [...(from === to ? [] : project(c.policy, from, to)), note(`A blocking review was published. You have ${sw.fixWindowHours} hours (until ${due}) to push the requested changes; time spent waiting on review or CI does not count against you. Comments or placeholder pushes do not extend the window.`)],
+    apply: (led) => { led.attempts.contributorFixRounds = rounds; led.sweep = undefined; if (from !== to) moveTo(led, to, undefined, c.now);
+      led.obligations = [...keep(led), { type: 'fix-window', startedAt: iso(c.now), dueAt: due, source: `blocking-review:${i.source.id}` }, { type: 'response', startedAt: iso(c.now), dueAt: iso(c.now + c.policy.sweep!.clocks.closeAfterHours * HOURS), source: `blocking-review:${i.source.id}` }]; } };
+}
+
+/** Record a TIMELY ready-for-review submission BEFORE any semantic assessment, so delayed review/CI/AI cannot falsely expire it.
+ *  A draft/placeholder is not delivery. The submission time is the reported observation clamped into [obligation start, decision time];
+ *  a late submission is not recorded as timely (the sweep decides the missed commitment). */
+function submission(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (i.origin !== 'deterministic') return rej('submission-origin', 'Submissions are recorded deterministically only.');
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  const want = l.kind === 'issue' ? 'delivery' : 'fix-window';
+  const ob = l.obligations.find((o) => o.type === want && open(o)); if (!ob) return silent('no-open-commitment');
+  const pr = l.kind === 'issue' ? c.linkedPr : c.item;
+  if (!pr || !pr.isPr || pr.state !== 'open') return silent('no-open-pr');
+  if (pr.draft) return silent('draft-is-not-delivery');
+  const reported = Date.parse(i.source.observedAt); const at = Number.isFinite(reported) ? Math.min(Math.max(reported, Date.parse(ob.startedAt)), c.now) : c.now;
+  if (at > Date.parse(ob.dueAt)) return silent('late-submission');
+  const prNum = l.kind === 'issue' ? (i.payload as { pr?: number }).pr! : l.item;
+  const to: WorkflowState = l.kind === 'issue' ? 'in-review' : 'needs-review';
+  const can = l.state === to ? { ok: true as const } : canTransition(l.kind, l.state, to);
+  return { accept: true, plan: [...(can.ok && l.state !== to ? project(c.policy, l.state, to) : []), note(`Timely submission recorded at ${iso(at)} (PR #${prNum}). Review will assess completeness; delays in review or CI do not count against the delivery commitment.`)],
+    apply: (led) => {
+      led.obligations = led.obligations.map((o) => (o.type === ob.type && o.dueAt === ob.dueAt ? { ...o, satisfiedAt: iso(at) } : o)).filter((o) => o.type !== 'response');
+      if (led.kind === 'issue' && !led.linked.includes(prNum)) led.linked.push(prNum);
+      led.sweep = undefined; if (can.ok && led.state !== to) moveTo(led, to, undefined, c.now);
+    } };
+}
+
+/** Explicit maintainer hold: freezes the UNEXPIRED portion of open commitments; recorded with reason, start and remaining time. */
+function hold(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Hold rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Hold by ${i.actor} rejected: not an authorized maintainer.`);
+  const reason = String((i.payload as { reason?: string }).reason ?? '').trim(); if (!reason) return rej('hold-reason-required', 'Hold rejected: a reason is required.');
+  const live = l.obligations.filter((o) => open(o) && !o.hold && Date.parse(o.dueAt) > c.now);
+  if (!live.length) return rej('nothing-to-hold', 'Hold rejected: there is no unexpired commitment to pause (an expired commitment cannot be rescued by a late hold).');
+  const rem = live.map((o) => `${o.type}: ${Math.round((Date.parse(o.dueAt) - c.now) / 60000)} minutes remaining`).join('; ');
+  return { accept: true, plan: [note(`Maintainer hold by ${i.actor} (${reason.slice(0, 200)}). Contributor takeover is paused and the unexpired time is frozen (${rem}). A revised deadline is published when the hold is released.`)],
+    apply: (led) => { led.obligations = led.obligations.map((o) => (live.some((x) => x.type === o.type && x.dueAt === o.dueAt) ? { ...o, hold: { startedAt: iso(c.now), remainingMs: Date.parse(o.dueAt) - c.now, reason: reason.slice(0, 200) } } : o)); } };
+}
+function holdRelease(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Release rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Release by ${i.actor} rejected: not an authorized maintainer.`);
+  const held = l.obligations.filter((o) => o.hold); if (!held.length) return rej('no-hold', 'Release rejected: nothing is on hold.');
+  const revised = held.map((o) => `${o.type} due ${iso(c.now + o.hold!.remainingMs)}`).join('; ');
+  return { accept: true, plan: [note(`Hold released by ${i.actor}. Revised deadline${held.length > 1 ? 's' : ''}: ${revised}.`)],
+    apply: (led) => { led.obligations = led.obligations.map((o) => { if (!o.hold) return o; const { hold: h, ...rest } = o; return { ...rest, dueAt: iso(c.now + h.remainingMs) }; }); } };
+}
+
+/** Reconcile the ledger with what GitHub shows now: externally closed issues, externally changed assignees, missing/mismatched state
+ *  labels. Never reopens an intentionally closed item and never invents a PR merge (merged vs closed is not observable through Store). */
+function reconcile(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (i.origin !== 'deterministic') return rej('reconcile-origin', 'Reconcile is deterministic only.');
+  const it = c.item; const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (!it) return silent('reconcile-unobserved');
+  if (isTerminal(l.kind, l.state)) return silent('ledger-terminal-never-reopened');
+  if (it.state === 'closed') {
+    if (l.kind === 'pr') return silent('pr-closed-externally-merge-status-unknown');
+    return { accept: true, plan: [...project(c.policy, l.state, 'closed'), note('This issue was closed outside Warden; the item ledger now matches and no work will be started on it.')],
+      apply: (led) => { moveTo(led, 'closed', undefined, c.now); led.owner = null; led.obligations = []; } };
+  }
+  const plan: Effect[] = []; let release = false;
+  if (l.kind === 'issue' && l.owner?.kind === 'contributor' && !it.assignees.includes(l.owner.id) && ['claimed', 'implementing'].includes(l.state)) {
+    release = true; plan.push(...project(c.policy, l.state, 'ready'), note(`${l.owner.id} is no longer assigned on GitHub, so the claim is released and the delivery commitment ends. The issue stays open.`));
+  }
+  const target = release ? 'ready' : l.state; const want = c.policy.projection ? c.policy.labelStates[target] : undefined;
+  if (want && !release) {
+    const stale = Object.values(c.policy.labelStates).filter((x) => x !== want && it.labels.includes(x)); const missing = !it.labels.includes(want);
+    if (missing || stale.length) plan.push({ t: 'label', add: missing ? [want] : [], remove: stale });
+  }
+  if (!plan.length) return silent('already-consistent');
+  return { accept: true, plan, apply: (led) => { if (release) { moveTo(led, 'ready', undefined, c.now); led.owner = null; led.obligations = led.obligations.filter((o) => o.type !== 'delivery'); } } };
+}
+
+/** Deliberate adoption of ONE existing item the operator selected. Preserves the existing GitHub owner; new clocks start at this
+ *  published adoption notice, never at the historical assignment, so adoption cannot manufacture an expired commitment. */
+function adopt(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const pl = i.payload as { expect?: string; draft?: 'keep' | 'close' };
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'maintainer') return silent('adopt-origin');
+  if (!c.policy.maintainers.includes(i.actor)) return silent('unauthorized-adopter');
+  if (!c.item) return silent('adopt-unobserved');
+  const initial = l.kind === 'issue' ? 'needs-triage' : 'needs-review';
+  void initial; if (!isFresh(l)) return silent('already-adopted');
+  const sw = c.policy.sweep; if (!sw) return silent('sweep-policy-missing');
+  const d = decideIntake({ title: c.item.title, body: c.item.body, isPr: c.item.isPr, draft: c.item.draft }, { draftsAllowed: c.policy.draftsAllowed ?? false });
+  if (d.to !== pl.expect) return silent(`stale-adoption:expected-${pl.expect}-found-${d.to}`);
+  const existingDraft = d.closeDraft;
+  if (existingDraft && pl.draft !== 'keep' && pl.draft !== 'close') return silent('draft-needs-explicit-decision');
+  const owner = l.kind === 'issue' ? c.item.assignees.find((a) => !c.policy.maintainers.includes(a)) : undefined;
+  const closeIt = existingDraft && pl.draft === 'close';
+  let to: WorkflowState = d.to; if (owner && to === 'needs-triage') to = 'claimed';
+  const notice = `Warden adopted this ${l.kind === 'pr' ? 'PR' : 'issue'} on ${iso(c.now)}. ${owner ? `${owner} remains the owner; the ${sw.deliveryHours}-hour delivery window runs from this notice (${iso(c.now + sw.deliveryHours * HOURS)}), not from the earlier assignment.` : 'Any response window runs from this notice, not from earlier activity.'} Nothing is closed because of how old it is.${existingDraft && pl.draft === 'keep' ? ' This existing draft was kept by the maintainer.' : ''}`;
+  const plan: Effect[] = [];
+  const lab = c.policy.projection ? c.policy.labelStates[to] : undefined; if (lab && !closeIt) plan.push({ t: 'label', add: [lab], remove: [] });
+  plan.push(note(closeIt ? `${notice} This draft was closed at the maintainer's decision; mark it ready for review and reopen it, or open a new PR.` : notice));
+  if (closeIt) plan.push({ t: 'close' });
+  return { accept: true, plan, apply: (led) => {
+    led.adoptedAt = iso(c.now); if (existingDraft && pl.draft === 'keep') led.draftDecision = 'keep';
+    if (closeIt) { moveTo(led, 'closed', undefined, c.now); return; }
+    if (to !== led.state) moveTo(led, to, undefined, c.now);
+    if (owner) { led.owner = { kind: 'contributor', id: owner, opid: i.opid }; led.obligations = [{ type: 'delivery', startedAt: iso(c.now), dueAt: iso(c.now + sw.deliveryHours * HOURS), source: 'adoption-notice' }]; }
   } };
 }

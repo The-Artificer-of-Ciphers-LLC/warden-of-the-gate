@@ -106,12 +106,12 @@ test('run --task intake --dry-run: proposed transitions, zero mutation; other ta
   const r = await e.json('run', '--task', 'intake', '--dry-run'); assert.equal(r.code, 0);
   assert.equal(r.data.mutations, 0); assert.equal(worldHash(e), before, 'world byte-identical after dry-run');
   const by = Object.fromEntries(r.data.proposals.map((p: any) => [p.item, p.to])); assert.deepEqual(by, { 3: 'needs-triage', 4: 'needs-info', 5: 'needs-review', 6: 'needs-review' });
-  assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('P2'));
+  assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('close with explanation'));
   assert.equal(r.data.protection.readOnlyStoreEnforced, true);
   for (const t of ['triage', 'claim', 'implement', 'review', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
   { const x = await e.json('run', '--task', 'sweep', '--dry-run'); assert.equal(x.code, 0, 'sweep dry-run is implemented (P2, offline)'); assert.equal(x.data.outcome, 'proposed'); assert.equal(x.data.mutations, 0); }
-  assert.equal((await e.json('run', '--task', 'sweep')).code, 3, 'live sweep stays unsupported until the Actions handler exists');
-  assert.equal((await e.json('run', '--task', 'intake')).code, 3, 'non-dry intake is P2');
+  assert.equal((await e.json('run', '--task', 'sweep')).code, 0, 'live sweep only SUBMITS intents (none here: no item has a ledger)');
+  assert.equal((await e.json('run', '--task', 'intake')).code, 2, 'live intake never scans the backlog: --item is required');
   assert.equal((await e.run('run', '--task', 'nope', '--dry-run')).code, 2); assert.equal((await e.run('run', '--dry-run')).code, 2);
   assert.equal(worldHash(e), before);
 });
@@ -168,4 +168,24 @@ test('status: no model, no secrets, shows state/ownership/approvals/credentials/
   const txt = await e.run('status'); assert.match(txt.out, /local stop: running/); assert.match(txt.out, /last sweep/);
   // GitHub unreachable: status still works locally and says remote is unknown
   e.envVars.WARDEN_SIM_DOWN = '1'; const d = await e.run('status'); assert.equal(d.code, 0); assert.match(d.out, /UNREACHABLE|unknown/i);
+});
+
+
+test('live intake via the CLI submits only the named item, the writer applies it, and adopt inventories/adopts only the selected existing items', async () => {
+  const e = await cliEnv();
+  await e.sim('sim', 'issue', '--title', 'Old backlog issue', '--body', 'existing body');     // #3 existing, never touched by intake
+  await e.sim('sim', 'issue', '--title', 'Brand new report', '--body', 'fresh body');          // #4 new
+  await e.sim('sim', 'issue', '--title', 'Another old issue', '--body', 'old body');          // #5 existing
+  const live = await e.json('run', '--task', 'intake', '--item', '4'); assert.equal(live.code, 0); assert.deepEqual(live.data.submitted, [4]);
+  assert.equal((await e.json('writer', 'drain')).code, 0);
+  const inv = await e.json('adopt', '--dry-run'); assert.equal(inv.code, 0);
+  assert.deepEqual(inv.data.items.map((i: any) => i.item), [3, 5], 'item 4 already has Warden state; 3 and 5 are inventoried, not adopted');
+  assert.equal((await e.json('status')).code, 0);
+  e.write('sel.json', JSON.stringify({ v: 1, repository: 'acme/widgets', inventoryDigest: 'stale', items: [{ item: 3 }] }));
+  assert.equal((await e.json('adopt', '--selection', 'repo/sel.json', '--confirm')).code, 1, 'stale inventory digest is refused');
+  e.write('sel.json', JSON.stringify({ v: 1, repository: 'acme/widgets', inventoryDigest: inv.data.digest, items: [{ item: 3 }] }));
+  assert.equal((await e.json('adopt', '--selection', 'repo/sel.json')).code, 2, 'needs --confirm');
+  const done = await e.json('adopt', '--selection', 'repo/sel.json', '--confirm'); assert.equal(done.code, 0); assert.equal(done.data.receipt.submitted.length, 1);
+  await e.json('writer', 'drain');
+  const after = await e.json('adopt', '--dry-run'); assert.deepEqual(after.data.items.map((i: any) => i.item), [5], 'only the selected item was adopted');
 });

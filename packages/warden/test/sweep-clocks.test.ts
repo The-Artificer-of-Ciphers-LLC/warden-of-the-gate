@@ -42,7 +42,7 @@ test('exemptions: keep-open, confirmed/approved issue, unreviewed PR, maintainer
   assert.equal((ev(pr({ unreviewed: true }), 999).due as any).why, 'unreviewed-pr');
   assert.equal((ev(pr({ maintainerWait: true }), 999).due as any).why, 'maintainer-wait');
   const d = pr({ draft: true, designatedDraft: true });
-  assert.equal(ev(d, 999).due.kind, 'close-silence');
+  assert.equal(ev(d, 999).due.kind, 'close-draft', 'drafts are disallowed by default, so a draft is closed by policy');
   assert.equal(evaluateClock(d, { now: at(999), stopped: false, cfg: { nudgeAfterHours: [48, 72], closeAfterHours: 120, reproductionDays: 14, otherInformationDays: 28, draftsEnabled: true } }).due.kind, 'none');
 });
 

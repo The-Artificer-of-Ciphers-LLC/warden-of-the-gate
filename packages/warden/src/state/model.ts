@@ -71,6 +71,10 @@ export interface Ledger {
   ops: Record<string, OpRec>; order: string[]; dropped: number; mac?: string;
   /** P2 sweep bookkeeping: which response nudges were published for the current silence start (resets when the author replies). */
   sweep?: { since: string; nudgesSent: Array<48 | 72> };
+  /** Set by deliberate adoption: an existing draft was kept; policy closure does not apply to it. */
+  draftDecision?: 'keep';
+  /** Adoption receipt reference (the inventory/receipt file is NOT a second canonical ledger). */
+  adoptedAt?: string;
 }
 export const newLedger = (repository: string, item: number, kind: ItemKind): Ledger => ({
   v: 1, repository, item, kind, epoch: 0, seq: 0, state: kind === 'issue' ? 'needs-triage' : 'needs-review', facets: {}, owner: null,

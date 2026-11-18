@@ -337,6 +337,7 @@ Required CLI operations (command names form the proposed MVP interface):
 | `warden setup` | Validate prerequisites and existing config; create only approved missing starter configuration/labels; explain App/isolation/model setup |
 | `warden config validate` | Validate both files and effective constraints; report actionable errors |
 | `warden run [--task <name>] [--dry-run]` | One bounded manual scan or selected task; all repository effects still use the serialized writer |
+| `warden adopt --dry-run [--out <file>]` / `warden adopt --selection <file> --confirm` | **PROPOSED (2026-11-18, awaiting owner review; implemented offline in P2).** Dry-run lists existing open items without Warden state (read-only) and writes an inventory file with a digest. `--selection` names the items to adopt, is bound to the current inventory digest, and needs `--confirm`; each existing draft needs an explicit `keep` or `close`. Only selected items are submitted through the writer; each receives a published adoption notice, keeps its existing owner, and starts new clocks at that notice. The inventory and the receipt are inputs/records, never a second item ledger. Never part of `setup` or `run` |
 | `warden status` | Show states, ownership/deadlines, last sweep, pending operations, blockers, credential/stop status and evidence freshness without exposing secrets |
 | `warden stop` / `warden resume` | Apply documented stop/resume semantics; no implicit restart of AI |
 | `warden upgrade --dry-run` | Show configuration/behavior change before an explicitly approved upgrade |

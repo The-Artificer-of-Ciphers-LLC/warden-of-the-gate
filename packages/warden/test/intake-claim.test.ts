@@ -41,11 +41,31 @@ test('intake: missing information asks the reporter, records a 28-day informatio
   assert.ok((await effects(r, n)).some((b) => b.includes('can reopen it')));
 });
 
-test('intake: a PR enters review; a draft PR is NOT closed (draft policy is not built) and is only queued', async () => {
-  const r = rig(); at(r, 0); const p = r.world.addIssue({ isPr: true, draft: true, title: 'wip', body: 'x' });
+test('intake: a PR enters review; a new draft PR is closed with an explanation and return path (drafts are disallowed by default)', async () => {
+  const r = rig(); at(r, 0);
+  const ok = r.world.addIssue({ isPr: true, title: 'ready pr', body: 'x' });
+  const p = r.world.addIssue({ isPr: true, draft: true, title: 'wip', body: 'x' });
+  await intake(r, [ok, p]); await w(r).drain();
+  assert.equal((await ledgerOf(r, ok)).state, 'needs-review'); assert.equal((await r.world.view('x').getIssue(ok)).state, 'open');
+  assert.equal((await r.world.view('x').getIssue(p)).state, 'closed');
+  assert.ok((await effects(r, p))[0].includes('draft pull requests are not accepted') && (await effects(r, p))[0].includes('Mark it ready for review'));
+});
+
+test('draft policy: drafts allowed => queued and never closed', async () => {
+  const r = rig({ drafts: { allowed: true } }); at(r, 0); const p = r.world.addIssue({ isPr: true, draft: true, title: 'wip', body: 'x' });
   await intake(r, [p]); await w(r).drain();
-  assert.equal((await ledgerOf(r, p)).state, 'needs-review');
   assert.equal((await r.world.view('x').getIssue(p)).state, 'open');
+});
+
+test('draft policy: a PR converted to draft later is closed by the next sweep unless adoption kept it', async () => {
+  const r = rig(); at(r, 0);
+  const a = r.world.addIssue({ isPr: true, title: 'was ready', body: 'x' }); await seed(r, a, 'pr', { state: 'needs-review' });
+  const b = r.world.addIssue({ isPr: true, title: 'kept draft', body: 'x' }); await seed(r, b, 'pr', { state: 'needs-review', draftDecision: 'keep' });
+  r.world.issues.get(a)!.draft = true; r.world.issues.get(b)!.draft = true;               // both converted to draft
+  const f = await planSweep(r.opStore, r.cfg, { now: r.world.now(), skip: new Set([r.inbox, r.control]) });
+  assert.deepEqual(f.map((x) => [x.item, x.due.kind]), [[a, 'close-draft']]);
+  await submitSweep(f, { submitStore: r.submitStore, repo: REPO, inboxIssue: r.inbox, now: r.world.now() }); await w(r).drain();
+  assert.equal((await r.world.view('x').getIssue(a)).state, 'closed'); assert.equal((await r.world.view('x').getIssue(b)).state, 'open');
 });
 
 test('intake never scans the backlog: it needs explicit items, skips ones that already have a ledger, and rejects an already-adopted item', async () => {

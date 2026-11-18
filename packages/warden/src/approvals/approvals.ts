@@ -16,12 +16,18 @@ const rej = (reason: string, text: string, apply?: (l: Ledger) => void): Decisio
 
 export type MaintainerCommand =
   | { kind: 'approval-decision'; payload: { approvalId: string; decision: 'approve' | 'deny'; bind?: string; reason?: string } }
-  | { kind: 'override'; payload: { to: string; reason: string } };
+  | { kind: 'override'; payload: { to: string; reason: string } }
+  | { kind: 'hold'; payload: { reason: string } }
+  | { kind: 'hold-release'; payload: { reason?: string } };
 export function parseMaintainerCommand(body: string): MaintainerCommand | null {
   const line = body.split('\n').map((l) => l.trim()).find((l) => l.startsWith('/warden'));
   if (!line) return null;
   const decision = /^\/warden\s+(approve|deny)\s+(apr_[0-9a-f]{6,})(?:\s+bind=([0-9a-f]{6,}))?(?:\s+(.*))?$/.exec(line);
   if (decision) return { kind: 'approval-decision', payload: { approvalId: decision[2], decision: decision[1] === 'approve' ? 'approve' : 'deny', bind: decision[3], reason: decision[4]?.trim() || undefined } };
+  const hold = /^\/warden\s+hold\s+(.+)$/.exec(line);
+  if (hold) return { kind: 'hold', payload: { reason: hold[1].trim() } };
+  const rel = /^\/warden\s+release-hold(?:\s+(.*))?$/.exec(line);
+  if (rel) return { kind: 'hold-release', payload: { reason: rel[1]?.trim() || undefined } };
   const override = /^\/warden\s+override\s+([a-z-]+)\s+(.+)$/.exec(line);
   return override ? { kind: 'override', payload: { to: override[1], reason: override[2].trim() } } : null;
 }
