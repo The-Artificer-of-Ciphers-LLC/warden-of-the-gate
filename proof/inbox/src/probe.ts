@@ -21,6 +21,20 @@ export async function runProbes(gh: GithubStore): Promise<ProbeResult[]> {
   out.push({ name: 'label-create-is-atomic', observed: { rounds, parallel: par, perRound: labelRounds }, pass: labelRounds.every((x) => x.created === 1 && x.other === 0), note: 'ADOPTED: label name uniqueness holds under parallel create => valid lease/fence primitive (issues:write only).' });
   out.push({ name: 'milestone-create-is-atomic', observed: { rounds, parallel: par, perRound: msRounds }, pass: false, note: 'EXPECTED FAIL / REJECTED: title uniqueness is a validation, not an atomic constraint; parallel creators all succeed. Must not be used as a lock.' });
 
+  // 1b. Alternatives considered (need wider permissions than issues:write): git refs and Actions variables
+  { const rn = `refs/warden/probe/${tag}`; const main = (await gh.req('GET', '/git/ref/heads/main')).json.object.sha;
+    const rr = await Promise.all(Array.from({ length: 8 }, () => fmt(gh.req('POST', '/git/refs', { ref: rn, sha: main }))));
+    out.push({ name: 'git-ref-create-is-atomic (needs contents:write; fallback only)', observed: count(rr), pass: count(rr).created === 1, note: 'Atomic, but requires contents:write.' });
+    const tree = (await gh.req('GET', `/git/commits/${main}`)).json.tree.sha;
+    const kids = await Promise.all([1, 2, 3, 4, 5].map((i) => gh.req('POST', '/git/commits', { message: 'probe' + i, tree, parents: [main] }).then((r) => r.json.sha as string)));
+    const ad = await Promise.all(kids.map((k) => fmt(gh.req('PATCH', `/git/refs/${rn.replace('refs/', '')}`, { sha: k, force: false }).then(() => ({})))));
+    out.push({ name: 'git-ref-advance-is-compare-and-swap (needs contents:write; fallback only)', observed: { siblings: 5, ...count(ad.map((x) => (x === 'created' ? 'created' : x)) ) }, pass: ad.filter((x) => x === 'created').length === 1, note: 'Non-force ref update behaves as CAS on a commit chain, but requires contents:write.' });
+    await gh.req('DELETE', `/git/${rn}`, undefined, { okStatuses: [404, 422] });
+    const vn = 'WARDEN_PROBE_' + tag.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 12);
+    const vr = await Promise.all(Array.from({ length: 6 }, () => fmt(gh.req('POST', '/actions/variables', { name: vn, value: '1' }))));
+    out.push({ name: 'actions-variable-create-is-atomic (needs Variables permission; rejected for the posting identity)', observed: count(vr), pass: count(vr).created === 1, note: 'Atomic, but the posting identity must not hold variable-write authority.' });
+    await gh.req('DELETE', `/actions/variables/${vn}`, undefined, { okStatuses: [404] }); }
+
   // 2. Read-after-write visibility of list reads (replication lag)
   let missing = 0; const lags: number[] = [];
   for (let i = 0; i < 12; i++) {

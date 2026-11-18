@@ -1,6 +1,6 @@
 # P0 PROOF-inbox: chosen mechanism
 
-Status: spike evidence. Not a production module. Results are in [RESULTS.md](RESULTS.md); reproduce with [README.md](README.md).
+Status: spike evidence. Not a production module. Verdict and blockers: [FINDINGS.md](FINDINGS.md). Raw results: [RESULTS.md](RESULTS.md); reproduce with [README.md](README.md).
 
 ## Decision in one paragraph
 
@@ -14,10 +14,10 @@ Nothing here needs a database, a repository ledger file, or contents-write autho
 |---|---|---|
 | Actions concurrency group / `queue: max` as the queue | Rejected as durability. Fine as a throughput hint. | Default group keeps 1 running + 1 pending; others are cancelled (see RESULTS: overflow). `queue: max` is still capped (100). |
 | Comment revision / ETag as compare-and-swap | Rejected. | Probe `comment-patch-has-compare-and-swap`: `If-Match` on `PATCH` comment is not honoured (HTTP 400); no CAS exists. |
-| Milestone title as a lock | **Rejected, found by the proof.** | Parallel creates of one title all succeed (probe `milestone-create-is-atomic`: up to 4 of 6 created per round). Uniqueness is a validation, not a constraint. |
+| Milestone title as a lock | **Rejected, found by the proof.** | Parallel creates of one title all succeed (probe `milestone-create-is-atomic`: 2 to 6 of 6 parallel creators succeeded per round). Uniqueness is a validation, not a constraint. |
 | Label name as a lock | **Adopted.** | 6 rounds x 6 parallel creates: exactly one `201`, five `422 already_exists` every round. |
-| Git ref create / ref advance as lock | Works (1 of 8 create; 1 of 5 advance), but needs `contents: write`. Kept as fallback only. | Exploratory run recorded in RESULTS. |
-| Repository variable as lock | Atomic (`409`), but needs a Variables permission the posting identity should not have. | Exploratory run recorded in RESULTS. |
+| Git ref create / ref advance as lock | Works (1 of 8 create; 1 of 5 advance), but needs `contents: write`. Kept as fallback only. | Probes `git-ref-*` in RESULTS. |
+| Repository variable as lock | Atomic (`409`), but needs a Variables permission the posting identity should not have. | Probes `git-ref-*` in RESULTS. |
 | Local-only journal | Insufficient alone (Mac off => deterministic events have no durable home). Kept as the Mac's write-ahead journal. | S15 |
 
 ## Objects and who may write them

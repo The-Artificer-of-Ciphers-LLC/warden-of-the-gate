@@ -33,11 +33,12 @@ Spike code, design and raw evidence: [`proof/inbox/`](../../proof/inbox/README.m
 
 ## Proof results and blockers
 
-Results are generated into [`proof/inbox/RESULTS.md`](../../proof/inbox/RESULTS.md) from raw JSON. Blockers and unverified items are listed there and summarized in the P0 hand-over; the ones that gate P1 are:
+Verdict and blockers: [`proof/inbox/FINDINGS.md`](../../proof/inbox/FINDINGS.md); raw results generated into [`proof/inbox/RESULTS.md`](../../proof/inbox/RESULTS.md). Passed against the sandbox: 17/17 scenarios offline and live, 16/16 Actions-side checks (real runner: 12 doorbells, 10 cancelled by GitHub, all 12 intents applied once; 18 increments from 4 Actions runners + 2 Mac processes with 0 lost versus 11 lost without the lease). Gating P1:
 
 - **Global stop across repositories** is unverified: Actions in repository X reading a control repository needs a credential wider than `GITHUB_TOKEN` (the GitHub App of ADR 0011). Until demonstrated, global stop is only proven as a second control scope inside one repository; do not claim cross-instance stop.
 - **Submit-versus-write separation** is not enforceable with one installation token: the Mac's `issues: write` token could also edit a ledger comment. P1 must either use two identities (submit-only vs writer) or accept divergence detection plus repair as the control.
-- **Cross-repository rate limits** (content-creation secondary limits) bound throughput; the live run records retries.
+- **Throughput and secondary rate limits:** about 8.5 s and roughly 25 API calls per intent in the spike; the shared login hit GitHub's secondary content-creation limit during the proof. P1 must batch/skip redundant fence lists and budget content creation.
+- **Scheduled sweep not observed:** no `schedule` run fired in about an hour; the backstop is proven only via `workflow_dispatch`.
 
 ## Consequences
 

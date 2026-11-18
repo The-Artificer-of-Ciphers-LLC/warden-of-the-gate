@@ -1,0 +1,838 @@
+{
+  "proof": "PROOF-inbox scenarios",
+  "backend": "github",
+  "repo": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "node": "v26.13.0",
+  "gitCommit": "3c3df5a",
+  "at": "2026-11-18T06:11:14.248Z",
+  "leaseTtlMs": 7000,
+  "summary": {
+    "total": 17,
+    "passed": 12,
+    "failed": [
+      "S13",
+      "S14",
+      "S15",
+      "S17",
+      "S16"
+    ]
+  },
+  "results": [
+    {
+      "id": "S01",
+      "title": "Baseline claim end to end (admission, decision, effects, receipt)",
+      "covers": "request admission; immutable identity; acknowledgements",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "[{\"commentId\":6970367115,\"opid\":\"op_2108339a7edf661aa6a518ec2127fdec\",\"result\":\"applied\"}]"
+      ],
+      "checks": [
+        {
+          "desc": "claim applied exactly once",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 6970367115,
+              "opid": "op_2108339a7edf661aa6a518ec2127fdec",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "ledger records single owner and op",
+          "pass": true,
+          "observed": {
+            "id": "trek-e",
+            "kind": "contributor",
+            "opid": "op_2108339a7edf661aa6a518ec2127fdec"
+          }
+        },
+        {
+          "desc": "GitHub assignment confirmed (assignable claimant)",
+          "pass": true,
+          "observed": [
+            "trek-e"
+          ]
+        },
+        {
+          "desc": "projection label applied",
+          "pass": true,
+          "observed": [
+            "warden:claimed"
+          ]
+        },
+        {
+          "desc": "one receipt keyed to the intent comment",
+          "pass": true,
+          "observed": [
+            {
+              "id": 6970371400,
+              "by": "writer-uma90a",
+              "epoch": 91,
+              "intentCommentId": 6970367115,
+              "item": 95,
+              "opid": "op_2108339a7edf661aa6a518ec2127fdec",
+              "post": {
+                "owner": {
+                  "id": "trek-e",
+                  "kind": "contributor",
+                  "opid": "op_2108339a7edf661aa6a518ec2127fdec"
+                },
+                "state": "claimed"
+              },
+              "result": "applied",
+              "seq": 6
+            }
+          ]
+        },
+        {
+          "desc": "exactly one ledger comment (no competing ledger)",
+          "pass": true
+        },
+        {
+          "desc": "operation identity is content-derived and stable",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 20162
+    },
+    {
+      "id": "S02",
+      "title": "Two claims for one issue, concurrent submitters, two concurrent writers (Mac + Actions)",
+      "covers": "two claims; serialization; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "exactly one accepted, one rejected",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "rejected": 1
+          }
+        },
+        {
+          "desc": "ledger has exactly one owner and it is the accepted op",
+          "pass": true,
+          "observed": {
+            "id": "factory",
+            "kind": "factory",
+            "opid": "op_ff22f0c2edcdbf09f38af9112bf17aec"
+          }
+        },
+        {
+          "desc": "only one \"Claim accepted\" notice was ever posted",
+          "pass": true
+        },
+        {
+          "desc": "loser was told why (explanatory comment)",
+          "pass": true
+        },
+        {
+          "desc": "receipt epochs never decrease by receipt order (no overlapping writers)",
+          "pass": true,
+          "observed": [
+            92,
+            92
+          ]
+        },
+        {
+          "desc": "both writers ran without error; one processed, the other idle or sequential",
+          "pass": true,
+          "observed": [
+            {
+              "env": "mac",
+              "epoch": 93,
+              "n": 0
+            },
+            {
+              "env": "actions",
+              "epoch": 92,
+              "n": 2
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 25041
+    },
+    {
+      "id": "S03",
+      "title": "Contributor vs factory ownership race (repeated rounds)",
+      "covers": "contributor/factory ownership race",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "each of 3 rounds has exactly one confirmed owner, one notice, GitHub assignment consistent with ledger",
+          "pass": true,
+          "observed": [
+            {
+              "item": 104,
+              "winner": "trek-e",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "trek-e"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 105,
+              "winner": "trek-e",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [
+                "trek-e"
+              ],
+              "consistent": true
+            },
+            {
+              "item": 106,
+              "winner": "factory",
+              "owners": 1,
+              "notices": 1,
+              "assignees": [],
+              "consistent": true
+            }
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 79827
+    },
+    {
+      "id": "S04",
+      "title": "Crash before an effect, then recovery by a new writer after lease expiry",
+      "covers": "crash before effect; lease takeover",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "writer crashed before the first effect (and held the lease)",
+          "pass": true,
+          "observed": "CRASH@before-effect:0"
+        },
+        {
+          "desc": "decision already durable in ledger (applying, step 0) and intent still pending",
+          "pass": true,
+          "observed": {
+            "st": {
+              "attempts": 0,
+              "decision": "accept",
+              "epoch": 100,
+              "intentCommentId": 6970400895,
+              "plan": [
+                {
+                  "add": [
+                    "warden:claimed"
+                  ],
+                  "remove": [
+                    "warden:ready"
+                  ],
+                  "t": "label"
+                },
+                {
+                  "t": "comment",
+                  "text": "Claim accepted: factory factory now owns this item."
+                }
+              ],
+              "status": "applying",
+              "step": 0
+            },
+            "pend": 1
+          }
+        },
+        {
+          "desc": "no external effect leaked before the crash",
+          "pass": true
+        },
+        {
+          "desc": "new writer waited out the dead lease, took a higher epoch, resumed the op",
+          "pass": true,
+          "observed": {
+            "epoch": 101,
+            "p": [
+              {
+                "commentId": 6970400895,
+                "opid": "op_acf9b72880074d9b693e6bffc9a16259",
+                "result": "applied"
+              }
+            ]
+          }
+        },
+        {
+          "desc": "each effect applied exactly once",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 20364
+    },
+    {
+      "id": "S05",
+      "title": "Effect applied but reply lost / crash after effect before progress recorded",
+      "covers": "effect applied reply lost",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "reply loss surfaced as a retry (attempt counted), not a duplicate or a silent success",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 6970406485,
+              "opid": "op_2ffac57d959b27977e61fc3aad548e81",
+              "result": "retry",
+              "reason": "Error: reply lost after effect comment"
+            },
+            {
+              "commentId": 6970406485,
+              "opid": "op_2ffac57d959b27977e61fc3aad548e81",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "notice posted exactly once despite the retry (marker reconciliation)",
+          "pass": true,
+          "observed": 1
+        },
+        {
+          "desc": "attempt counter persisted in ledger",
+          "pass": true,
+          "observed": 1
+        },
+        {
+          "desc": "crash after effect/before progress record left the effect applied and the op unfinished",
+          "pass": true,
+          "observed": {
+            "rr": "CRASH@after-effect:1",
+            "before": 1
+          }
+        },
+        {
+          "desc": "recovery did not repeat the already-applied effect",
+          "pass": true,
+          "observed": 1
+        }
+      ],
+      "pass": true,
+      "ms": 40607
+    },
+    {
+      "id": "S06",
+      "title": "Duplicate and out-of-order triggers",
+      "covers": "duplicate/out-of-order triggers; immutable identity",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "{\"applied\":2,\"duplicate\":2}"
+      ],
+      "checks": [
+        {
+          "desc": "out-of-order release is deferred (stays pending, visible), not applied or dropped",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 6970417150,
+              "opid": "op_98ffbd272328b5601a0d1ada85710072",
+              "result": "deferred",
+              "reason": "waiting for op_bb408cb3ac11d4dfc0d5215e48c375fb"
+            }
+          ]
+        },
+        {
+          "desc": "three identical claim deliveries => one applied, two duplicates",
+          "pass": true,
+          "observed": {
+            "applied": 2,
+            "duplicate": 2
+          }
+        },
+        {
+          "desc": "deferred release applied after its predecessor within the same drain",
+          "pass": true,
+          "observed": {
+            "state": "ready",
+            "owner": null
+          }
+        },
+        {
+          "desc": "claim notice posted once",
+          "pass": true
+        },
+        {
+          "desc": "nothing left pending",
+          "pass": true,
+          "observed": []
+        }
+      ],
+      "pass": true,
+      "ms": 33169
+    },
+    {
+      "id": "S07",
+      "title": "Interrupted multi-effect application (3 effects, crash after the second)",
+      "covers": "interrupted multi-effect application",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "crashed mid-plan: earlier effects visible, ledger step lags at most one",
+          "pass": true,
+          "observed": {
+            "r1": "CRASH@after-effect:1",
+            "step": 1
+          }
+        },
+        {
+          "desc": "no acknowledgement (receipt) existed before completion",
+          "pass": true
+        },
+        {
+          "desc": "resumed to completion: all effects present exactly once",
+          "pass": true,
+          "observed": {
+            "assignees": [
+              "trek-e"
+            ],
+            "labels": [
+              "warden:claimed"
+            ]
+          }
+        },
+        {
+          "desc": "receipt posted only after completion",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 26380
+    },
+    {
+      "id": "S08",
+      "title": "Actions outage: intents accepted and visible while no writer runs; no local mutation fallback",
+      "covers": "Actions outage; failure visibility",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "all 5 intents durable on GitHub and enumerable while the writer is down",
+          "pass": true,
+          "observed": 5
+        },
+        {
+          "desc": "no ledger or item mutation occurred (no unsynchronized local write path)",
+          "pass": true
+        },
+        {
+          "desc": "local journal agrees: 5 submitted, 0 acked => status shows 5 uncertain/pending",
+          "pass": true
+        },
+        {
+          "desc": "after recovery all 5 applied exactly once, in inbox order",
+          "pass": true,
+          "observed": [
+            "applied",
+            "applied",
+            "applied",
+            "applied",
+            "applied"
+          ]
+        },
+        {
+          "desc": "Mac journal reconciled all 5 to acked from receipts",
+          "pass": true,
+          "observed": {
+            "resubmitted": 0,
+            "adopted": 0,
+            "acked": 5
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 49898
+    },
+    {
+      "id": "S09",
+      "title": "Trigger flood beyond pending-queue capacity (doorbells collapse to 2 runs; every intent still applied)",
+      "covers": "triggers exceeding pending-queue capacity",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "20 triggers, only 2 runs survived (model), yet all 20 intents were applied (durable inbox, not queue, carries the work)",
+          "pass": true,
+          "observed": {
+            "receipts": {
+              "applied": 20
+            },
+            "effects": 20
+          }
+        },
+        {
+          "desc": "per-run cap respected (second run needed to finish)",
+          "pass": true,
+          "observed": [
+            10,
+            10
+          ]
+        },
+        {
+          "desc": "nothing pending after the surviving runs",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 170754
+    },
+    {
+      "id": "S10",
+      "title": "Stop: global/instance, before and during application, operator authority, fail closed",
+      "covers": "global/instance stop visibility; stop during effect; resume",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [
+        "non-operator unlabel check runs in the Actions-side proof (actor github-actions[bot]); single gh identity here"
+      ],
+      "checks": [
+        {
+          "desc": "instance stop: writer halts before any effect, intent stays pending, stop-ack posted",
+          "pass": true,
+          "observed": "instance: stop label present"
+        },
+        {
+          "desc": "global stop (separate control scope) halts a running-instance writer",
+          "pass": true,
+          "observed": "global: stop label present"
+        },
+        {
+          "desc": "stop mid-plan: halted between effects; op remains applying (recoverable), no receipt",
+          "pass": true,
+          "observed": {
+            "halted": "stop",
+            "st": {
+              "attempts": 0,
+              "decision": "accept",
+              "epoch": 112,
+              "intentCommentId": 6970491954,
+              "plan": [
+                {
+                  "login": "trek-e",
+                  "t": "assign"
+                },
+                {
+                  "add": [
+                    "warden:claimed"
+                  ],
+                  "remove": [
+                    "warden:ready"
+                  ],
+                  "t": "label"
+                },
+                {
+                  "t": "comment",
+                  "text": "Claim accepted: contributor trek-e now owns this item."
+                }
+              ],
+              "status": "applying",
+              "step": 2
+            }
+          }
+        },
+        {
+          "desc": "explicit resume completes the interrupted op exactly once",
+          "pass": true,
+          "observed": [
+            {
+              "commentId": 6970491954,
+              "opid": "op_641b1baab0ba46e6c50ebdec0d55156d",
+              "result": "applied"
+            }
+          ]
+        },
+        {
+          "desc": "unreadable stop control => fail closed (no effects), reported as unknown",
+          "pass": true,
+          "observed": "instance: control state unreadable (Error: control unreadable) => fail closed"
+        }
+      ],
+      "pass": true,
+      "ms": 33200
+    },
+    {
+      "id": "S11",
+      "title": "Admission: authorization, edits, forged identity, oversize, malformed",
+      "covers": "request admission; authorization; payload limits; failure visibility",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "oversize intent rejected at the submission edge (never truncated)",
+          "pass": true
+        },
+        {
+          "desc": "forged identity, malformed, oversize, edited => all quarantined with a visible receipt (none silently ignored)",
+          "pass": true,
+          "observed": [
+            "identity-mismatch",
+            "malformed-json",
+            "payload-too-large",
+            "edited-after-admission"
+          ]
+        },
+        {
+          "desc": "the one valid intent still applied",
+          "pass": true,
+          "observed": {
+            "applied": 1,
+            "quarantined": 4
+          }
+        },
+        {
+          "desc": "quarantined intents produced no ledger op",
+          "pass": true
+        },
+        {
+          "desc": "intent from a non-allow-listed author is quarantined, never applied",
+          "pass": true,
+          "observed": [
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e",
+            "unauthorized-author:trek-e"
+          ]
+        }
+      ],
+      "pass": true,
+      "ms": 30382
+    },
+    {
+      "id": "S12",
+      "title": "Retry bound: poison effect becomes visible failure, never an infinite loop",
+      "covers": "retry bounds; failure visibility",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "op fails permanently after exactly 5 attempts with a visible 'failed' receipt",
+          "pass": true,
+          "observed": {
+            "attempts": 5,
+            "rc": [
+              "failed"
+            ]
+          }
+        },
+        {
+          "desc": "attempt budget is persisted: a cold-start writer cannot reset it",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "ms": 25576
+    },
+    {
+      "id": "S13",
+      "title": "Zombie writer: stalls past lease expiry; fenced; stale write detected and repaired from receipts",
+      "covers": "actual serialization under pause; no acknowledged claim with two owners",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [
+        {
+          "desc": "taker B ran at a higher epoch and applied claim then release",
+          "pass": true,
+          "observed": {
+            "zombie": 119,
+            "taker": 120
+          }
+        },
+        {
+          "desc": "(a) zombie woke, base check failed, it wrote nothing and halted fenced",
+          "pass": true,
+          "observed": "FENCED: stale base on #148: expected seq 4, found 13"
+        }
+      ],
+      "pass": false,
+      "ms": 171765,
+      "error": "Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createComment (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:65:64)"
+    },
+    {
+      "id": "S14",
+      "title": "Zombie creating a ledger concurrently is fenced and removes its own duplicate ledger",
+      "covers": "one item-ledger authority; no competing ledger",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [],
+      "pass": false,
+      "ms": 106774,
+      "error": "Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)"
+    },
+    {
+      "id": "S15",
+      "title": "Mac write-ahead journal: crash before post, lost reply after post, reconcile",
+      "covers": "durable local intent; acknowledgements; enumeration/recovery",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [],
+      "pass": false,
+      "ms": 107005,
+      "error": "Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)"
+    },
+    {
+      "id": "S17",
+      "title": "Retention/compaction: terminal pairs expire, pending and failed are kept, replays stay harmless",
+      "covers": "retention; dedupe horizon",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [],
+      "pass": false,
+      "ms": 107009,
+      "error": "Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)"
+    },
+    {
+      "id": "S16",
+      "title": "Overlap proof: lost updates without the lease, none with it; non-atomic primitive control",
+      "covers": "ACTUAL serialization (not a concurrency setting or revision number)",
+      "inputs": {
+        "backend": "github",
+        "leaseTtlMs": 7000,
+        "scale": {
+          "flood": 20,
+          "races": 3
+        }
+      },
+      "log": [],
+      "checks": [],
+      "pass": false,
+      "ms": 106983,
+      "error": "Error: rate limited persistently |     at GithubStore.req (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:42:33) |     at process.processTicksAndRejections (node:internal/process/task_queues:104:5) |     at async GithubStore.createIssue (file:///Users/trekkie/projects/warden-of-the-gate/.claude/worktrees/p0-inbox-proof-0657db/proof/inbox/src/github.ts:83:60)"
+    }
+  ]
+}

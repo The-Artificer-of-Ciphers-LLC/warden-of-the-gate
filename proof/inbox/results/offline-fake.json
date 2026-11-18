@@ -3,12 +3,12 @@
   "backend": "fake",
   "repo": "in-memory fake",
   "node": "v26.13.0",
-  "gitCommit": "8fd0bce",
-  "at": "2026-11-18T05:20:56.850Z",
+  "gitCommit": "3c3df5a",
+  "at": "2026-11-18T05:51:06.759Z",
   "leaseTtlMs": 350,
   "summary": {
-    "total": 16,
-    "passed": 16,
+    "total": 17,
+    "passed": 17,
     "failed": []
   },
   "results": [
@@ -68,7 +68,7 @@
           "observed": [
             {
               "id": 1003,
-              "by": "writer-57rosq",
+              "by": "writer-57178m",
               "epoch": 1,
               "intentCommentId": 1000,
               "item": 104,
@@ -96,7 +96,7 @@
         }
       ],
       "pass": true,
-      "ms": 143
+      "ms": 125
     },
     {
       "id": "S02",
@@ -124,9 +124,9 @@
           "desc": "ledger has exactly one owner and it is the accepted op",
           "pass": true,
           "observed": {
-            "id": "alice",
-            "kind": "contributor",
-            "opid": "op_aeb56a9d6b773cbb5db35d778ca71d1d"
+            "id": "factory",
+            "kind": "factory",
+            "opid": "op_a3d8260b34767b91b2d33aa2b683a68b"
           }
         },
         {
@@ -163,7 +163,7 @@
         }
       ],
       "pass": true,
-      "ms": 438
+      "ms": 390
     },
     {
       "id": "S03",
@@ -203,18 +203,22 @@
             },
             {
               "item": 114,
-              "winner": "factory",
+              "winner": "alice",
               "owners": 1,
               "notices": 1,
-              "assignees": [],
+              "assignees": [
+                "alice"
+              ],
               "consistent": true
             },
             {
               "item": 115,
-              "winner": "factory",
+              "winner": "alice",
               "owners": 1,
               "notices": 1,
-              "assignees": [],
+              "assignees": [
+                "alice"
+              ],
               "consistent": true
             },
             {
@@ -229,10 +233,12 @@
             },
             {
               "item": 117,
-              "winner": "factory",
+              "winner": "alice",
               "owners": 1,
               "notices": 1,
-              "assignees": [],
+              "assignees": [
+                "alice"
+              ],
               "consistent": true
             },
             {
@@ -259,7 +265,7 @@
         }
       ],
       "pass": true,
-      "ms": 2324
+      "ms": 2273
     },
     {
       "id": "S04",
@@ -334,7 +340,7 @@
         }
       ],
       "pass": true,
-      "ms": 535
+      "ms": 593
     },
     {
       "id": "S05",
@@ -392,7 +398,7 @@
         }
       ],
       "pass": true,
-      "ms": 691
+      "ms": 649
     },
     {
       "id": "S06",
@@ -449,7 +455,7 @@
         }
       ],
       "pass": true,
-      "ms": 245
+      "ms": 242
     },
     {
       "id": "S07",
@@ -495,7 +501,7 @@
         }
       ],
       "pass": true,
-      "ms": 489
+      "ms": 569
     },
     {
       "id": "S08",
@@ -546,7 +552,7 @@
         }
       ],
       "pass": true,
-      "ms": 377
+      "ms": 378
     },
     {
       "id": "S09",
@@ -586,7 +592,7 @@
         }
       ],
       "pass": true,
-      "ms": 3362
+      "ms": 3357
     },
     {
       "id": "S10",
@@ -669,7 +675,7 @@
         }
       ],
       "pass": true,
-      "ms": 219
+      "ms": 226
     },
     {
       "id": "S11",
@@ -720,7 +726,7 @@
         }
       ],
       "pass": true,
-      "ms": 1267
+      "ms": 1286
     },
     {
       "id": "S12",
@@ -752,7 +758,7 @@
         }
       ],
       "pass": true,
-      "ms": 170
+      "ms": 178
     },
     {
       "id": "S13",
@@ -782,12 +788,19 @@
           "observed": "FENCED: stale base on #161: expected seq 4, found 13"
         },
         {
-          "desc": "(b) stale write DID land (honest residual window) and was detected by the post-write fence",
+          "desc": "(b) stale write DID land (honest residual window): ledger regressed from ready to claimed, detected by the post-write fence",
           "pass": true,
           "observed": {
             "zombie": "FENCED: epoch 42 superseded by 43",
-            "ledgerState": "claimed",
-            "owner": "alice"
+            "before": {
+              "state": "ready",
+              "seq": 13
+            },
+            "afterZombie": {
+              "state": "claimed",
+              "owner": "alice",
+              "seq": 5
+            }
           }
         },
         {
@@ -817,7 +830,7 @@
         }
       ],
       "pass": true,
-      "ms": 2382
+      "ms": 1473
     },
     {
       "id": "S14",
@@ -850,7 +863,7 @@
         }
       ],
       "pass": true,
-      "ms": 1111
+      "ms": 520
     },
     {
       "id": "S15",
@@ -897,7 +910,51 @@
         }
       ],
       "pass": true,
-      "ms": 188
+      "ms": 194
+    },
+    {
+      "id": "S17",
+      "title": "Retention/compaction: terminal pairs expire, pending and failed are kept, replays stay harmless",
+      "covers": "retention; dedupe horizon",
+      "inputs": {
+        "backend": "fake",
+        "leaseTtlMs": 350,
+        "scale": {
+          "flood": 60,
+          "races": 8
+        }
+      },
+      "log": [
+        "retention used (ms): 562"
+      ],
+      "checks": [
+        {
+          "desc": "applied intent+receipt pairs deleted after retention",
+          "pass": true,
+          "observed": {
+            "deleted": 4,
+            "kept": 1
+          }
+        },
+        {
+          "desc": "quarantined pair kept (4x retention), pending intent never deleted",
+          "pass": true,
+          "observed": 3
+        },
+        {
+          "desc": "late redelivery of a compacted op is a duplicate (ledger dedupe horizon), no second effect",
+          "pass": true,
+          "observed": {
+            "notes": 3,
+            "p": [
+              "applied",
+              "duplicate"
+            ]
+          }
+        }
+      ],
+      "pass": true,
+      "ms": 1414
     },
     {
       "id": "S16",
@@ -912,7 +969,7 @@
         }
       },
       "log": [
-        "{\"none\":{\"mode\":\"nolease\",\"workers\":6,\"perWorker\":5,\"expected\":30,\"final\":6,\"lostUpdates\":24,\"distinctEpochsUsed\":0,\"epochsStrictlyDistinctPerIncrement\":null,\"commentId\":1352},\"lease\":{\"mode\":\"lease\",\"workers\":6,\"perWorker\":5,\"expected\":30,\"final\":30,\"lostUpdates\":0,\"distinctEpochsUsed\":30,\"epochsStrictlyDistinctPerIncrement\":true,\"commentId\":1353}}"
+        "{\"none\":{\"mode\":\"nolease\",\"workers\":6,\"perWorker\":5,\"expected\":30,\"final\":6,\"lostUpdates\":24,\"distinctEpochsUsed\":0,\"epochsStrictlyDistinctPerIncrement\":null,\"commentId\":1366},\"lease\":{\"mode\":\"lease\",\"workers\":6,\"perWorker\":5,\"expected\":30,\"final\":30,\"lostUpdates\":0,\"distinctEpochsUsed\":30,\"epochsStrictlyDistinctPerIncrement\":true,\"commentId\":1367}}"
       ],
       "checks": [
         {
@@ -927,7 +984,7 @@
             "lostUpdates": 24,
             "distinctEpochsUsed": 0,
             "epochsStrictlyDistinctPerIncrement": null,
-            "commentId": 1352
+            "commentId": 1366
           }
         },
         {
@@ -942,7 +999,7 @@
             "lostUpdates": 0,
             "distinctEpochsUsed": 30,
             "epochsStrictlyDistinctPerIncrement": true,
-            "commentId": 1353
+            "commentId": 1367
           }
         },
         {
@@ -953,16 +1010,16 @@
             "workers": 6,
             "perWorker": 5,
             "expected": 30,
-            "final": 18,
-            "lostUpdates": 12,
-            "distinctEpochsUsed": 12,
+            "final": 22,
+            "lostUpdates": 8,
+            "distinctEpochsUsed": 16,
             "epochsStrictlyDistinctPerIncrement": false,
-            "commentId": 1354
+            "commentId": 1368
           }
         }
       ],
       "pass": true,
-      "ms": 1542
+      "ms": 1581
     }
   ]
 }
