@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import type { Store } from '../github/store.ts';
 import { Faults, redactDeep } from '../util.ts';
 import { INTENT_MARK, encodeIntent, parseIntent, parseReceipt } from './protocol.ts';
-import type { Intent } from './protocol.ts';
+import type { Intent, Receipt } from './protocol.ts';
 
 export interface JournalEntry { opid: string; intent?: Intent; state: 'pending' | 'submitted' | 'acked'; commentId?: number; result?: string; reason?: string; at: string }
 
@@ -34,13 +34,17 @@ export async function submit(store: Store, inboxIssue: number, intent: Intent, j
   return { commentId: c.id };
 }
 
-/** Recovery on the Mac: resubmit what never landed, adopt what did (lost reply), mark acked ONLY from receipts. */
-export async function reconcileJournal(store: Store, inboxIssue: number, journal: Journal, maxBytes?: number) {
+/** Adopt only the submitter's unedited intents; acknowledge only unedited writer receipts matching the operation and item. */
+export async function reconcileJournal(store: Store, inboxIssue: number, journal: Journal, writerIdentities: readonly string[], maxBytes?: number) {
   const comments = await store.listComments(inboxIssue);
-  const byOpid = new Map<string, number>(); const receipts = new Map<number, { result: string; reason?: string }>();
+  const byOpid = new Map<string, number>(); const receipts = new Map<number, Receipt[]>();
   for (const c of comments) {
-    if (c.body.startsWith(INTENT_MARK)) { const p = parseIntent(c, maxBytes); if (p.ok && !byOpid.has(p.intent.opid)) byOpid.set(p.intent.opid, c.id); }
-    const r = parseReceipt(c.body); if (r) receipts.set(r.intentCommentId, { result: r.result, reason: r.reason });
+    if (c.updatedAt !== c.createdAt) continue;
+    if (c.author === store.actor() && c.body.startsWith(INTENT_MARK)) { const p = parseIntent(c, maxBytes); if (p.ok && !byOpid.has(p.intent.opid)) byOpid.set(p.intent.opid, c.id); }
+    if (writerIdentities.includes(c.author)) {
+      const r = parseReceipt(c.body);
+      if (r) { const candidates = receipts.get(r.intentCommentId) ?? []; candidates.push(r); receipts.set(r.intentCommentId, candidates); }
+    }
   }
   const out = { resubmitted: 0, adopted: 0, acked: 0 };
   for (const e of journal.entries().values()) {
@@ -48,7 +52,7 @@ export async function reconcileJournal(store: Store, inboxIssue: number, journal
     let cid = byOpid.get(e.opid);
     if (!cid && e.intent) { cid = (await submit(store, inboxIssue, e.intent, journal, new Faults(), maxBytes)).commentId; out.resubmitted++; }
     else if (cid && e.state === 'pending') { journal.append({ opid: e.opid, state: 'submitted', commentId: cid, at: new Date().toISOString() }); out.adopted++; }
-    const res = cid ? receipts.get(cid) : undefined;
+    const res = cid ? receipts.get(cid)?.find((r) => r.opid === e.opid && r.item === e.intent?.item) : undefined;
     if (cid && res) { journal.append({ opid: e.opid, state: 'acked', commentId: cid, result: res.result, reason: res.reason, at: new Date().toISOString() }); out.acked++; }
   }
   return out;

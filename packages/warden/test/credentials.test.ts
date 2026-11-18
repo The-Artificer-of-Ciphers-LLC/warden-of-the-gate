@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CredentialController } from '../src/credentials/controller.ts';
+import { CredentialController, readPersistedCredentialStatus } from '../src/credentials/controller.ts';
 import { ScriptedIssuer } from '../src/credentials/fake-issuer.ts';
 import { CredentialUnavailable } from '../src/credentials/types.ts';
 import type { AuthorityCeiling, CredentialRequest } from '../src/credentials/types.ts';
@@ -16,6 +16,22 @@ function mk(script = [] as ConstructorParameters<typeof ScriptedIssuer>[0], ceil
   return { t, issuer, c: make(), make, dir };
 }
 const state = async (p: Promise<unknown>) => p.then(() => 'ok', (e) => (e instanceof CredentialUnavailable ? e.state : 'other:' + e));
+
+test('corrupt credential state cannot clear revocation or disappear from status', async (t) => {
+  const { c, issuer, make, dir } = mk([{ fail: 'revoked' }]);
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  assert.equal(await state(c.token(REQ)), 'revoked');
+  for (const contents of ['{', 'null', '[]', '{"write@acme/widgets":{"state":"revoked"}}']) {
+    writeFileSync(join(dir, 'credentials-state.json'), contents);
+    await assert.rejects(() => make().token(REQ), /STORAGE FAILURE/, contents);
+    assert.equal(issuer.calls, 1, 'corruption must not reissue credentials');
+    assert.throws(() => readPersistedCredentialStatus(dir), /STORAGE FAILURE/, contents);
+  }
+  rmSync(join(dir, 'credentials-state.json')); mkdirSync(join(dir, 'credentials-state.json'));
+  await assert.rejects(() => make().token(REQ), /STORAGE FAILURE/);
+  assert.throws(() => readPersistedCredentialStatus(dir), /STORAGE FAILURE/);
+  assert.equal(issuer.calls, 1, 'an unreadable state file must not reissue credentials');
+});
 
 test('ceiling is enforced outside the model; issuer never called', async () => {
   const { c, issuer } = mk();

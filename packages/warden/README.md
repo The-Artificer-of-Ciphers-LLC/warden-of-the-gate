@@ -3,7 +3,7 @@
 Production TypeScript/Node package for Warden of the Gate, phase P1 (see [implementation plan](../../docs/prd/0001-warden-of-the-gate.implementation-plan.md)). **Private and unpublished** (`warden-core-unpublished`); the npm scope is a P6 release gate. Not live-ready: no AI effects exist in this phase.
 
 ```bash
-npm ci && npm run build && npm test          # 53 tests, no network, no credentials
+npm ci && npm run build && npm test          # 59 tests, no network, no credentials
 node scripts/evidence.ts                      # regenerates evidence/acceptance-transcript.md
 node dist/cli.js --help
 ```
@@ -37,16 +37,19 @@ Exit codes: 0 ok, 1 invalid/refused, 2 usage or unconfirmed, 3 unsupported task,
 | `status` without a model; fields; no secrets | `warden status` | `e2e: status` |
 | `stop`: local vs remote confirmation, unconfirmed reported, writers fail closed, accepted effects reconcilable | `warden stop`, `writer drain` | `e2e: stop`, `writer: crash points` |
 | `resume`: explicit, starts no AI, does not restore revoked authority or reset counts | `warden resume --confirm` | `e2e: resume`, `units: retry bound persisted` |
-| GitHub-native approve/deny; record before authorize; unauthorized/replayed/stale/conflict fail visibly; 24h expiry | `event handle`, `approvals` | `approvals.test.ts` (10 tests, incl. CLI end to end) |
+| GitHub-native approve/deny; record before authorize; unauthorized/replayed/stale/conflict fail visibly; 24h expiry | `event handle`, `approvals` | `approvals.test.ts` (11 tests, incl. CLI end to end) |
 | Two instances on one host cannot exchange state; issuer outage keeps pending work; recovery never uses a broader PAT | storage + credentials | `units: storage`, `units: two instances`, `credentials.test.ts`, `units: HttpStore` |
 | Crash/uncertain effect/duplicate/out-of-order/queue overflow/outage recover (PRD evidence row 6) | `writer drain` | `writer.test.ts` |
 
 ## Decisions recorded here (and in the ADRs)
 
 1. **Identity split (ADR 0011/0012):** two identities. The *submit* identity (Mac CLI, event handler) may only append intent comments; the *writer* identity is the only author of ledgers and receipts. The writer rejects ledgers/receipts authored by any other login (`Anomaly`, fail closed) and, when the owner provisions `WARDEN_LEDGER_KEY` (an Actions secret the agent did not create), authenticates ledgers with an HMAC so an edit by the submit identity is detected. Without the key only author checks and receipt divergence repair apply, and that is the stated limit. A single installation token still cannot be narrowed to "inbox only"; this split is a detective control, not a permission boundary.
-2. **Stop authority:** operators = `maintainers` plus optional `operators`. The CLI's acting identity must be in that list for its stop to be operator-attributed (`stop` reports `operatorAttributed`).
+2. **Stop authority:** operators = `maintainers` plus optional `operators`. The CLI's acting identity must be in that list for its stop to be operator-attributed (`stop` reports `operatorAttributed`). Both instance and global stops persist local protection before remote propagation. Their local latches are independent: confirmed resume clears only the requested scope and reports any remaining local stop.
 3. **Replay protection:** intents older than `inbox.maxIntentAgeHours` that cannot be proven new (ledger has dropped its dedupe horizon) are rejected `beyond-dedupe-horizon` (closes the P0 open item).
 4. **Throughput:** receipts are de-duplicated from the scan (no per-receipt re-list), `fenceCacheMs` is an opt-in knob for pre-write fence checks (default 0; post-write checks are never cached), and a per-run content-creation budget (`maxCreatesPerRun`, default 80) halts the drain with intents still pending.
+5. **Local state failures:** only absent optional JSON state defaults to empty/running. Malformed, unreadable or invalid-shaped stop and credential state raises `STORAGE FAILURE`; it cannot clear revocation, issue credentials or authorize a run.
+6. **Maintainer source binding:** event intake and writer verification share one parser. Approval/denial and override intents must match the unedited GitHub-attributed comment on the target item, including command kind, approval/binding IDs and reason.
+7. **Journal recovery:** only unedited intents by the authenticated submit identity are adopted. Acknowledgement requires an unedited configured-writer receipt matching the source comment, operation ID and target item. Untrusted or mismatched records leave the operation pending; reconciliation errors are surfaced.
 
 ## Known gaps and unverified items
 

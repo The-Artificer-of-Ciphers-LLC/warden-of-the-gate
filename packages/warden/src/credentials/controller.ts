@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { CredentialUnavailable, IssuerError } from './types.ts';
 import type { AuthorityCeiling, CredentialProvider, CredentialRequest, CredentialState, CredentialStatus, IssuedCredential, Issuer, Operation, PermLevel, Permissions } from './types.ts';
 import { iso, redact } from '../util.ts';
+import { readJsonFile, StorageError } from '../storage/instance.ts';
 
 interface Persisted { failures: number; nextAttemptAt?: number; lastError?: string; state: CredentialState; revokedAt?: number; expiresAt?: number }
 export interface Backoff { baseMs: number; maxMs: number; maxConsecutive: number }
@@ -10,6 +11,26 @@ export interface AuditEntry { at: string; event: string; operation: string; repo
 
 const lvl = (p?: PermLevel) => (p === 'write' ? 2 : p === 'read' ? 1 : 0);
 const keyOf = (r: { operation: Operation; repository: string }) => `${r.operation}@${r.repository}`;
+
+function validPersisted(value: unknown): value is Persisted {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const p = value as Partial<Persisted>;
+  return typeof p.failures === 'number' && Number.isSafeInteger(p.failures) && p.failures >= 0
+    && typeof p.state === 'string' && ['valid', 'none', 'renewing', 'backoff', 'revoked', 'opted-out', 'denied'].includes(p.state)
+    && [p.nextAttemptAt, p.revokedAt, p.expiresAt].every((v) => v === undefined || (typeof v === 'number' && Number.isFinite(v)))
+    && (p.lastError === undefined || typeof p.lastError === 'string');
+}
+function readCredentialState(dir: string): Record<string, Persisted> {
+  const file = join(dir, 'credentials-state.json'); const value = readJsonFile<unknown>(file);
+  if (value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) throw new StorageError(`invalid credential state in ${file}`);
+  const state: Record<string, Persisted> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!validPersisted(entry)) throw new StorageError(`invalid credential record in ${file}`);
+    state[key] = entry;
+  }
+  return state;
+}
 
 /** Trusted credential controller (ADR 0011). Enforces the operator ceiling OUTSIDE any model, issues/renews/rotates/recovers,
  *  persists backoff and revocation so cold starts cannot reset them, never logs a token, and has NO fallback path to a broader credential. */
@@ -25,7 +46,7 @@ export class CredentialController implements CredentialProvider {
   }
   private get statePath() { return join(this.dir, 'credentials-state.json'); }
   private get auditPath() { return join(this.dir, 'credential-audit.jsonl'); }
-  private load(): Record<string, Persisted> { try { return JSON.parse(readFileSync(this.statePath, 'utf8')); } catch { return {}; } }
+  private load(): Record<string, Persisted> { return readCredentialState(this.dir); }
   private save(s: Record<string, Persisted>) { const t = this.statePath + '.tmp'; writeFileSync(t, JSON.stringify(s), { mode: 0o600 }); renameSync(t, this.statePath); chmodSync(this.statePath, 0o600); }
   private patch(k: string, p: Partial<Persisted>) { const s = this.load(); s[k] = { ...({ failures: 0, state: 'none' } as Persisted), ...s[k], ...p }; this.save(s); return s[k]; }
   private audit(event: string, req: CredentialRequest, outcome: string, detail?: string) {
@@ -101,8 +122,6 @@ export class CredentialController implements CredentialProvider {
 }
 /** Read persisted credential status without constructing a controller (used by `warden status`: no network, no secrets). */
 export function readPersistedCredentialStatus(stateDir: string, now = Date.now()): CredentialStatus[] {
-  try {
-    const s = JSON.parse(readFileSync(join(stateDir, 'credentials-state.json'), 'utf8')) as Record<string, Persisted>;
-    return Object.entries(s).map(([k, p]) => ({ operation: k.split('@')[0] as Operation, state: p.state === 'valid' && p.expiresAt && p.expiresAt <= now ? 'none' : p.state, expiresAt: p.expiresAt, consecutiveFailures: p.failures, nextAttemptAt: p.nextAttemptAt, lastError: p.lastError, revokedAt: p.revokedAt, suspended: ['backoff', 'revoked', 'denied'].includes(p.state) }));
-  } catch { return []; }
+  const s = readCredentialState(stateDir);
+  return Object.entries(s).map(([k, p]) => ({ operation: k.split('@')[0] as Operation, state: p.state === 'valid' && p.expiresAt && p.expiresAt <= now ? 'none' : p.state, expiresAt: p.expiresAt, consecutiveFailures: p.failures, nextAttemptAt: p.nextAttemptAt, lastError: p.lastError, revokedAt: p.revokedAt, suspended: ['backoff', 'revoked', 'denied'].includes(p.state) }));
 }

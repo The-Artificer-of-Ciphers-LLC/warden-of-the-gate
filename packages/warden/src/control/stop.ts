@@ -1,10 +1,22 @@
 import type { InstanceStorage } from '../storage/instance.ts';
+import { StorageError } from '../storage/instance.ts';
 import type { Store } from '../github/store.ts';
 import { readStop, setLabel } from '../writer/control.ts';
 import { iso } from '../util.ts';
 
 export interface LocalStop { stopped: boolean; at?: string; by?: string; reason?: string }
-export const readLocalStop = (st: InstanceStorage): LocalStop => st.readJson<LocalStop>(st.stopPath) ?? { stopped: false };
+function readStopFile(st: InstanceStorage, file: string): LocalStop {
+  const value = st.readJson<unknown>(file);
+  if (value === null) return { stopped: false };
+  if (typeof value !== 'object' || Array.isArray(value) || !('stopped' in value) || typeof value.stopped !== 'boolean'
+    || ['at', 'by', 'reason'].some((key) => key in value && typeof Reflect.get(value, key) !== 'string'))
+    throw new StorageError(`invalid stop state in ${file}`);
+  return { ...value, stopped: value.stopped };
+}
+export const readLocalStop = (st: InstanceStorage): LocalStop => {
+  const instance = readStopFile(st, st.stopPath); const global = readStopFile(st, st.globalStopPath);
+  return instance.stopped ? instance : global;
+};
 export interface ControlTarget { store: Store; issue: number; scope: 'instance' | 'global' }
 export interface StopReport {
   scope: string; local: 'stopped'; remote: 'confirmed' | 'unconfirmed'; remoteDetail: string; operatorAttributed: boolean;
@@ -20,7 +32,7 @@ export async function ackList(store: Store, issue: number): Promise<{ env: strin
 /** `warden stop`: (1) local stop FIRST (cancels/blocks new local model and verification work even if GitHub is unreachable),
  *  (2) request the shared stop on GitHub, (3) re-read to CONFIRM. A propagation failure is reported as UNCONFIRMED, never as global success. */
 export async function requestStop(o: { storage: InstanceStorage; target: ControlTarget | null; operators: string[]; stopLabel: string; actor: string; reason?: string }): Promise<StopReport> {
-  if (o.target?.scope !== 'global') o.storage.writeJson(o.storage.stopPath, { stopped: true, at: iso(Date.now()), by: o.actor, reason: o.reason ?? 'operator stop' } satisfies LocalStop);
+  o.storage.writeJson(o.target?.scope === 'global' ? o.storage.globalStopPath : o.storage.stopPath, { stopped: true, at: iso(Date.now()), by: o.actor, reason: o.reason ?? 'operator stop' } satisfies LocalStop);
   o.storage.securityAudit('stop-requested', { actor: o.actor, scope: o.target?.scope ?? 'instance', reason: o.reason });
   const rep: StopReport = { scope: o.target?.scope ?? 'instance', local: 'stopped', remote: 'unconfirmed', remoteDetail: 'no authenticated GitHub access (credentials unavailable); stop NOT propagated', operatorAttributed: false, acknowledgements: [], globalSuccessClaimed: false };
   if (!o.target) return rep;
@@ -51,7 +63,8 @@ export async function requestResume(o: { storage: InstanceStorage; target: Contr
     } catch (e) { notes.push(`could not remove remote stop: ${String((e as Error).message).slice(0, 100)}`); }
   } else notes.push('no authenticated GitHub access: remote stop state unknown, staying stopped');
   if (remote !== 'running') return { resumed: false, refused: 'remote stop not confirmed cleared; staying stopped (fail closed)', local: readLocalStop(o.storage).stopped ? 'stopped' : 'running', remote, notes };
-  if (o.target?.scope !== 'global') o.storage.writeJson(o.storage.stopPath, { stopped: false, at: iso(Date.now()), by: o.actor } satisfies LocalStop);
+  o.storage.writeJson(o.target?.scope === 'global' ? o.storage.globalStopPath : o.storage.stopPath, { stopped: false, at: iso(Date.now()), by: o.actor } satisfies LocalStop);
   o.storage.securityAudit('resumed', { actor: o.actor, scope: o.target?.scope });
-  return { resumed: true, local: 'running', remote, notes };
+  const local = readLocalStop(o.storage).stopped ? 'stopped' : 'running';
+  return { resumed: local === 'running', refused: local === 'stopped' ? 'another local stop remains in force; resume that scope explicitly' : undefined, local, remote, notes };
 }

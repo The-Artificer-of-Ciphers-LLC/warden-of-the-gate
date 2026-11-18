@@ -9,6 +9,23 @@ export const instanceIdFor = (repository: string) => repository.toLowerCase().re
 export class InstanceMismatch extends Error { constructor(m: string) { super('INSTANCE MISMATCH: ' + m); } }
 export class StorageError extends Error { constructor(m: string) { super('STORAGE FAILURE: ' + m); } }
 
+export function readJsonFile<T>(file: string): T | null {
+  let text: string;
+  try { text = readFileSync(file, 'utf8'); }
+  catch (e) {
+    if (e instanceof Error && 'code' in e && e.code === 'ENOENT') return null;
+    throw new StorageError(`cannot read ${file}`);
+  }
+  try {
+    const value: unknown = JSON.parse(text);
+    if (value === null) throw new StorageError(`null state in ${file}`);
+    return value as T;
+  } catch (e) {
+    if (e instanceof SyntaxError) throw new StorageError(`invalid JSON in ${file}`);
+    throw e;
+  }
+}
+
 /** Per-instance protected local state (CORE-instances, CORE-storage). One directory per configured repository: 0700 dirs, 0600 files,
  *  credential-shaped values redacted from the FIRST write. An instance directory records its repository and refuses to open for another,
  *  so two instances on one host cannot exchange mutable state, authority or decisions. Failed writes throw: durability is never assumed. */
@@ -32,6 +49,7 @@ export class InstanceStorage {
   get journalPath() { return this.path('journal', 'journal.jsonl'); }
   get credentialsDir() { return this.path('credentials'); }
   get stopPath() { return this.path('stop.json'); }
+  get globalStopPath() { return this.path('global-stop.json'); }
   get decisionsPath() { return this.path('decisions.jsonl'); }
   get auditPath() { return this.path('security-audit.jsonl'); }
   get transcriptsDir() { return this.path('transcripts'); }
@@ -40,7 +58,7 @@ export class InstanceStorage {
     try { const t = file + '.tmp'; writeFileSync(t, JSON.stringify(redactDeep(v)), { mode: 0o600 }); renameSync(t, file); chmodSync(file, 0o600); }
     catch (e) { throw new StorageError(`write ${file}: ${(e as Error).message}`); }
   }
-  readJson<T>(file: string): T | null { try { return JSON.parse(readFileSync(file, 'utf8')) as T; } catch { return null; } }
+  readJson<T>(file: string): T | null { return readJsonFile<T>(file); }
   appendLine(file: string, v: unknown) {
     try { appendFileSync(file, redact(JSON.stringify(v)) + '\n', { mode: 0o600 }); chmodSync(file, 0o600); }
     catch (e) { throw new StorageError(`append ${file}: ${(e as Error).message}`); }

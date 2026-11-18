@@ -1,5 +1,5 @@
 import type { Comment, Store } from '../github/store.ts';
-import { Anomaly, Crash, Faults, Fenced, NetworkError, Stopped, sleep } from '../util.ts';
+import { Anomaly, Crash, Faults, Fenced, NetworkError, Stopped, canonical, sleep } from '../util.ts';
 import { Lease } from './lease.ts';
 import { readControls } from './control.ts';
 import type { GlobalControl } from './control.ts';
@@ -9,7 +9,7 @@ import { newLedger } from '../state/model.ts';
 import type { Effect, Ledger, OpRec } from '../state/model.ts';
 import { reduce } from './reduce.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
-import { expireApprovals } from '../approvals/approvals.ts';
+import { expireApprovals, parseMaintainerCommand } from '../approvals/approvals.ts';
 import type { DecisionRecord } from '../approvals/approvals.ts';
 
 export interface WriterConfig {
@@ -208,11 +208,14 @@ export class Writer {
     return this.runPlan(c, intent, l);
   }
 
-  /** For maintainer-attributed intents: confirm the GitHub comment really is by `actor` and unedited, so a submitter cannot forge a decision. */
+  /** Reconstruct maintainer authority from the target item's source comment, not the submitter's interpretation. */
   private async verifySource(i: Intent): Promise<boolean> {
     if (i.kind !== 'approval-decision' && i.kind !== 'override') return true;
     if (i.source.kind !== 'gh-comment') return false;
-    try { const sc = await this.store.getComment(Number(i.source.id)); return sc.author === i.actor && sc.updatedAt === sc.createdAt; } catch { return false; }
+    const sc = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
+    if (!sc || sc.author !== i.actor || sc.updatedAt !== sc.createdAt) return false;
+    const command = parseMaintainerCommand(sc.body);
+    return command !== null && command.kind === i.kind && canonical(command.payload) === canonical(i.payload);
   }
   private async rejectNow(c: Comment, intent: Intent, reason: string): Promise<Processed> {
     await this.receipt(c, intent, 'rejected', reason, null); return { commentId: c.id, opid: intent.opid, result: 'rejected', reason };
