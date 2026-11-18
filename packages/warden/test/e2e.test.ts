@@ -108,7 +108,7 @@ test('run --task intake --dry-run: proposed transitions, zero mutation; other ta
   const by = Object.fromEntries(r.data.proposals.map((p: any) => [p.item, p.to])); assert.deepEqual(by, { 3: 'needs-triage', 4: 'needs-info', 5: 'needs-review', 6: 'needs-review' });
   assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('close with explanation'));
   assert.equal(r.data.protection.readOnlyStoreEnforced, true);
-  for (const t of ['claim', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
+  for (const t of ['claim', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
   { const x = await e.json('run', '--task', 'sweep', '--dry-run'); assert.equal(x.code, 0, 'sweep dry-run is implemented (P2, offline)'); assert.equal(x.data.outcome, 'proposed'); assert.equal(x.data.mutations, 0); }
   assert.equal((await e.json('run', '--task', 'sweep')).code, 0, 'live sweep only SUBMITS intents (none here: no item has a ledger)');
   assert.equal((await e.json('run', '--task', 'intake')).code, 2, 'live intake never scans the backlog: --item is required');
@@ -221,4 +221,14 @@ test('run --task implement: needs --item and a configured factory identity; with
   const before = worldHash(e);
   const plan = await e.json('run', '--task', 'implement', '--item', '3', '--dry-run'); assert.equal(plan.code, 4); assert.equal(plan.data.plan.eligible, false); assert.equal(plan.data.plan.reason, 'no-ledger'); assert.equal(plan.data.mutations, 0);
   const live = await e.json('run', '--task', 'implement', '--item', '3', '--base-sha', 'deadbeef'); assert.equal(live.code, 4); assert.equal(worldHash(e), before, 'nothing claimed, posted or opened');
+});
+
+
+test('run --task rework: needs --item and a factory identity; the dry-run describes the preconditions; live refuses honestly', async () => {
+  const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'a pr', '--pr');
+  assert.equal((await e.json('run', '--task', 'rework', '--dry-run')).code, 2);
+  assert.equal((await e.json('run', '--task', 'rework', '--item', '3', '--dry-run')).code, 4);
+  e.write('.github/warden.yml', 'schemaVersion: 1\nrepository: acme/widgets\nmaintainers: [maint1, maint2]\nmerge:\n  factoryLogins: [warden-factory]\n');
+  const dry = await e.json('run', '--task', 'rework', '--item', '3', '--dry-run'); assert.equal(dry.code, 0); assert.equal(dry.data.mutations, 0);
+  assert.equal((await e.json('run', '--task', 'rework', '--item', '3')).code, 4);
 });

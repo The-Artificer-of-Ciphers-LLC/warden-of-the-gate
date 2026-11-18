@@ -1,4 +1,4 @@
-import type { Comment, IssueEvent, IssueState, Label, PullInfo, Store } from './store.ts';
+import type { Comment, IssueEvent, IssueState, Label, PullCommit, PullInfo, Store } from './store.ts';
 import { NetworkError, sleep } from '../util.ts';
 import type { CredentialProvider, CredentialRequest } from '../credentials/types.ts';
 
@@ -45,7 +45,7 @@ export class HttpStore implements Store {
     const runs = (await this.req('GET', `/commits/${p.head.sha}/check-runs`, undefined, { query: 'per_page=100' })).json?.check_runs ?? [];
     const ci: PullInfo['ci'] = !runs.length ? 'none' : runs.some((r: any) => r.status !== 'completed') ? 'pending' : runs.every((r: any) => ['success', 'neutral', 'skipped'].includes(r.conclusion)) ? 'passing' : 'failing';
     const latest = new Map<string, string>(); for (const r of await this.paged(`/pulls/${n}/reviews`)) if (r.state !== 'COMMENTED' && r.user?.login) latest.set(r.user.login, r.state);
-    return { number: n, head: p.head.sha, base: p.base.sha, title: p.title, author: p.user?.login ?? 'unknown', draft: !!p.draft, state: p.state, merged: !!p.merged, approvals: [...latest].filter(([, s]) => s === 'APPROVED').map(([l]) => l), ci, files };
+    return { number: n, headRef: p.head.ref, head: p.head.sha, base: p.base.sha, title: p.title, author: p.user?.login ?? 'unknown', draft: !!p.draft, state: p.state, merged: !!p.merged, approvals: [...latest].filter(([, s]) => s === 'APPROVED').map(([l]) => l), ci, files };
   }
   async getIssue(n: number) { return this.is((await this.req('GET', `/issues/${n}`)).json); }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { return (await this.paged('/issues', `state=${o.state ?? 'open'}`)).map(this.is); }
@@ -62,6 +62,7 @@ export class HttpStore implements Store {
   async updateLabel(name: string, description: string) { const r = await this.req('PATCH', `/labels/${encodeURIComponent(name)}`, { description }); return { name: r.json.name, description: r.json.description ?? '' }; }
   async deleteLabel(name: string) { await this.req('DELETE', `/labels/${encodeURIComponent(name)}`, undefined, { okStatuses: [404] }); }
   async createIssue(title: string, body: string) { return (await this.req('POST', '/issues', { title, body })).json.number; }
+  async listPullCommits(n: number): Promise<PullCommit[]> { return (await this.paged(`/pulls/${n}/commits`)).map((c: any) => ({ sha: c.sha, authorLogin: c.author?.login ?? c.commit?.author?.name ?? 'unknown', authorName: c.commit?.author?.name ?? 'unknown', authorEmail: c.commit?.author?.email ?? '', subject: String(c.commit?.message ?? '').split('\n')[0] })); }
   async getBranchHead(branch: string) { return String((await this.req('GET', `/branches/${encodeURIComponent(branch)}`)).json.commit.sha); }
   async mergePull(n: number, expectedHead: string) { await this.req('PUT', `/pulls/${n}/merge`, { sha: expectedHead, merge_method: 'merge' }); }
   async closeIssue(n: number) { await this.req('PATCH', `/issues/${n}`, { state: 'closed' }); }
