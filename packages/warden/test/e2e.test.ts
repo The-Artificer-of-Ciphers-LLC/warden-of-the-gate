@@ -108,7 +108,7 @@ test('run --task intake --dry-run: proposed transitions, zero mutation; other ta
   const by = Object.fromEntries(r.data.proposals.map((p: any) => [p.item, p.to])); assert.deepEqual(by, { 3: 'needs-triage', 4: 'needs-info', 5: 'needs-review', 6: 'needs-review' });
   assert.ok(r.data.proposals.find((p: any) => p.item === 6).effects[0].includes('close with explanation'));
   assert.equal(r.data.protection.readOnlyStoreEnforced, true);
-  for (const t of ['claim', 'implement', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
+  for (const t of ['claim', 'rework', 'retro']) { const x = await e.json('run', '--task', t, '--dry-run'); assert.equal(x.code, 3, t); assert.equal(x.data.outcome, 'unsupported'); }
   { const x = await e.json('run', '--task', 'sweep', '--dry-run'); assert.equal(x.code, 0, 'sweep dry-run is implemented (P2, offline)'); assert.equal(x.data.outcome, 'proposed'); assert.equal(x.data.mutations, 0); }
   assert.equal((await e.json('run', '--task', 'sweep')).code, 0, 'live sweep only SUBMITS intents (none here: no item has a ledger)');
   assert.equal((await e.json('run', '--task', 'intake')).code, 2, 'live intake never scans the backlog: --item is required');
@@ -210,4 +210,15 @@ test('run --task triage: one issue per invocation, dry-run plans without a model
   const plan = await e.json('run', '--task', 'triage', '--item', '3', '--dry-run'); assert.equal(plan.code, 0); assert.equal(plan.data.plan.action, 'run'); assert.equal(plan.data.mutations, 0);
   const live = await e.json('run', '--task', 'triage', '--item', '3'); assert.equal(live.code, 4); assert.equal(live.data.outcome, 'blocked'); assert.equal(live.data.marker, null);
   assert.equal(worldHash(e), before, 'nothing posted, labelled or closed');
+});
+
+
+test('run --task implement: needs --item and a configured factory identity; with both, a dry-run reports eligibility without claiming anything; live refuses honestly without a harness', async () => {
+  const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'Saving crashes the app', '--body', 'Steps: open, save, crash.');
+  assert.equal((await e.json('run', '--task', 'implement', '--dry-run')).code, 2);
+  assert.equal((await e.json('run', '--task', 'implement', '--item', '3', '--dry-run')).data.plan?.reason ?? (await e.json('run', '--task', 'implement', '--item', '3', '--dry-run')).data.reason, 'no-factory-identity');
+  e.write('.github/warden.yml', 'schemaVersion: 1\nrepository: acme/widgets\nmaintainers: [maint1, maint2]\nmerge:\n  factoryLogins: [warden-factory]\nverify:\n  checks:\n    - {id: unit, kind: test, command: node, args: [--test]}\n');
+  const before = worldHash(e);
+  const plan = await e.json('run', '--task', 'implement', '--item', '3', '--dry-run'); assert.equal(plan.code, 4); assert.equal(plan.data.plan.eligible, false); assert.equal(plan.data.plan.reason, 'no-ledger'); assert.equal(plan.data.mutations, 0);
+  const live = await e.json('run', '--task', 'implement', '--item', '3', '--base-sha', 'deadbeef'); assert.equal(live.code, 4); assert.equal(worldHash(e), before, 'nothing claimed, posted or opened');
 });

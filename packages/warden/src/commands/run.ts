@@ -13,6 +13,12 @@ import { OpenCodeRunner } from '../runner/opencode.ts';
 import { fileKV, planReview, runReview } from '../review/slice.ts';
 import { eligible, scanReviews } from '../scan/review-scan.ts';
 import { planTriage, runTriage } from '../triage/slice.ts';
+import { planImplement, runImplement } from '../implement/slice.ts';
+import type { ImplKV, IntentSink } from '../implement/slice.ts';
+import { LocalOutboxPublisher } from '../implement/publishers.ts';
+import { makeIntent, parseLedger as parseLed2 } from '../writer/protocol.ts';
+import { submit as submitIntent } from '../writer/journal.ts';
+import { writerDrain } from './writer.ts';
 import type { TriageKV } from '../triage/slice.ts';
 import { select } from '../scan/select.ts';
 import { mkdirSync } from 'node:fs';
@@ -56,6 +62,26 @@ export async function run(c: Ctx): Promise<Result> {
       const sw = await submitSweep(findings, { ...base, repo: cfg.repository });
       const rec = await submitReconcile(await planReconcile(store, cfg, { skip }), { ...base, repo: cfg.repository });
       return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred; run \`warden writer drain\` to apply` };
+    }
+    if (task === 'implement') {
+      // P4 Implement (factory): ONE issue, a trusted checkout of the default-branch tip, a writable-only-there session with no shell, trusted-executor evidence.
+      // The result is published to a LOCAL outbox unless a GitHub publisher is explicitly configured; this release never pushes or opens a PR by itself.
+      const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task implement requires --item N (one issue per invocation)' };
+      if (!cfg.merge.factoryLogins.length) return { code: 4, data: { task, outcome: 'blocked', reason: 'no-factory-identity' }, text: 'run --task implement is blocked: set merge.factoryLogins in warden.yml (the identity that owns factory work)' };
+      mkdirSync(st.path('implement'), { recursive: true, mode: 0o700 });
+      const ikv: ImplKV = { read: (n) => st.readJson(st.path('implement', `${n}.json`)), write: (n, rec) => st.writeJson(st.path('implement', `${n}.json`), rec) };
+      const sub = be.open('submit'); let journal: Journal | null = null; try { journal = new Journal(st.journalPath); } catch { /* none */ }
+      const intents: IntentSink = { async submit(i) { if (!sub) throw new Error('submit identity unavailable'); const it = makeIntent(i); await submitIntent(sub, cfg.inbox.inboxIssue, it, journal, undefined, pol.maxIntentBytes); if (c.flags.drain) await writerDrain(c); return { opid: it.opid }; },
+        async confirmClaim(n) { const deadline = c.now() + Number(str(c.flags, 'claim-wait-seconds') ?? 90) * 1000; do { const cm = (await store.listComments(n)).find((x) => x.body.startsWith(LEDGER_MARK)); const led = cm ? parseLed2(cm.body) : null; if (led?.owner) return led.owner.kind === 'factory'; await new Promise((r) => setTimeout(r, 1500)); } while (c.now() < deadline); return false; } };
+      const baseSha = str(c.flags, 'base-sha') ?? (c.flags['dry-run'] ? 'dry-run' : await store.getBranchHead(cfg.defaultBranch).catch(() => ''));
+      if (!baseSha) return { code: 2, data: { task, outcome: 'refused' }, text: `run --task implement could not resolve the ${cfg.defaultBranch} tip; pass --base-sha SHA` };
+      const implCfg = { repository: cfg.repository, source: str(c.flags, 'source') ?? `https://github.com/${cfg.repository}.git`, baseSha, factoryLogins: cfg.merge.factoryLogins, factoryAuthor: { name: cfg.merge.factoryLogins[0], email: `${cfg.merge.factoryLogins[0]}@users.noreply.invalid` },
+        model: cfg.runtime.modelPool[0], harness: 'opencode 2.2.7', maxFactoryPrs: cfg.runtime.budgets.maxFactoryImplementationPrs, maxAttempts: 3, maxLaunchRetries: cfg.runtime.budgets.maxOperationRetries,
+        budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, workRoot: st.path('implement', 'work'), checks: cfg.verify.checks };
+      if (c.flags['dry-run']) { const p = await planImplement({ store, item, policy: pol, cfg: implCfg, kv: ikv, stopped: () => ctl.stopped || local.stopped, intents }); return { code: p.eligible ? 0 : 4, data: { task, outcome: 'proposed', mode: 'dry-run', plan: p, mutations: 0 }, text: `task implement (dry-run) #${item}: ${p.eligible ? `eligible (${p.kind}${p.resume ? ', resuming own claim' : ''})` : `blocked: ${p.notice}`}; no claim, no session, no repository mutation` }; }
+      const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url'), maxPromptChars: 60_000 }) : new NotReadyRunner();
+      const o = await runImplement({ store, item, policy: pol, cfg: implCfg, runner, kv: ikv, publisher: new LocalOutboxPublisher(st.path('outbox.git')), intents, stopped: () => ctl.stopped || local.stopped, signal: abort.signal });
+      return { code: o.kind === 'opened' || o.kind === 'prepared' ? 0 : o.kind === 'blocked' || o.kind === 'interrupted' ? 4 : 1, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task implement #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
     if (task === 'triage') {
       // P3 Triage (shadow): ONE issue per invocation, local only. Nothing is posted, labelled or closed; the result is a draft proposal card.

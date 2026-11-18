@@ -62,6 +62,7 @@ export class HttpStore implements Store {
   async updateLabel(name: string, description: string) { const r = await this.req('PATCH', `/labels/${encodeURIComponent(name)}`, { description }); return { name: r.json.name, description: r.json.description ?? '' }; }
   async deleteLabel(name: string) { await this.req('DELETE', `/labels/${encodeURIComponent(name)}`, undefined, { okStatuses: [404] }); }
   async createIssue(title: string, body: string) { return (await this.req('POST', '/issues', { title, body })).json.number; }
+  async getBranchHead(branch: string) { return String((await this.req('GET', `/branches/${encodeURIComponent(branch)}`)).json.commit.sha); }
   async mergePull(n: number, expectedHead: string) { await this.req('PUT', `/pulls/${n}/merge`, { sha: expectedHead, merge_method: 'merge' }); }
   async closeIssue(n: number) { await this.req('PATCH', `/issues/${n}`, { state: 'closed' }); }
 }
