@@ -1,0 +1,113 @@
+{
+  "startedAt": "2026-11-18T22:50:34.971Z",
+  "repository": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "pull": 217,
+  "model": "warden-proof-qwen",
+  "harness": "opencode 2.2.7",
+  "sourceSha256": "b9983ff4e281fe9683c9e354fb09f30d69523e09b812e35ffcd7fc192b446078",
+  "before": {
+    "head": "76126979f34548a9d6783ffb7cddd81f961f2a89",
+    "state": "open",
+    "labels": [],
+    "comments": 0,
+    "reviews": 0,
+    "updatedAt": "2026-11-18T22:49:53Z",
+    "commits": 2
+  },
+  "preflight": {
+    "ok": true,
+    "failures": [],
+    "harnessVersion": "2.2.7",
+    "isolation": "seatbelt",
+    "resolvedModel": "warden-proof-qwen"
+  },
+  "first": {
+    "kind": "accepted",
+    "notice": "Accepted. The review marker now points at 76126979. A draft decision card exists for the maintainer; nothing was posted.",
+    "attempts": {
+      "used": 0,
+      "max": 3
+    },
+    "marker": {
+      "head": "76126979f34548a9d6783ffb7cddd81f961f2a89",
+      "base": "c4764f527215a5c85f6fbc272daaff39ecc33a23",
+      "verdict": "changes needed",
+      "findings": [
+        {
+          "id": "test-assert-noop",
+          "severity": "major",
+          "path": "test/sum.test.ts",
+          "line": 2,
+          "rationale": "In Node.js, console.assert only writes a message to stderr when the condition is falsy; it never throws. So this file always exits successfully even if sumTo(0) returned a wrong value, meaning the PR's only test provides no regression protection and CI could not detect a breakage of sumTo.",
+          "correction": "Replace console.assert with an assertion that actually fails the test, e.g. import assert from 'node:assert'; assert.strictEqual(sumTo(0), 0); or use the project's test framework."
+        },
+        {
+          "id": "unvalidated-number-input",
+          "severity": "minor",
+          "path": "src/sum.ts",
+          "line": 3,
+          "rationale": "The parameter is typed number with no validation. sumTo(Infinity) loops forever because i <= Infinity is always true, hanging the process; fractional inputs are silently truncated (sumTo(2.5) returns 3, i.e. it sums to floor(n)). The intended contract is undocumented.",
+          "correction": "Guard the input, e.g. if (!Number.isFinite(n)) throw new RangeError('n must be finite'); and either reject fractional values or document that non-integers are floored."
+        }
+      ],
+      "ci": "none",
+      "acceptedAt": "2026-11-18T22:53:11.483Z"
+    },
+    "card": {
+      "text": "Recommend: request changes (0 blocker(s), 2 finding(s)).",
+      "posted": false,
+      "head": "76126979f34548a9d6783ffb7cddd81f961f2a89"
+    },
+    "mode": "full",
+    "ms": 156511
+  },
+  "second": {
+    "kind": "reused",
+    "notice": "Same code, same checks, already reviewed: the accepted review is reused. No model call.",
+    "attempts": {
+      "used": 0,
+      "max": 3
+    },
+    "marker": {
+      "head": "76126979f34548a9d6783ffb7cddd81f961f2a89",
+      "base": "c4764f527215a5c85f6fbc272daaff39ecc33a23",
+      "verdict": "changes needed",
+      "findings": [
+        {
+          "id": "test-assert-noop",
+          "severity": "major",
+          "path": "test/sum.test.ts",
+          "line": 2,
+          "rationale": "In Node.js, console.assert only writes a message to stderr when the condition is falsy; it never throws. So this file always exits successfully even if sumTo(0) returned a wrong value, meaning the PR's only test provides no regression protection and CI could not detect a breakage of sumTo.",
+          "correction": "Replace console.assert with an assertion that actually fails the test, e.g. import assert from 'node:assert'; assert.strictEqual(sumTo(0), 0); or use the project's test framework."
+        },
+        {
+          "id": "unvalidated-number-input",
+          "severity": "minor",
+          "path": "src/sum.ts",
+          "line": 3,
+          "rationale": "The parameter is typed number with no validation. sumTo(Infinity) loops forever because i <= Infinity is always true, hanging the process; fractional inputs are silently truncated (sumTo(2.5) returns 3, i.e. it sums to floor(n)). The intended contract is undocumented.",
+          "correction": "Guard the input, e.g. if (!Number.isFinite(n)) throw new RangeError('n must be finite'); and either reject fractional values or document that non-integers are floored."
+        }
+      ],
+      "ci": "none",
+      "acceptedAt": "2026-11-18T22:53:11.483Z"
+    },
+    "card": {
+      "text": "Recommend: request changes (0 blocker(s), 2 finding(s)).",
+      "posted": false,
+      "head": "76126979f34548a9d6783ffb7cddd81f961f2a89"
+    }
+  },
+  "after": {
+    "head": "76126979f34548a9d6783ffb7cddd81f961f2a89",
+    "state": "open",
+    "labels": [],
+    "comments": 0,
+    "reviews": 0,
+    "updatedAt": "2026-11-18T22:49:53Z",
+    "commits": 2
+  },
+  "nothingWritten": true,
+  "finishedAt": "2026-11-18T22:53:13.445Z"
+}
