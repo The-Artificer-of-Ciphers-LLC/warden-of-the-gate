@@ -6,11 +6,12 @@ import { decideApproval, requestApproval, revisionUpdate } from '../approvals/ap
 import type { Decision } from '../approvals/approvals.ts';
 import { iso } from '../util.ts';
 import { evaluateClock } from '../sweep/clocks.ts';
-import type { IssueState } from '../github/store.ts';
+import type { IssueState, PullInfo } from '../github/store.ts';
+import { bindingFor, evaluateMerge } from '../merge/gates.ts';
 import { decideIntake } from '../tasks/intake.ts';
 import { clockItemFrom, isFresh, type SweepObs } from '../sweep/derive.ts';
 
-export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState; /** For `submission`: the linked PR as GitHub shows it now. */ linkedPr?: IssueState }
+export interface ReduceCtx { policy: PolicySnapshot; now: number; sourceVerified: boolean; assignable: (login: string) => boolean; /** Writer-observed GitHub facts for sweep-action, read at decision time (never taken from the intent). */ observed?: SweepObs; /** Current GitHub item read by the writer at decision time (title/body/assignees/...): intake and claim re-check against it. */ item?: IssueState; /** For `submission`: the linked PR as GitHub shows it now. */ linkedPr?: IssueState; /** For `merge-request`: the pull request as GitHub shows it now. */ pull?: PullInfo }
 const note = (text: string): Effect => ({ t: 'comment', text });
 const rej = (reason: string, text: string): Decision => ({ accept: false, reason, plan: [note(text)] });
 
@@ -80,6 +81,8 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'hold-release': return holdRelease(l, i, c);
     case 'reconcile': return reconcile(l, i, c);
     case 'adopt': return adopt(l, i, c);
+    case 'review-record': return reviewRecord(l, i, c);
+    case 'merge-request': return mergeRequest(l, i, c);
   }
 }
 
@@ -279,4 +282,36 @@ function adopt(l: Ledger, i: Intent, c: ReduceCtx): Decision {
     if (to !== led.state) moveTo(led, to, undefined, c.now);
     if (owner) { led.owner = { kind: 'contributor', id: owner, opid: i.opid }; led.obligations = [{ type: 'delivery', startedAt: iso(c.now), dueAt: iso(c.now + sw.deliveryHours * HOURS), source: 'adoption-notice' }]; }
   } };
+}
+
+/** Record the latest ACCEPTED review summary on the item ledger so deterministic Actions-side merge logic can see it (the review itself runs on the
+ *  Mac). Origin `ai`: the writer already rejects AI-origin intents in shadow mode, so nothing is recorded, and nothing can merge, before live. */
+function reviewRecord(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'ai') return silent('review-record-origin');
+  if (l.kind !== 'pr') return silent('review-record-on-issue');
+  const pl = i.payload as { head?: string; base?: string; verdict?: string; severities?: unknown; policyDigest?: string };
+  const sev = Array.isArray(pl.severities) ? (pl.severities as unknown[]) : null;
+  if (!pl.head || !pl.base || !pl.verdict || !sev || sev.some((s) => !['blocker', 'major', 'minor', 'nit'].includes(String(s)))) return silent('review-record-malformed');
+  if (c.item?.isPr !== true) return silent('review-record-unobserved');
+  return { accept: true, plan: [], apply: (led) => { led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sev as Array<'blocker' | 'major' | 'minor' | 'nit'>, policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; } };
+}
+
+/** Merge request bound to the head the requester saw. Enqueueing is not merging: the effect re-reads, merges only that head, confirms with GitHub,
+ *  and only then does `mark-merged` update the ledger. Eligibility is the pure `evaluateMerge`; anything but `merge` is a silent rejection with the reasons. */
+function mergeRequest(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'deterministic') return silent('merge-origin');
+  if (l.kind !== 'pr') return silent('merge-on-issue');
+  if (c.policy.mode === 'shadow') return silent('shadow-mode-no-merge');
+  const m = c.policy.merge; if (!m) return silent('merge-policy-missing');
+  const pull = c.pull; if (!pull) return silent('merge-unobserved');
+  const want = (i.payload as { expectedHead?: string }).expectedHead;
+  if (want !== pull.head) return silent(`stale-request:expected-${String(want).slice(0, 8)}-found-${pull.head.slice(0, 8)}`);
+  const input = { ledger: l, pull, review: l.review ? { head: l.review.head, policyDigest: l.review.policyDigest, severities: l.review.severities } : null, gates: m.gates, policy: c.policy,
+    rules: { requiredApprovals: m.requiredApprovals, approvals: pull.approvals.map((login) => ({ login })), factoryLogins: m.factoryLogins }, automationLogins: m.automationLogins, hold: false, stopped: false, now: c.now, policyDigest: c.policy.digest };
+  const v = evaluateMerge(input);
+  if (v.action !== 'merge') return silent(`merge-${v.action}:${v.reasons.join('; ')}`);
+  const b = bindingFor(input, v);
+  return { accept: true, plan: [note(`Merge requested for head ${b.expectedHead.slice(0, 8)} (${v.via}${v.approvalId ? ' ' + v.approvalId : ''}). The merge is bound to that head and recorded only after GitHub confirms it.`), { t: 'merge', expectedHead: b.expectedHead }, ...project(c.policy, 'merge-ready', 'merged'), { t: 'mark-merged' }] };
 }

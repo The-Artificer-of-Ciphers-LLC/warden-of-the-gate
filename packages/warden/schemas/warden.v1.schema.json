@@ -345,6 +345,33 @@
         "type": "string",
         "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\\[bot\\])?$"
       }
+    },
+    "merge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "automationLogins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxItems": 20
+        },
+        "factoryLogins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxItems": 20
+        },
+        "requiredApprovals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        }
+      }
     }
   }
 }

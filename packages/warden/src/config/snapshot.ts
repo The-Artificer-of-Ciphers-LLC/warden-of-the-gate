@@ -10,6 +10,8 @@ export interface PolicySnapshot {
   orders: Orders; labelStates: Record<string, string>; projection: boolean; stopLabel: string;
   maxAttempts: number; dedupeHorizon: number; maxIntentAgeMs: number; maxIntentBytes: number;
   draftsAllowed?: boolean;
+  /** P4 merge facts from approved config. Absent => merge requests are rejected (fail closed). */
+  merge?: { gates: { blocker: true; major: boolean; minor: boolean; nit: boolean }; automationLogins: string[]; factoryLogins: string[]; requiredApprovals: number };
   /** P2 sweep windows from approved config. Absent => sweep actions are rejected (fail closed). */
   sweep?: { clocks: ClockConfig; keepOpenLabel: string; deliveryHours: number; fixWindowHours: number; contributorFixRounds: number };
 }
@@ -21,6 +23,7 @@ export function buildPolicy(w: WardenConfig, o: Orders | null): PolicySnapshot {
     labelStates: w.labels.projection ? w.labels.states : {}, projection: w.labels.projection, stopLabel: w.inbox.stopLabel,
     maxAttempts: w.runtime.budgets.maxOperationRetries, dedupeHorizon: w.inbox.dedupeHorizon, maxIntentAgeMs: w.inbox.maxIntentAgeHours * 3600_000, maxIntentBytes: w.inbox.maxIntentBytes,
     draftsAllowed: w.drafts.allowed,
+    merge: { gates: { blocker: true, major: w.gates.major, minor: w.gates.minor, nit: w.gates.nit }, automationLogins: [...w.merge.automationLogins], factoryLogins: [...w.merge.factoryLogins], requiredApprovals: w.merge.requiredApprovals },
     sweep: { clocks: clockConfigOf(w), keepOpenLabel: w.labels.keepOpen, deliveryHours: w.clocks.initialDeliveryHours, fixWindowHours: w.clocks.fixWindowHours, contributorFixRounds: w.clocks.contributorFixRounds },
   };
 }
