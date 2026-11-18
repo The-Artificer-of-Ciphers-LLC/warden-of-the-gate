@@ -34,7 +34,13 @@ export interface Evidence {
   revision?: string;             // the item revision approvals bind to (PR head sha or issue body/criteria revision)
   updatedAt?: string;
 }
-export interface Obligation { type: 'delivery' | 'fix-window' | 'response' | 'information'; startedAt: string; dueAt: string; source: string }
+export interface Obligation {
+  type: 'delivery' | 'fix-window' | 'response' | 'information'; startedAt: string; dueAt: string; source: string;
+  /** Genuinely complete submission recorded in time (satisfies delivery/fix-window). Nothing sets these three yet: see handoff. */
+  satisfiedAt?: string;
+  hold?: { startedAt: string; remainingMs: number; reason: string };
+  completenessUnassessed?: boolean;
+}
 export type ApprovalType = 'action' | 'feature-design';
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'invalidated';
 export interface ApprovalBinding { revision: string; policyDigest: string; evidenceDigest: string }
@@ -54,6 +60,7 @@ export type Effect =
   | { t: 'assign'; login: string }
   | { t: 'label'; add?: string[]; remove?: string[] }
   | { t: 'comment'; text: string }
+  | { t: 'unassign'; login: string }
   | { t: 'close' };
 
 export interface Ledger {

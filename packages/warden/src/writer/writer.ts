@@ -269,6 +269,9 @@ export class Writer {
       if (!assignees.includes(e.login)) await this.store.addAssignee(i.item, e.login);
       const after = await this.store.getIssue(i.item);
       if (!after.assignees.includes(e.login)) throw new Error('assignment not confirmed by GitHub');  // never ack before confirmation
+    } else if (e.t === 'unassign') {
+      if (assignees.includes(e.login)) await this.store.removeAssignee(i.item, e.login);
+      if ((await this.store.getIssue(i.item)).assignees.includes(e.login)) throw new Error('unassignment not confirmed by GitHub');
     } else if (e.t === 'close') {
       if (iss.state !== 'closed') await this.store.closeIssue(i.item);
       if ((await this.store.getIssue(i.item)).state !== 'closed') throw new Error('close not confirmed by GitHub');

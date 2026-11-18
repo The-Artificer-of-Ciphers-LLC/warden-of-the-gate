@@ -18,6 +18,7 @@ export interface Store {
   getIssue(n: number): Promise<IssueState>;
   listIssues(opts?: { state?: 'open' | 'closed' | 'all' }): Promise<IssueState[]>;
   addAssignee(n: number, login: string): Promise<void>;
+  removeAssignee(n: number, login: string): Promise<void>;
   addLabel(n: number, label: string): Promise<void>;
   removeLabel(n: number, label: string): Promise<void>;
   listEvents(n: number): Promise<IssueEvent[]>;
@@ -31,7 +32,7 @@ export interface Store {
 }
 
 /** Write methods of Store; used by ReadOnlyStore and tests. */
-export const WRITE_METHODS = ['createComment', 'updateComment', 'deleteComment', 'addAssignee', 'addLabel', 'removeLabel', 'createLabel', 'updateLabel', 'deleteLabel', 'createIssue', 'closeIssue'] as const;
+export const WRITE_METHODS = ['createComment', 'updateComment', 'deleteComment', 'addAssignee', 'removeAssignee', 'addLabel', 'removeLabel', 'createLabel', 'updateLabel', 'deleteLabel', 'createIssue', 'closeIssue'] as const;
 
 export class ReadOnlyViolation extends Error { constructor(m: string) { super('READ-ONLY STORE: refused ' + m); } }
 /** Dry-run guard: every mutation throws. Wraps any Store, so "no repository mutation" is enforced, not promised. */

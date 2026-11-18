@@ -87,3 +87,12 @@ test('invalid timestamps throw instead of silently expiring', () => {
   assert.throws(() => evaluateClock(pr({ response: { kind: 'pr-response', requestedAt: 'nope' } }), { now: at(1), stopped: false }));
   assert.ok(DAY === 24 * HOUR);
 });
+
+test('a confirmed issue is shielded from stale closure but NOT from a missed delivery commitment; keep-open and maintainer wait shield both', () => {
+  const c = { type: 'delivery' as const, startedAt: at(0), dueAt: at(48) };
+  const claimed: ClockItem = { kind: 'issue', confirmedOrApproved: true, commitment: c, response: { kind: 'reproduction', requestedAt: at(0) } };
+  assert.equal(ev(claimed, 49).due.kind, 'expire-commitment');
+  assert.equal(ev({ ...claimed, commitment: undefined }, 999).due.kind, 'none');
+  assert.equal(ev({ ...claimed, keepOpen: true }, 999).due.kind, 'none');
+  assert.equal(ev({ ...claimed, maintainerWait: true }, 999).due.kind, 'none');
+});

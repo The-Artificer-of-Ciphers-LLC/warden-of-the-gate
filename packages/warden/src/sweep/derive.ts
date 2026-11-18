@@ -22,9 +22,8 @@ export function authorActivity(comments: Comment[], author: string): string | un
 
 const CONFIRMED = ['ready', 'claimed', 'implementing', 'in-review'];
 
-/** Ledger + observations -> ClockItem. Only response/information obligations are derived for live enforcement:
- *  the ledger does not yet record satisfaction or holds, so delivery/fix-window expiry is NOT derivable (see handoff). */
-export function clockItemFrom(l: Ledger, o: SweepObs, includeCommitments = false): ClockItem {
+/** Ledger + observations -> ClockItem. Satisfaction/holds are read from the obligation if present (nothing writes them yet). */
+export function clockItemFrom(l: Ledger, o: SweepObs): ClockItem {
   const item: ClockItem = {
     kind: l.kind, keepOpen: o.keepOpen, draft: o.draft, pendingObservations: o.pendingObservations,
     confirmedOrApproved: l.kind === 'issue' && (CONFIRMED.includes(l.state) || Object.values(l.approvals).some((a) => a.status === 'approved')),
@@ -37,8 +36,12 @@ export function clockItemFrom(l: Ledger, o: SweepObs, includeCommitments = false
     const since = new Date(Math.max(Date.parse(ob.startedAt), o.authorLastActivityAt ? Date.parse(o.authorLastActivityAt) : 0)).toISOString();
     item.response = { kind, requestedAt: ob.startedAt, lastAuthorActivityAt: o.authorLastActivityAt, nudgesSent: l.sweep?.since === since ? l.sweep.nudgesSent : [] };
   }
-  const cm = includeCommitments ? l.obligations.find((x) => x.type === 'delivery' || x.type === 'fix-window') : undefined;
-  if (cm) item.commitment = { type: cm.type as 'delivery' | 'fix-window', startedAt: cm.startedAt, dueAt: cm.dueAt };
+  const cm = l.obligations.find((x) => x.type === 'delivery' || x.type === 'fix-window');
+  if (cm) {
+    // An issue with linked work or in review may hold a timely complete submission that no one has assessed yet: never expire it on a guess.
+    const maybeSubmitted = l.kind === 'issue' && (l.linked.length > 0 || l.state === 'in-review');
+    item.commitment = { type: cm.type as 'delivery' | 'fix-window', startedAt: cm.startedAt, dueAt: cm.dueAt, satisfiedAt: cm.satisfiedAt, hold: cm.hold, completenessUnassessed: cm.completenessUnassessed || maybeSubmitted };
+  }
   return item;
 }
 void HOUR;

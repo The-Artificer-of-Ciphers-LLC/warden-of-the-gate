@@ -97,20 +97,30 @@ function exempt(i: ClockItem, cfg: ClockConfig): string | null {
   return null;
 }
 
+/** Commitments (a missed delivery/fix-window) are not stale-closure: confirmed/approved issues and unreviewed PRs are exactly the items that carry
+ *  them, so only keep-open, maintainer waits and enabled designated drafts shield a commitment (a hold or satisfaction is handled on the commitment). */
+function exemptCommitment(i: ClockItem, cfg: ClockConfig): string | null {
+  if (i.keepOpen) return 'keep-open';
+  if (i.maintainerWait) return 'maintainer-wait';
+  if (i.kind === 'pr' && i.draft && i.designatedDraft && cfg.draftsEnabled) return 'designated-draft';
+  return null;
+}
+
 export function evaluateClock(i: ClockItem, ctx: ClockCtx): Verdict {
   const cfg = ctx.cfg ?? DEFAULT_CLOCKS; const now = ms(ctx.now);
   const done = (due: Due): Verdict => ({ due, effectsDeferred: ctx.stopped && due.kind !== 'none' });
-  const ex = exempt(i, cfg); if (ex) return done({ kind: 'none', why: ex });
+  const ex = exempt(i, cfg); const exC = exemptCommitment(i, cfg);
+  if (ex && exC) return done({ kind: 'none', why: ex });
 
   // 1. Commitment expiry (delivery / fix window). Earlier than any silence closure by construction.
   const c = i.commitment; let expiry: Due | null = null;
-  if (c && !c.satisfiedAt && !c.hold && now >= ms(c.dueAt)) {
+  if (c && !exC && !c.satisfiedAt && !c.hold && now >= ms(c.dueAt)) {
     expiry = c.completenessUnassessed ? { kind: 'defer', why: 'completeness-unassessed' } : { kind: 'expire-commitment', commitment: c.type, dueAt: c.dueAt };
   }
   // 2. Response/information silence.
   let silence: Due | null = null;
   const r = i.response;
-  if (r) {
+  if (r && !ex) {
     const since = Math.max(ms(r.requestedAt), r.lastAuthorActivityAt ? ms(r.lastAuthorActivityAt) : 0);
     const age = now - since; const sinceIso = new Date(since).toISOString();
     if (r.kind === 'pr-response') {
@@ -130,7 +140,7 @@ export function evaluateClock(i: ClockItem, ctx: ClockCtx): Verdict {
   }
 
   const chosen = expiry ?? silence;   // an earlier delivery deadline wins over silence
-  if (!chosen) return done({ kind: 'none', why: 'nothing-due' });
+  if (!chosen) return done({ kind: 'none', why: ex ?? 'nothing-due' });
   // Unreconciled author observations could contradict the verdict: defer instead of enforcing (nudges are harmless but also deferred for accuracy).
   if (i.pendingObservations && chosen.kind !== 'defer') return done({ kind: 'defer', why: 'reconcile-observations' });
   return done(chosen);

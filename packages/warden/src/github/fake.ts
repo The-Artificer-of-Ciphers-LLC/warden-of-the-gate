@@ -81,5 +81,6 @@ export class FakeStore implements Store {
   async updateLabel(name: string, description: string) { await this.lat(); const l = this.w.labels.get(name); if (!l) throw new Error('404 label'); l.description = description; this.touch(); return { ...l }; }
   async deleteLabel(name: string) { await this.lat(); this.w.labels.delete(name); this.touch(); }
   async createIssue(title: string, body: string) { await this.lat(); const n = this.w.addIssue({ title, body, author: this.who }); this.touch(); return n; }
+  async removeAssignee(n: number, login: string) { await this.lat(); const i = this.issue(n); i.assignees = i.assignees.filter((a) => a !== login); this.touch(); await this.maybeLost('removeAssignee'); }
   async closeIssue(n: number) { await this.lat(); this.issue(n).state = 'closed'; this.touch(); }
 }

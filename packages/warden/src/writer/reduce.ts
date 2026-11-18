@@ -69,8 +69,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
 
 /** Deterministic sweep enforcement. The writer RE-EVALUATES the clock against the CURRENT ledger at decision time and accepts only if the
  *  same verdict still holds, so a stale or replayed sweep cannot close or nudge anything (the second of two racing decisions loses).
- *  Observations (keep-open label, author activity) are read by the writer at decision time, not trusted from the intent. Only comments count as author activity (pushes/reviews are not observable through Store yet). Delivery/fix-window expiry and
- *  claim release are NOT enforced here: they need an unassign effect and ledger fields for satisfaction/holds. */
+ *  Observations (keep-open label, author activity) are read by the writer at decision time, not trusted from the intent. Only comments count as author activity (pushes/reviews are not observable through Store yet). */
 function sweepAction(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const pl = i.payload as { expect?: { kind?: string; hours?: number } };
   if (i.origin !== 'deterministic') return rej('sweep-origin', 'Sweep actions are deterministic only.');
@@ -78,7 +77,7 @@ function sweepAction(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!pl.expect?.kind) return rej('sweep-malformed', 'Sweep rejected: an expectation is required.');
   if (!c.observed) return rej('sweep-unobserved', 'Sweep rejected: the writer could not observe current GitHub state.');
   const due = evaluateClock(clockItemFrom(l, c.observed), { now: iso(c.now), stopped: false, cfg }).due;
-  const same = due.kind === pl.expect.kind && (due.kind !== 'nudge' || due.hours === pl.expect.hours);
+  const same = due.kind === pl.expect.kind && (due.kind !== 'nudge' || due.hours === pl.expect.hours) && (due.kind !== 'expire-commitment' || due.commitment === (pl.expect as { commitment?: string }).commitment);
   if (!same) return rej(`stale-sweep:expected-${pl.expect.kind}-found-${due.kind}`, `Sweep rejected: the clock no longer says ${pl.expect.kind}.`);
   if (due.kind === 'nudge') {
     const keep = l.sweep?.since === due.since ? l.sweep.nudgesSent : [];
@@ -93,6 +92,21 @@ function sweepAction(l: Ledger, i: Intent, c: ReduceCtx): Decision {
     const why = due.kind === 'close-silence' ? `no author response since ${due.since}` : `the requested reporter information was not received since ${due.since}`;
     const back = l.kind === 'pr' ? 'You can reopen this PR or open a new one when the requested changes are ready.' : 'Reply with the requested information and a maintainer or the sweep can reopen it.';
     return { accept: true, plan: [...project(c.policy, from, 'closed'), note(`Closing this ${l.kind === 'pr' ? 'PR' : 'issue'} automatically: ${why}.${retained} ${back}`), { t: 'close' }], apply: (led) => moveTo(led, 'closed', undefined, c.now) };
+  }
+  if (due.kind === 'expire-commitment') {
+    const refs = l.linked.length ? ` Partial-work references retained: ${l.linked.map((n) => '#' + n).join(', ')}.` : '';
+    const from = l.state;
+    if (l.kind === 'issue') {
+      if (due.commitment !== 'delivery') return rej('commitment-kind-mismatch', 'Expiry rejected: only a delivery commitment applies to an issue claim.');
+      const o = l.owner; if (!o || o.kind !== 'contributor') return rej('no-contributor-owner', 'Expiry rejected: there is no contributor claim to release.');
+      const ok = canTransition('issue', from, 'ready'); if (!ok.ok) return rej(ok.reason, `Release rejected: ${ok.reason}.`);
+      return { accept: true, plan: [{ t: 'unassign', login: o.id }, ...project(c.policy, from, 'ready'), note(`The delivery commitment by ${o.id} expired at ${due.dueAt} without a complete submission, so the claim is released and the issue stays open for others.${refs}`)],
+        apply: (led) => { moveTo(led, 'ready', undefined, c.now); led.owner = null; led.obligations = led.obligations.filter((x) => !(x.type === 'delivery' && x.dueAt === due.dueAt)); } };
+    }
+    if (due.commitment !== 'fix-window') return rej('commitment-kind-mismatch', 'Expiry rejected: only a fix window applies to a PR.');
+    const ok = canTransition('pr', from, 'closed'); if (!ok.ok) return rej(ok.reason, `Closure rejected: ${ok.reason}.`);
+    return { accept: true, plan: [...project(c.policy, from, 'closed'), note(`Closing this PR automatically: the 48-hour fix window ended at ${due.dueAt} without the requested changes.${refs} The original issue stays open; you can reopen this PR or open a new one when the changes are ready.`), { t: 'close' }],
+      apply: (led) => moveTo(led, 'closed', undefined, c.now) };
   }
   return rej(`unsupported-sweep-verdict:${due.kind}`, `Sweep verdict ${due.kind} is not enforceable by the writer yet.`);
 }

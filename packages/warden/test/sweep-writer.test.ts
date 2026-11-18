@@ -122,3 +122,74 @@ test('non-deterministic origin and missing policy are rejected by the reducer', 
   assert.equal(rep.decisions.length >= 0, true);
   assert.equal((await r.world.view('x').getIssue(n)).state, 'open');
 });
+
+const iso = (h: number) => new Date(T0 + h * HOUR).toISOString();
+const delivery = (due: number, extra: Record<string, unknown> = {}) => [{ type: 'delivery' as const, startedAt: iso(0), dueAt: iso(due), source: 'assignment', ...extra }];
+async function claimedIssue(r: Rig, o: { linked?: number[]; state?: Ledger['state']; obligations?: Ledger['obligations'] } = {}) {
+  at(r, 0);
+  const n = r.world.addIssue({ title: 'fix the widget crash' });
+  await r.world.view('x').addAssignee(n, 'contrib1'); await r.world.view('x').addLabel(n, 'warden:claimed');
+  await seed(r, n, 'issue', { state: o.state ?? 'claimed', owner: { kind: 'contributor', id: 'contrib1', opid: 'op_claim' }, linked: o.linked ?? [], obligations: o.obligations ?? delivery(48) });
+  return n;
+}
+
+test('delivery expiry releases the claim: unassign confirmed, back to ready, issue stays open, label projected, partial work retained', async () => {
+  const r = rig(); const n = await claimedIssue(r);
+  at(r, 47); assert.deepEqual(await plan(r), []);
+  at(r, 49); const f = await plan(r);
+  assert.deepEqual(f.map((x) => x.due.kind), ['expire-commitment']);
+  await submitAll(r, f); await r.writer().drain();
+  const gh = await r.world.view('x').getIssue(n);
+  assert.deepEqual(gh.assignees, []); assert.equal(gh.state, 'open');
+  assert.ok(gh.labels.includes('warden:ready') && !gh.labels.includes('warden:claimed'), gh.labels.join());
+  const l = await ledgerOf(r, n);
+  assert.equal(l.state, 'ready'); assert.equal(l.owner, null); assert.equal(l.obligations.length, 0);
+  assert.ok((await bodies(r, n)).some((b) => b.startsWith('<!-- warden-effect') && b.includes('claim is released')));
+  assert.deepEqual(await plan(r), [], 'no further enforcement once released');
+});
+
+test('commitments that must NOT expire: satisfied, held (frozen), and ambiguous completeness (linked work / in review)', async () => {
+  const r = rig(); at(r, 0);
+  await claimedIssue(r, { obligations: delivery(48, { satisfiedAt: iso(10) }) });
+  await claimedIssue(r, { obligations: delivery(48, { hold: { startedAt: iso(30), remainingMs: 18 * HOUR, reason: 'maintainer hold' } }) });
+  const linked = await claimedIssue(r, { linked: [55] });
+  await claimedIssue(r, { state: 'in-review' });
+  at(r, 500);
+  const f = await plan(r);
+  assert.deepEqual(f.map((x) => [x.item, x.due.kind]), [[linked, 'defer'], [linked + 1, 'defer']].map(([a, b]) => [a, b]));
+  const sub = await submitAll(r, f); assert.deepEqual(sub.submitted, []);
+  await r.writer().drain();
+  assert.equal((await r.world.view('x').getIssue(linked)).assignees.length, 1);
+});
+
+test('PR fix-window expiry closes the PR with explanation while the original issue stays open', async () => {
+  const r = rig(); at(r, 0);
+  const issue = r.world.addIssue({ title: 'the original issue' });
+  const n = r.world.addIssue({ isPr: true, author: 'contrib1', title: 'attempt' });
+  await seed(r, n, 'pr', { state: 'needs-author', linked: [issue], attempts: { launchRetries: 0, reworkCycles: 0, contributorFixRounds: 1, review: 1 }, obligations: [{ type: 'fix-window', startedAt: iso(0), dueAt: iso(48), source: 'published-review' }] });
+  at(r, 49); const f = await plan(r); assert.equal(f[0].due.kind, 'expire-commitment');
+  await submitAll(r, f); await r.writer().drain();
+  assert.equal((await r.world.view('x').getIssue(n)).state, 'closed');
+  assert.equal((await r.world.view('x').getIssue(issue)).state, 'open');
+  assert.ok((await bodies(r, n)).some((b) => b.startsWith('<!-- warden-effect') && b.includes(`#${issue}`) && b.includes('fix window')));
+});
+
+test('stale expiry loses: a release processed before the sweep leaves nothing to unassign or comment', async () => {
+  const r = rig(); const n = await claimedIssue(r); at(r, 49);
+  const f = await plan(r);
+  await r.send({ kind: 'release', item: n, actor: 'contrib1' });
+  await submitAll(r, f);
+  await r.writer().drain();
+  assert.equal((await ledgerOf(r, n)).state, 'ready');
+  assert.ok(!(await bodies(r, n)).some((b) => b.includes('delivery commitment')));
+});
+
+test('unassign effect is confirmed against GitHub before acknowledgement', async () => {
+  const r = rig(); const n = await claimedIssue(r); at(r, 49);
+  const store = r.world.view(WRITER);
+  (store as any).removeAssignee = async () => { /* GitHub silently ignored the request */ };
+  const w = new (await import('../src/writer/writer.ts')).Writer(store, (await import('../src/writer/writer.ts')).defaultWriterConfig({ repository: REPO, inboxIssue: r.inbox, controlIssue: r.control, policy: r.policy, submitters: ['warden-submit'], writerIdentities: [WRITER], leaseTtlMs: 5000, leaseWaitMs: 2000, fenceMarginMs: 500 }));
+  await submitAll(r, await plan(r));
+  const rep = await w.drain();
+  assert.ok(!rep.processed.some((p) => p.result === 'applied'), JSON.stringify(rep.processed));
+});
