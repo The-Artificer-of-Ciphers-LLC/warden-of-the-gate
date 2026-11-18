@@ -139,3 +139,16 @@ test('a diff too large for the local reviewer is refused before any attempt is s
   const runner = new FakeRunner(GOOD, () => done(CLEAN)); const o = await r.scan(runner);
   assert.equal(o.kind, 'blocked'); assert.equal(o.reason, 'diff-too-large'); assert.match(o.notice, /split it into smaller pull requests/); assert.equal(o.attempts.used, 0); assert.equal(runner.calls, 0);
 });
+
+test('a material policy change invalidates the accepted review with a recorded reason and re-reviews the same head as a delta; a base advance is only a pending compatibility note', async (t) => {
+  const r = rig(); t.after(r.cleanup);
+  let seen = 0; const runner = new FakeRunner(GOOD, () => { seen++; return done(seen === 1 ? BLOCKER : { verdict: 'no findings', findings: [], revalidated: [{ id: 'f1', status: 'resolved' }] }); });
+  const a = await r.scan(runner, { policyDigest: 'policy-aaaaaaaa' }); assert.equal(a.kind, 'accepted'); assert.equal(r.kv.read(r.n)!.marker!.policyDigest, 'policy-aaaaaaaa');
+  assert.equal((await r.scan(runner, { policyDigest: 'policy-aaaaaaaa' })).kind, 'reused'); assert.equal(runner.calls, 1);
+  const b = await r.scan(runner, { policyDigest: 'policy-bbbbbbbb' });
+  assert.equal(b.kind, 'accepted'); assert.equal(b.mode, 'delta'); assert.match(b.notice, /invalidated: approved policy changed/); assert.equal(runner.calls, 2);
+  assert.ok(r.kv.read(r.n)!.log.some((l) => l.event === 'invalidated'));
+  r.pull.pull!.base = 'newbase0000bb';
+  const c = await r.scan(runner, { policyDigest: 'policy-bbbbbbbb' });
+  assert.equal(c.kind, 'reused'); assert.equal(c.baseAdvanced, true); assert.match(c.notice, /compatibility assessment is pending, not a full re-review/); assert.equal(runner.calls, 2);
+});

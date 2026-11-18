@@ -11,7 +11,7 @@ import type { Finding, ReviewOutput } from './schema.ts';
 /** P3 first checkpoint: ONE read-only shadow review of ONE pull request. Lifts the pure rules of the accepted review-slice prototype into real
  *  components (store, runner seam, Ajv, persistence). There is deliberately NO code path that posts, merges or edits a contributor branch: the
  *  store handed to the scan is wrapped read-only, so a write throws instead of happening. The result is a local draft decision card only. */
-export interface Marker { head: string; base: string; verdict: ReviewOutput['verdict']; findings: Finding[]; ci: PullInfo['ci']; acceptedAt: string }
+export interface Marker { head: string; base: string; verdict: ReviewOutput['verdict']; findings: Finding[]; ci: PullInfo['ci']; acceptedAt: string; policyDigest?: string }
 export interface Card { text: string; posted: false; head: string }
 export interface ReviewRecord { v: 1; item: number; attempts: { used: number }; marker: Marker | null; card: Card | null; log: Array<{ at: string; event: string; detail?: string }> }
 export interface ReviewKV { read(item: number): ReviewRecord | null; write(item: number, r: ReviewRecord): void }
@@ -22,9 +22,11 @@ export interface ReviewOpts {
   store: Store; item: number; runner: AgentRunner; kv: ReviewKV; cfg: ReviewConfig;
   /** Local AND shared stop, evaluated before any model work. Unknown control state must report stopped. */
   stopped: () => boolean | Promise<boolean>; signal?: AbortSignal; clock?: () => number;
+  /** Digest of the approved policy in force. A change invalidates the accepted review with a recorded reason. */
+  policyDigest?: string;
 }
 export type ReviewKind = 'reused' | 'checks-only' | 'accepted' | 'rejected' | 'interrupted' | 'blocked';
-export interface ReviewOutcome { kind: ReviewKind; notice: string; reason?: string; mode?: 'full' | 'delta'; attempts: { used: number; max: number }; marker: Marker | null; card: Card | null }
+export interface ReviewOutcome { kind: ReviewKind; notice: string; reason?: string; mode?: 'full' | 'delta'; baseAdvanced?: boolean; invalidated?: string; attempts: { used: number; max: number }; marker: Marker | null; card: Card | null }
 
 const fresh = (item: number): ReviewRecord => ({ v: 1, item, attempts: { used: 0 }, marker: null, card: null, log: [] });
 
@@ -50,9 +52,14 @@ export async function runReview(o: ReviewOpts): Promise<ReviewOutcome> {
   if (pull.state !== 'open') return blocked(`Pull request #${o.item} is not open.`, 'not-open');
 
   const m = rec.marker;
-  if (m && m.head === pull.head) {
-    if (m.ci === pull.ci) { note('reused', pull.head); return out('reused', 'Same code, same checks, already reviewed: the accepted review is reused. No model call.'); }
-    m.ci = pull.ci; note('checks-only', pull.ci); return out('checks-only', `Same code; only the checks changed (now ${pull.ci}). Merge gates are re-evaluated by plain rules. No model call.`);
+  // Material policy change invalidates the accepted conclusion (with a reason); it is then re-reviewed as a delta of the same head.
+  const invalidated = m && m.head === pull.head && o.policyDigest && m.policyDigest && m.policyDigest !== o.policyDigest ? `approved policy changed (${m.policyDigest.slice(0, 8)} -> ${o.policyDigest.slice(0, 8)})` : undefined;
+  if (invalidated) note('invalidated', invalidated);
+  if (m && m.head === pull.head && !invalidated) {
+    const baseAdvanced = m.base !== pull.base;   // an unrelated base advance is a compatibility assessment, never an automatic full re-review
+    const tail = baseAdvanced ? ` The base branch moved (${m.base.slice(0, 8)} -> ${pull.base.slice(0, 8)}): a compatibility assessment is pending, not a full re-review.` : '';
+    if (m.ci === pull.ci) { note('reused', pull.head); return out('reused', `Same code, same checks, already reviewed: the accepted review is reused. No model call.${tail}`, { baseAdvanced }); }
+    m.ci = pull.ci; note('checks-only', pull.ci); return out('checks-only', `Same code; only the checks changed (now ${pull.ci}). Merge gates are re-evaluated by plain rules. No model call.${tail}`, { baseAdvanced });
   }
   const size = pull.files.reduce((a, f) => a + (f.patch?.length ?? 0), 0);
   if (size > (o.cfg.maxPatchChars ?? 40_000)) return blocked(`This pull request's patch text is ${size} characters, over the ${o.cfg.maxPatchChars ?? 40_000}-character limit the local reviewer can read whole. It is not reviewed partially: ask the contributor to split it into smaller pull requests.`, 'diff-too-large');
@@ -100,13 +107,13 @@ export async function runReview(o: ReviewOpts): Promise<ReviewOutcome> {
   if (after.head !== pull.head) return fail(`The contributor pushed ${after.head.slice(0, 8)} while the review ran on ${pull.head.slice(0, 8)}. A review is bound to the code it saw, so it is rejected as stale.`, 'head-moved');
 
   const open = output.findings.length;
-  rec.marker = { head: pull.head, base: pull.base, verdict: output.verdict, findings: output.findings, ci: after.ci, acceptedAt: iso(now()) };
+  rec.marker = { head: pull.head, base: pull.base, verdict: output.verdict, findings: output.findings, ci: after.ci, acceptedAt: iso(now()), policyDigest: o.policyDigest };
   rec.card = { text: open ? `Recommend: request changes (${output.findings.filter((f) => f.severity === 'blocker').length} blocker(s), ${open} finding(s)).` : 'Recommend: no review findings. Merge still needs checks and authority.', posted: false, head: pull.head };
   rec.attempts.used = 0;
   const prior = m ? m.findings.length : 0;
   const stillOpen = (output.revalidated ?? []).filter((r) => r.status === 'open').length;
   note('accepted', `${output.verdict} head ${pull.head}`);
-  return out('accepted', `Accepted. The review marker now points at ${pull.head.slice(0, 8)}. A draft decision card exists for the maintainer; nothing was posted.${prior ? ` ${prior} earlier finding(s) re-checked: ${stillOpen} still open.` : ''}`, { mode });
+  return out('accepted', `${invalidated ? `Earlier conclusion invalidated: ${invalidated}. ` : ''}Accepted. The review marker now points at ${pull.head.slice(0, 8)}. A draft decision card exists for the maintainer; nothing was posted.${prior ? ` ${prior} earlier finding(s) re-checked: ${stillOpen} still open.` : ''}`, { mode });
 }
 
 /** Persistence for the real instance directory (0600 files via InstanceStorage). Tests use an in-memory KV. */

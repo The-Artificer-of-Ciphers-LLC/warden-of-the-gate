@@ -193,7 +193,7 @@ test('live intake via the CLI submits only the named item, the writer applies it
 
 test('run --task review: needs one --item, dry-run plans with no model call, and live refuses honestly until the OpenCode adapter exists (never a fabricated review)', async () => {
   const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'Fix token refresh race', '--pr', '--as', 'outside');
-  assert.equal((await e.json('run', '--task', 'review')).code, 2, 'one pull request per scan');
+  { const dry = await e.json('run', '--task', 'review', '--dry-run'); assert.equal(dry.code, 0); assert.equal(dry.data.mutations, 0); assert.ok(dry.data.skipped.some((s: any) => /no Warden state/.test(s.why)), 'a PR without Warden state is skipped, not reviewed'); }
   const w = e.worldJson(); const pr = w.issues.find((i: any) => i.isPr); pr.pull = { head: 'a1b2c3d4e5f6', base: 'base000', ci: 'passing', files: [{ path: 'src/a.ts', status: 'modified', patch: '@@' }] };
   writeFileSync(e.world, JSON.stringify(w));
   const before = worldHash(e);
