@@ -50,3 +50,30 @@ The P1 scheduling gate remains open. A second attempt of the comparison itself (
 - **Cause of both stalls: found.** From this machine `github.com:22` is unreachable right now (`nc` to port 22 timed out 3 of 3 times and the harness log shows `Operation timed out`), while `ssh.github.com:443` is reachable and authenticates as `trek-e`. A push of one text file to a throwaway branch had succeeded earlier (1.1 s), so port 22 is intermittently blocked by this network, not by GitHub, the repos or Warden. Attempt 1's `ETIMEDOUT` on the sandbox push is consistent with the same cause (not proven for that specific moment).
 - Consequence: attempts 1 and 2 are **infrastructure failures, not negative results**. They say nothing about whether the commit method affects schedule registration.
 - Next: the owner's broad approval ("do what is needed to figure this out, I approve running whatever you see fit") covers a third attempt over SSH port 443 with GitHub's published host keys in a temporary `known_hosts` (the owner's `~/.ssh` is not modified), within the same two private repos and the same 10-minute bound.
+
+## Attempt 3 (SSH over port 443; raw report `schedule-gitpush-2026-11-18.run3.json`, preserved unchanged)
+
+**Outcome: valid trial, negative for the commit-method hypothesis in this one bounded window.** Run 22:38:55 to 22:49:05 UTC.
+
+- Both private repos received the byte-identical workflow (blob `013aaace…`) through a real `git commit` + `git push` over the `trek-e` SSH identity (route `ssh.github.com:443`; host keys from GitHub's `/meta` endpoint in a temporary `known_hosts`; every git step succeeded, pushes about 1 s each; no stall).
+- Registration worked: workflow ids `423051691` (sandbox) and `423051766` (control).
+- **Manual controls: 2/2 success** (sandbox run `44413586042` at 22:39:02Z, control run `44413596718` at 22:39:06Z; the logs show `event=workflow_dispatch`).
+- **Native schedule runs observed: 0/2** over the roughly 10-minute window at the documented 5-minute minimum cadence (cron `2/5 * * * *`, so expected slots around :42, :47 and :52 minute marks relative to the install).
+- Install commits were **unsigned** (`verification.verified` false for both): this tested real-git-push-as-`trek-e`, not a GPG- or SSH-signed "verified" commit.
+- Per-step timing is in the report (`gitSteps`, all exit 0, none timed out).
+
+### Independent cleanup verification (after attempt 3)
+
+| Check | Sandbox | Control |
+|---|---|---|
+| `.github/workflows/p1-cron-minimal.yml` on `main` | absent (HTTP 404) | absent (HTTP 404) |
+| Head of `main` | `c4764f52` (install `ed6737b6` then removal) | `330c01b2` (install `3d8131d3` then removal) |
+| Workflows listed | `p0-overlap`, `p0-writer`, both `disabled_manually` | none |
+| Newest Actions runs | only the manual control above (no schedule runs) | only the manual control above |
+| In-progress runs | 0 | 0 |
+
+### What this establishes and does not
+
+- Combined with the earlier minimal API-commit test (20:04 to 20:14 UTC, 0/2 scheduled) and the original observations, **installing by git push instead of the Contents API did not make a native schedule run appear in a 10-minute window**. It is one trial per method, and GitHub documents scheduling as best-effort, so this narrows but does not eliminate the commit-method hypothesis (an unsigned commit, a short window and a single `2/5` cron form were used).
+- The two earlier stalls (attempts 1 and 2) were this network blocking `github.com:22`, not GitHub; they are not results.
+- The remaining untested differences are listed in the handoff (organization-specific eligibility, account-level scheduling behavior, a longer observation window, other cron forms). The P1 gate is still open and support case #5025247 is still unanswered.
