@@ -1,0 +1,18 @@
+{
+  "startedAt": "2026-11-18T19:45:36.626Z",
+  "pass": false,
+  "experiment": "five-minute cron capability check with verified personal commit identity; manual dispatch does not satisfy this check",
+  "sourceSha256": "79cef6973ab658a839005b552f4e829062aa488012ab44b430a4498152bad171",
+  "cronBefore": "*/15 * * * *",
+  "cronDuring": "2/5 * * * *",
+  "observationMinutes": 10,
+  "changeCommit": "7aa52f4338b824cd064fd3e48c0d7ddc508754f3",
+  "registeredActor": "trek-e",
+  "observingAt": "2026-11-18T19:45:40.769Z",
+  "error": "No successful schedule-triggered run observed within 10 minutes",
+  "disabled": true,
+  "restoreCommit": "45d4545ca884d3c53d0da4bdc364eda2b328f924",
+  "restored": true,
+  "cleanupErrors": [],
+  "finishedAt": "2026-11-18T19:55:51.594Z"
+}

@@ -74,6 +74,8 @@ After a failed, finished original observation and **separate owner approval**, `
 
 For a capability check rather than a longer observation, the owner requested `--live --rapid`: GitHub's minimum supported five-minute interval, offset as `2/5 * * * *`, with a **10-minute maximum** and the same early-success and restoration/disable safeguards. It writes `results/schedule-rapid-2026-11-18.json`. The longer window is a timeout, never a required duration or timing-accuracy assertion. GitHub may still delay or drop events; shortening the test does not make delivery guaranteed.
 
+The [recorded rapid attempt](results/schedule-rapid-2026-11-18.json) did not observe a successful scheduled run within that bound. Its cleanup restored the original workflow and disabled it without errors; independent checks confirmed both workflows disabled and zero scheduled runs. No observation remains active, and further live attempts require separate approval.
+
 The original [failed observation](results/schedule-2026-11-18.json) remains failed; its [independent closeout](results/schedule-2026-11-18-closeout.json) records the verified disabled state after an immediate status-read discrepancy. The approved off-peak diagnostic writes its own report and never overwrites that evidence.
 
 ## Owner-approved trust-root recovery
