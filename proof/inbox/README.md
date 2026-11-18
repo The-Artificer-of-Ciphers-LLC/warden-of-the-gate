@@ -76,6 +76,18 @@ For a capability check rather than a longer observation, the owner requested `--
 
 The [recorded rapid attempt](results/schedule-rapid-2026-11-18.json) did not observe a successful scheduled run within that bound. Its cleanup restored the original workflow and disabled it without errors; independent checks confirmed both workflows disabled and zero scheduled runs. No observation remains active, and further live attempts require separate approval.
 
+### Minimal differential scheduler reproduction
+
+After separate approval for both disposable repositories:
+
+```bash
+node proof/inbox/src/schedule-minimal-proof.ts --live
+```
+
+This installs identical copies of `workflows/p1-cron-minimal.yml` in the sandbox and control repositories: five-minute cron, manual dispatch, `permissions: {}`, and one trigger-recording step. There is no checkout, Warden code, concurrency, App credential, secret or issue mutation. One actual manual control per repository distinguishes runnable jobs from absent scheduled events. The ten-minute comparison includes setup time and ends early if both genuine scheduled controls succeed; cleanup disables and removes the temporary workflows and cancels outstanding runs. Existing writer workflows must already be disabled and stay disabled.
+
+The [minimal report](results/schedule-minimal-2026-11-18.json) reproduces the symptom without Warden: both manual controls executed their step successfully, but neither repository observed a successful scheduled event. Both temporary files were removed with no cleanup errors. This narrows the failure boundary; it does not expose GitHub's internal scheduler error or establish a provider-internal root cause. The public API schema exposes workflow state/runs, not cron registration or missed-event diagnostics. Mocked safety tests verify evidence attribution and cleanup, not GitHub scheduling.
+
 The original [failed observation](results/schedule-2026-11-18.json) remains failed; its [independent closeout](results/schedule-2026-11-18-closeout.json) records the verified disabled state after an immediate status-read discrepancy. The approved off-peak diagnostic writes its own report and never overwrites that evidence.
 
 ## Owner-approved trust-root recovery
