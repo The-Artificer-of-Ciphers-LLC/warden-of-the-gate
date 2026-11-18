@@ -16,9 +16,9 @@ Requirements: Node >= 22.18. Any model-backed task also needs macOS (Seatbelt `s
 |---|---|
 | `warden setup [--create-config --repo o/n --maintainers a,b] [--create-orders] [--create-labels] [--approve-ceiling]` | prerequisite report; every creation is a separate explicit flag; existing files are never overwritten; adopts nothing |
 | `warden config validate [--show-effective]` | both YAML files (Ajv), schema compatibility, effective-policy conflicts, unsafe defaults |
-| `warden run --task intake\|claim\|sweep [--dry-run] [--item N]` | deterministic housekeeping. Live `intake --item N` and `sweep` only SUBMIT intents; `warden writer drain` applies them. Nothing is scheduled by Warden |
+| `warden run --task intake\|sweep [--dry-run] [--item N]` | deterministic housekeeping. Live `intake --item N` and `sweep` only SUBMIT intents; `warden writer drain` applies them. Nothing is scheduled by Warden |
 | `warden run --task review\|triage [--dry-run] [--item N] [--runner opencode]` | local read-only shadow work. Without `--runner opencode` a live run refuses honestly. `review` without `--item` is a bounded scan |
-| `warden run --task implement\|rework\|retro` | return `unsupported` (exit 3): not built in this candidate |
+| `warden run --task claim\|implement\|rework\|retro` | return `unsupported` (exit 3): not built in this candidate. Claims work today as writer intents (claim rules, ownership check and the 48-hour obligation are built and tested), but no comment parser or event handler turns a volunteer comment into one yet |
 | `warden adopt --dry-run [--out f]` / `--selection f --confirm` | inventory existing items, then adopt only the selected ones (existing owners kept, new clocks start at the adoption notice) |
 | `warden status [--json]` | state, ownership, approvals, evidence freshness, pending operations, credentials, stop acknowledgements; no model, no secrets |
 | `warden stop [--global]` / `warden resume --confirm [--global]` | local stop first, then shared stop, confirmed by re-read |
