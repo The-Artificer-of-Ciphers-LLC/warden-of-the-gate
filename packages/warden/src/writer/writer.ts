@@ -97,7 +97,7 @@ export class Writer {
   async drain(): Promise<DrainReport> {
     this.repairs = 0; this.creates = 0; this.decisions = [];
     const rep: DrainReport = { env: this.cfg.env, holder: this.cfg.holder, epoch: 0, processed: [], pendingAfter: [], decisions: [], repairs: 0, creates: 0 };
-    const finish = async () => { rep.pendingAfter = (await this.scan()).pending.map((c) => c.id); rep.decisions = this.decisions; rep.repairs = this.repairs; rep.creates = this.creates; return rep; };
+    const finish = async () => { try { rep.pendingAfter = (await this.scan()).pending.map((c) => c.id); } catch { rep.haltReason = (rep.haltReason ?? '') + ' (inbox unreadable: pending state unknown, nothing was written)'; } rep.decisions = this.decisions; rep.repairs = this.repairs; rep.creates = this.creates; return rep; };
     const st = await this.controls();
     if (st.stopped || st.dryRun) {
       const kind = st.stopped ? 'stop' : 'dry-run';
