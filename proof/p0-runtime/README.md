@@ -57,7 +57,8 @@ only records errno/length for real credential paths; nothing is printed or copie
 | Report | Required checks | Informational |
 | --- | --- | --- |
 | `results/isolation.json` | 27/27 PASS | 1 (memory cap unavailable) |
-| `results/runtime.json` | 37/37 PASS | 7 (semantic sanity, reasoning overshoot, read-tool cap, same-session resume hazard, accepted-request fate, model-chosen escalation attempts, measured resources) |
+| `results/runtime.json` | 37/37 PASS (committed A–F run; **sections E,F were later changed and re-run, see below; A–D not re-run since**) | 7 (semantic sanity, reasoning overshoot, read-tool cap, same-session resume hazard, accepted-request fate, model-chosen escalation attempts, measured resources) |
+| `results/runtime.partial-EF.json` | E,F re-run (twice): 9/9 required each time (incl. model prerequisite) | 6 each (E1b, E1c, E2b, E3b, E6, F1) |
 | `results/lookup.json` | 19/19 PASS | 2 (latency/memory, SCIP occurrence comparison) |
 
 ### Findings that change the design (details in ADR 0004/0006/0007 proof records)
@@ -68,6 +69,10 @@ only records errno/length for real credential paths; nothing is printed or copie
 4. Re-prompting a crashed session replays its dangling prompt; recover with a fresh session.
 5. No per-process memory cap on macOS; Seatbelt is a deprecated CLI over a supported kernel mechanism; Docker/Apple container backends are unverified here.
 6. The harness boundary must allow the LM Studio port, so candidate-code execution needs a second, network-less boundary.
+
+### Reproducibility correction (E1, F2)
+
+A parent-side re-run of E,F gave 10/13, so the first committed 37/37 was not reproducible. Causes and fixes: **E1** asserted tool counts, but `steps` bounds model steps, not tool calls (a model may batch calls in one step; 5 tools executed in 2 assistant messages was observed). E1 now asserts only steps ≤ 2 and termination; E1b records the finding and E1c shows an adapter-side tool-call budget (informational; nondeterministic, reports exercised/not). **F2** was vacuous when the model ran no commands; it now fails only on a leak/escape and reports "not exercised" otherwise; F3 (harness shell, all commands) is the deterministic coverage. Two consecutive E,F runs after the fix: 9/9 required, 6 informational, identical outcomes (E1b: 1 tool executed, no batching; E1c exercised, interrupted at 2 tool parts; F2 exercised, no leak). Nondeterminism that remains by nature: whether the model batches calls (E1b/E1c) and whether it runs the hostile commands (F1/F2); neither can fail the required count.
 
 ### Not proven
 

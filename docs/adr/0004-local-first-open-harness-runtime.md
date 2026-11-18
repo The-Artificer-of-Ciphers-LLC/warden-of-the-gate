@@ -46,9 +46,9 @@ Evidence: [`proof/p0-runtime`](../../proof/p0-runtime/README.md) — `results/ru
 | Resolved provider is local | harness is asked what it *resolved*: only loopback endpoints accepted; hosted, LAN, mDNS, lookalike and userinfo hosts rejected; endpoint probed; model device must be `Local` (C) |
 | No hosted request when local fails | dead local endpoint + hardened harness: zero egress observed, no output; explicit hosted selection fails `provider.no-route` with zero egress (C6, C8) |
 | Cancellation | interrupt stops generation in ~0.4 s and LM Studio returns to idle; transcript and workspace changes recoverable via git; crash (SIGKILL) leaves the session and prompt on disk; fresh session recovers (D) |
-| Finite budgets | `steps` cap, `limit.output`, tool-output truncation, adapter wall-clock interrupt (8.1 s for an 8 s budget), bounded context overflow (E) |
+| Finite budgets | `steps` cap bounds **model steps** (assistant messages), *not* tool calls; `limit.output`, tool-output truncation, adapter wall-clock interrupt (8.1 s for an 8 s budget), bounded context overflow (E). A tool-call budget is **not** provided by the harness: the runner must enforce it (constraint 7) |
 | Boundary vs hostile repo | npm lifecycle scripts, git hook, test runner and direct code: 0 breaches over 44 hostile attempts per vector (plus 2 positive controls) (home credentials, unrelated files, write token in env, `gh`, symlink/hardlink/rename escape, unapproved loopback incl. LM Studio port, internet, DNS, UDP, unix sockets, listen, osascript/open/launchctl); the identical payload uncontained succeeds on every vector (positive control) |
-| Harness inside the boundary | OpenCode runs inside Seatbelt; with every tool permission open the harness shell still cannot read home, reach the internet or write outside the workspace (F) |
+| Harness inside the boundary | OpenCode runs inside Seatbelt; with every tool permission open the harness shell still cannot read home, reach the internet or write outside the workspace: deterministic proof via the harness shell (F3). The model-driven run (F2) fails only on a leak and is reported *not exercised* when the model runs no commands |
 
 **Constraints this imposes (carry into P1/P3 design)**
 
@@ -58,6 +58,7 @@ Evidence: [`proof/p0-runtime`](../../proof/p0-runtime/README.md) — `results/ru
 4. **Recovery uses a fresh session.** Re-prompting a crashed session also answers its dangling prompt (12.6 k characters of unbounded work observed). Killing the harness aborts the in-flight LM Studio generation (~0.14 s), so the accepted request is lost, not completed: report it as "accepted, result discarded".
 5. **No per-process memory cap exists on macOS** (`ulimit -v` fails with EINVAL). Memory is bounded only by the model/context budget, the wall-clock kill and host monitoring. Reasoning tokens are not strictly bounded by `limit.output` (141 vs cap 48 observed); wall-clock is the hard bound.
 6. LM Studio can list models served by *other* devices (LM Link). `lms ps` device must be `Local` for a model to count as local.
+7. **Tool-call budget is the runner's job.** `steps` bounds model steps; one step can batch several tool calls (observed: 5 tools executed in 2 assistant messages in a verification run). The adapter must poll the message log and interrupt past its budget (E1c shows the mechanism works but is time-bounded, not exact: calls batched in one step may execute before the poll sees them).
 
 **Unverified / not claimed:** other macOS majors, Docker/Apple container backends, nested sandboxing (Swift macro plugins, tools that call `sandbox_init`), CPU/GPU contention while the factory and the maintainer share the Mac, statistical reliability of structured output beyond 5 runs of one model and schema, and OpenCode MCP/LSP/plugin surfaces (disabled or unused in the proof). If the boundary is unavailable the dependent work (any candidate-code execution) stays blocked; nothing is weakened.
 
