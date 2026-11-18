@@ -1,22 +1,49 @@
 {
-  "name": "warden-core-unpublished",
+  "name": "@taoc/warden",
   "version": "0.1.0-p4",
   "private": true,
   "type": "module",
-  "description": "Warden of the Gate P1 walking skeleton: versioned CLI, schemas, state model, serialized writer, stop/approvals. Not published; package scope is a P6 release gate.",
+  "description": "Warden of the Gate: a local-first, one-repository-per-instance software factory CLI (review, triage, housekeeping and gated merge) with a serialized GitHub writer. Release candidate; not published.",
+  "license": "MIT",
+  "author": "The Artificer of Ciphers LLC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate.git",
+    "directory": "packages/warden"
+  },
+  "bugs": {
+    "url": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate/issues"
+  },
+  "homepage": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-of-the-gate#readme",
+  "keywords": [
+    "warden",
+    "software-factory",
+    "github",
+    "local-llm",
+    "opencode",
+    "maintainer-tools"
+  ],
   "bin": {
     "warden": "dist/cli.js"
   },
   "files": [
     "dist",
     "schemas",
-    "templates"
+    "templates",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-reporter=spec 'test/**/*.test.ts'",
-    "evidence": "node scripts/evidence.ts"
+    "evidence": "node scripts/evidence.ts",
+    "prepack": "npm run build",
+    "verify-install": "node scripts/verify-install.ts"
   },
   "engines": {
     "node": ">=22.18"
