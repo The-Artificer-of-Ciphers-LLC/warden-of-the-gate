@@ -1,4 +1,4 @@
-import { GitHubPublisher, PathRemote } from '../implement/github-publisher.ts';
+import { GitHubPublisher, HttpsGitRemote, PathRemote } from '../implement/github-publisher.ts';
 import type { PullWriter } from '../implement/github-publisher.ts';
 import type { PrPublisher } from '../implement/slice.ts';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -82,7 +82,16 @@ export async function run(c: Ctx): Promise<Result> {
     // a store that can create pull requests, and an explicit push remote; there is no publish credential in this release, so a real https push stays blocked.
     const pubr = ((): { publisher?: PrPublisher; refusal?: Result } => {
       if (str(c.flags, 'publisher') !== 'github') return { publisher: new LocalOutboxPublisher(st.path('outbox.git')) };
-      const pw = store as unknown as Partial<PullWriter>; const remote = str(c.flags, 'push-remote');
+      const remote = str(c.flags, 'push-remote');
+      if (remote === 'github') {
+        // Real publish to THIS instance's repository: App-issued contents + pull-request write, only inside the protected ceiling, never the operator token.
+        try {
+          const pb = be.publish?.();
+          if (!pb) return { refusal: { code: 4, data: { task, outcome: 'blocked', reason: 'publisher-unavailable' }, text: 'run --publisher github --push-remote github is blocked: no App installation or protected ceiling is configured for publishing (the owner must grant contents and pull-request write and approve the ceiling)' } };
+          return { publisher: new GitHubPublisher(pb.store as unknown as PullWriter, new HttpsGitRemote(cfg.repository, pb.token), cfg.defaultBranch) };
+        } catch (e) { return { refusal: { code: 4, data: { task, outcome: 'blocked', reason: 'publisher-unavailable' }, text: `run --publisher github is blocked: ${(e as Error).message}` } }; }
+      }
+      const pw = store as unknown as Partial<PullWriter>;
       const why = typeof pw.createPull !== 'function' ? 'this backend cannot create pull requests' : !remote ? 'no --push-remote was given and this release has no publish credential for https pushes (the App ceiling grants no contents or pull-request write)' : null;
       if (why) return { refusal: { code: 4, data: { task, outcome: 'blocked', reason: 'publisher-unavailable' }, text: `run --publisher github is blocked: ${why}. Omit --publisher to use the local outbox.` } };
       return { publisher: new GitHubPublisher(pw as PullWriter, new PathRemote(String(remote)), cfg.defaultBranch) };

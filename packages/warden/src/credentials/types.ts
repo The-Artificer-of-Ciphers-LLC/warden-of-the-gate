@@ -1,6 +1,6 @@
 /** CORE-credentials contract (ADR 0011). The controller sits BEHIND these interfaces; model sessions never see them.
  *  There is deliberately no code path that reads GITHUB_TOKEN, `gh auth token` or any PAT: no broader fallback exists. */
-export type Operation = 'submit' | 'write' | 'read-control';
+export type Operation = 'submit' | 'write' | 'read-control' | 'publish';
 export type PermLevel = 'read' | 'write';
 export type Permissions = Record<string, PermLevel>;
 
