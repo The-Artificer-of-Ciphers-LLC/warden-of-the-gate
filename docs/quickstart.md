@@ -90,6 +90,8 @@ warden run --task review --runner opencode                # bounded scan: finite
 
 - **Retro** (manual, local): `warden run --task retro [--window-days 30] [--runner opencode] [--source REPO_PATH]` gathers this instance's own decisions, denials, critical escapes and review/triage/implement/rework outcomes, and asks the local model for NARROW proposals (design change first, then a static check, a test, and only then a rule). Every proposal must cite evidence ids; "no change is justified" is a valid answer, and with no evidence no model is called. A proposal that would expand authority is only text for a maintainer and, if it touches an action that was denied before, must cite the old ruling and newer evidence. Nothing is applied, merged or trained on; with `--source` the report is prepared as a `warden/retro-DATE` branch in the local outbox **[verified with a fake model; not run with the real model]**.
 
+- **Replay and qualification** (P7): `warden replay --set FILE [--runner opencode]` replays a maintainer-curated set of PRs and issues in a SIMULATED repository against the local model and reports recall, false-positive rate, accepted rate and triage accuracy with a qualification verdict. A synthetic set (`fixtures/replay/synthetic.json` is a demo) or a set with fewer than 20 PRs and 20 issues can never qualify, and the command never activates anything **[verified with a scripted model; not run with the real model]**.
+
 ## 8. Stop, resume and recover
 
 ```bash
@@ -117,4 +119,4 @@ Scopes are explicit; credentials are never exported; decisions are kept until yo
 
 ## What this release does not include
 
-Discord approval cards and the helper; a published package; a live GitHub publisher for factory PRs (the publisher is built and tested against the simulation, but needs an owner-granted contents and pull-request write permission and a publish credential, neither of which exists here); live activation and the qualification replay (P7); Linux or Windows hosts; non-TypeScript lookup. See `docs/handoff/2026-11-18-p3-progress.md` for the current state and the P1 gate.
+Discord approval cards and the helper; a published package; a live GitHub publisher for factory PRs (the publisher is built and tested against the simulation, but needs an owner-granted contents and pull-request write permission and a publish credential, neither of which exists here); live activation (never implied; a separate explicit owner step) and a maintainer-curated qualification set (P7: the replay framework exists, see below, but the curated set of at least 20 PRs and 20 issues is the owner's to supply); Linux or Windows hosts; non-TypeScript lookup. See `docs/handoff/2026-11-18-p3-progress.md` for the current state and the P1 gate.

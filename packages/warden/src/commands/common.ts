@@ -15,7 +15,7 @@ import { HttpStore } from '../github/http.ts';
 
 export type Flags = Record<string, string | boolean>;
 export interface Parsed { cmd: string[]; flags: Flags }
-const BOOL = new Set(['json', 'dry-run', 'confirm', 'global', 'create-config', 'create-orders', 'create-labels', 'approve-ceiling', 'approve-control-read', 'replace', 'show-effective', 'drain', 'pr', 'draft', 'help', 'version']);
+const BOOL = new Set(['json', 'dry-run', 'confirm', 'global', 'create-config', 'create-orders', 'create-labels', 'approve-ceiling', 'approve-control-read', 'replace', 'show-effective', 'drain', 'pr', 'draft', 'help', 'version', 'validate-only']);
 export function parseArgs(argv: string[]): Parsed {
   const cmd: string[] = []; const flags: Flags = {};
   for (let i = 0; i < argv.length; i++) {

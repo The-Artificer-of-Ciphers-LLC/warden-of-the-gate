@@ -1,0 +1,11 @@
+{
+  "name": "synthetic-demo",
+  "curatedBy": "agent (synthetic; not a maintainer)",
+  "synthetic": true,
+  "cases": [
+    { "id": "pr-off-by-one", "kind": "review", "title": "Sum helper", "files": [{ "path": "src/sum.js", "status": "modified", "patch": "@@ -1,4 +1,4 @@\n exports.sumTo = (n) => {\n   let t = 0;\n-  for (let i = 1; i <= n; i++) t += i;\n+  for (let i = 1; i < n; i++) t += i;\n   return t;\n };" }], "expect": { "mustFind": [{ "path": "src/sum.js", "lineMin": 1, "lineMax": 6 }] } },
+    { "id": "pr-docs-only", "kind": "review", "title": "Fix typo", "files": [{ "path": "README.md", "status": "modified", "patch": "@@ -1 +1 @@\n-Teh project\n+The project" }], "expect": { "clean": true } },
+    { "id": "issue-crash", "kind": "triage", "title": "Saving crashes", "body": "Exit code 1 when saving an empty document.", "expect": { "kind": "bug", "outcome": "likely-bug" } },
+    { "id": "issue-vague", "kind": "triage", "title": "It broke", "body": "Doesn't work.", "expect": { "kind": "question", "outcome": "needs-info" } }
+  ]
+}
