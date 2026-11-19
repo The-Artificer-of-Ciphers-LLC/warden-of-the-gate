@@ -1,3 +1,6 @@
+import { GitHubPublisher, PathRemote } from '../implement/github-publisher.ts';
+import type { PullWriter } from '../implement/github-publisher.ts';
+import type { PrPublisher } from '../implement/slice.ts';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { readControls } from '../writer/control.ts';
 import { readLocalStop } from '../control/stop.ts';
@@ -75,6 +78,16 @@ export async function run(c: Ctx): Promise<Result> {
       return { async submit(i) { if (!sub) throw new Error('submit identity unavailable'); const it = makeIntent(i); await submitIntent(sub, cfg.inbox.inboxIssue, it, journal, undefined, pol.maxIntentBytes); if (c.flags.drain) await writerDrain(c); return { opid: it.opid }; },
         async confirmClaim(n) { const deadline = c.now() + Number(str(c.flags, 'claim-wait-seconds') ?? 90) * 1000; do { const cm = (await store.listComments(n)).find((x) => x.body.startsWith(LEDGER_MARK)); const led = cm ? parseLed2(cm.body) : null; if (led?.owner) return led.owner.kind === 'factory'; await new Promise((r) => setTimeout(r, 1500)); } while (c.now() < deadline); return false; } };
     };
+    // Publisher selection: the LOCAL outbox is the default. `--publisher github` needs pull-request write permission the issues-only App ceiling does not grant,
+    // a store that can create pull requests, and an explicit push remote; there is no publish credential in this release, so a real https push stays blocked.
+    const pubr = ((): { publisher?: PrPublisher; refusal?: Result } => {
+      if (str(c.flags, 'publisher') !== 'github') return { publisher: new LocalOutboxPublisher(st.path('outbox.git')) };
+      const pw = store as unknown as Partial<PullWriter>; const remote = str(c.flags, 'push-remote');
+      const why = typeof pw.createPull !== 'function' ? 'this backend cannot create pull requests' : !remote ? 'no --push-remote was given and this release has no publish credential for https pushes (the App ceiling grants no contents or pull-request write)' : null;
+      if (why) return { refusal: { code: 4, data: { task, outcome: 'blocked', reason: 'publisher-unavailable' }, text: `run --publisher github is blocked: ${why}. Omit --publisher to use the local outbox.` } };
+      return { publisher: new GitHubPublisher(pw as PullWriter, new PathRemote(String(remote)), cfg.defaultBranch) };
+    })();
+    if ((task === 'implement' || task === 'rework') && pubr.refusal) return pubr.refusal;
     if (task === 'retro') {
       // P5 Retro (manual, local): narrow PROPOSALS from this instance's own evidence. Nothing is applied, merged, posted or trained on.
       const { gatherRetro } = await import('../retro/gather.ts'); const rs = await import('../retro/slice.ts');
@@ -105,7 +118,7 @@ export async function run(c: Ctx): Promise<Result> {
         budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, workRoot: st.path('implement', 'work'), checks: cfg.verify.checks };
       if (c.flags['dry-run']) { const p = await planImplement({ store, item, policy: pol, cfg: implCfg, kv: ikv, stopped: () => ctl.stopped || local.stopped, intents }); return { code: p.eligible ? 0 : 4, data: { task, outcome: 'proposed', mode: 'dry-run', plan: p, mutations: 0 }, text: `task implement (dry-run) #${item}: ${p.eligible ? `eligible (${p.kind}${p.resume ? ', resuming own claim' : ''})` : `blocked: ${p.notice}`}; no claim, no session, no repository mutation` }; }
       const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url'), maxPromptChars: 60_000 }) : new NotReadyRunner();
-      const o = await runImplement({ store, item, policy: pol, cfg: implCfg, runner, kv: ikv, publisher: new LocalOutboxPublisher(st.path('outbox.git')), intents, stopped: () => ctl.stopped || local.stopped, signal: abort.signal });
+      const o = await runImplement({ store, item, policy: pol, cfg: implCfg, runner, kv: ikv, publisher: pubr.publisher!, intents, stopped: () => ctl.stopped || local.stopped, signal: abort.signal });
       return { code: o.kind === 'opened' || o.kind === 'prepared' ? 0 : o.kind === 'blocked' || o.kind === 'interrupted' ? 4 : 1, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task implement #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
     if (task === 'rework') {
@@ -120,7 +133,7 @@ export async function run(c: Ctx): Promise<Result> {
         model: cfg.runtime.modelPool[0], harness: 'opencode 2.2.7', maxFactoryPrs: cfg.runtime.budgets.maxFactoryImplementationPrs, maxAttempts: 3, maxLaunchRetries: cfg.runtime.budgets.maxOperationRetries, reworkCycles: cfg.clocks.reworkCycles,
         budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, workRoot: st.path('rework', 'work'), checks: cfg.verify.checks };
       const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url') }) : new NotReadyRunner();
-      const o = await runRework({ store, item, policy: pol, cfg: implCfg, runner, kv: wkv, reviews, publisher: new LocalOutboxPublisher(st.path('outbox.git')), intents: makeSink(), stopped: () => ctl.stopped || local.stopped, signal: abort.signal });
+      const o = await runRework({ store, item, policy: pol, cfg: implCfg, runner, kv: wkv, reviews, publisher: pubr.publisher!, intents: makeSink(), stopped: () => ctl.stopped || local.stopped, signal: abort.signal });
       return { code: o.kind === 'reworked' ? 0 : o.kind === 'blocked' || o.kind === 'interrupted' ? 4 : 1, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task rework #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
     if (task === 'triage') {

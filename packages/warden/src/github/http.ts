@@ -66,4 +66,7 @@ export class HttpStore implements Store {
   async getBranchHead(branch: string) { return String((await this.req('GET', `/branches/${encodeURIComponent(branch)}`)).json.commit.sha); }
   async mergePull(n: number, expectedHead: string) { await this.req('PUT', `/pulls/${n}/merge`, { sha: expectedHead, merge_method: 'merge' }); }
   async closeIssue(n: number) { await this.req('PATCH', `/issues/${n}`, { state: 'closed' }); }
+  /** Factory publisher surface (needs pull-request write permission the issues-only App ceiling does not grant). Always a draft. */
+  async createPull(o: { head: string; base: string; title: string; body: string; draft: boolean }) { const j = (await this.req('POST', '/pulls', o)).json; return { number: j.number as number, url: j.html_url as string, headSha: j.head.sha as string }; }
+  async branchHead(branch: string) { return this.getBranchHead(branch); }
 }

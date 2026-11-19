@@ -259,3 +259,8 @@ test('event doorbells: issue opened -> intake; draft PR opened -> closed by poli
   assert.equal(ledger(5)?.state, 'needs-author'); assert.ok(ledger(5)?.obligations.some((o: any) => o.type === 'fix-window'));
   const other = await e.json('event', 'handle', '--event-name', 'workflow_run', '--event-path', ev('x', { action: 'completed' })); assert.equal(other.code, 0); assert.match(other.out, /no handler/);
 });
+
+test('run --publisher github: refused honestly when the backend cannot create pull requests or no push remote is given; the local outbox stays the default', async () => {
+  const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'Needs work', '--body', 'x');
+  const x = await e.json('run', '--task', 'implement', '--item', '3', '--publisher', 'github'); assert.equal(x.code, 4); assert.equal(x.data.reason, 'publisher-unavailable');
+});
