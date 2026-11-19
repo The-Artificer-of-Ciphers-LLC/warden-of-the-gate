@@ -1,0 +1,47 @@
+{
+  "base": "13d5a09d0745219d6ac976e3c76ca8888d64ade6",
+  "started": "2026-11-19T02:39:54.386Z",
+  "configValid": 0,
+  "plan": {
+    "task": "implement",
+    "outcome": "proposed",
+    "mode": "dry-run",
+    "plan": {
+      "eligible": true,
+      "kind": "bug",
+      "resume": true,
+      "attempts": {
+        "completed": 0,
+        "launchRetries": 0
+      }
+    },
+    "mutations": 0
+  },
+  "live": {
+    "code": 0,
+    "outcome": "prepared",
+    "notice": "Prepared branch warden/bug-3 (two-way door) locally at /var/folders/6j/7584f0_97v9cy8hd4xy581640000gn/T/warden-e2e-ESXc9t/home/instances/acme-widgets-d782c874/outbox.git#warden/bug-3@7643b2fb. Nothing was published: opening a PR needs write credentials the current ceiling does not grant.",
+    "runner": "opencode",
+    "ms": 132487,
+    "raw": {
+      "task": "implement",
+      "outcome": "prepared",
+      "kind": "prepared",
+      "notice": "Prepared branch warden/bug-3 (two-way door) locally at /var/folders/6j/7584f0_97v9cy8hd4xy581640000gn/T/warden-e2e-ESXc9t/home/instances/acme-widgets-d782c874/outbox.git#warden/bug-3@7643b2fb. Nothing was published: opening a PR needs write credentials the current ceiling does not grant.",
+      "attempts": {
+        "completed": 1,
+        "max": 3,
+        "launchRetries": 0
+      },
+      "pr": {
+        "number": null,
+        "url": "/var/folders/6j/7584f0_97v9cy8hd4xy581640000gn/T/warden-e2e-ESXc9t/home/instances/acme-widgets-d782c874/outbox.git#warden/bug-3@7643b2fb"
+      },
+      "evidence": {
+        "sufficient": true,
+        "reasons": []
+      },
+      "runner": "opencode"
+    }
+  }
+}
