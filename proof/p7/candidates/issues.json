@@ -1,0 +1,649 @@
+{
+ "repo": "open-gsd/gsd-core",
+ "method": "label-derived; spread evenly over the issue number range; body length 500-4000 chars (200+ for needs-info); excludes issues with conflicting labels; duplicates excluded because the reviewer cannot see the original",
+ "cases": [
+  {
+   "number": 4869,
+   "title": "audit-open permanently reports the debugger's own knowledge base as an open debug session",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "cardaba",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5004,
+   "title": "bug(verifier): gsd_run is only defined in Step 1 (initial mode) \u2014 re-verification falls back to a disk-wide find / that stalls the verifier",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "dimitrita",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5061,
+   "title": "chore(ci): require-issue-link rejects Refs #N on .out-of-scope/-only PRs",
+   "labels": [
+    "bug",
+    "confirmed-bug",
+    "type: chore"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5189,
+   "title": "bug(tests): process-seam darwin partial-stderr assertion races Node startup under the 300 ms bound on a loaded macOS runner",
+   "labels": [
+    "bug",
+    "confirmed-bug",
+    "needs-triage"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5321,
+   "title": "bug(roadmap): annotate-dependencies is write-once, so a replan's new wave structure is reported updated: true but never written",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "davdittrich",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5451,
+   "title": "plan-phase: stall-detection config key easy to mis-guess; key not named at use sites",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5553,
+   "title": "bug(roadmap.update-plan-progress): <details open>, uppercase tags and newest-first archives break the lastIndexOf('</details>') active-region cut",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "davdittrich",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5726,
+   "title": "phase add / add-batch silently scope to the whole unshipped roadmap when STATE.md names a milestone with no heading in ROADMAP.md",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "davdittrich",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5857,
+   "title": "bug(isolation-guard): a FIFO at `.gsd/.gitignore` hangs `record-dispatch-isolation` (sentinel writer opens it without O_NONBLOCK)",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "davdittrich",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 5960,
+   "title": "bug(mempalace): plan:pre recall never runs outside auto-chain, and the planner does not read MEMORY-RECALL.md",
+   "labels": [
+    "bug",
+    "confirmed-bug"
+   ],
+   "author": "Bit0ps",
+   "expect": {
+    "kind": [
+     "bug"
+    ],
+    "outcome": [
+     "likely-bug"
+    ]
+   },
+   "basis": "maintainer label confirmed-bug, closed as completed"
+  },
+  {
+   "number": 2856,
+   "title": "enh(gsd-executor): agent has no browser MCP surface, so any plan with live-DOM verification cannot complete inside the executor",
+   "labels": [
+    "enhancement",
+    "approved-enhancement"
+   ],
+   "author": "nabki",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-enhancement"
+  },
+  {
+   "number": 3241,
+   "title": "enhance(#2313): omit the Codex per-agent model by default (supersede #2517 embedding) \u2014 Phase 1",
+   "labels": [
+    "enhancement",
+    "approved-enhancement"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-enhancement"
+  },
+  {
+   "number": 3534,
+   "title": "3160 Phase 5 (10a) \u2014 resolve-execution must not report an effort the agent will not use",
+   "labels": [
+    "enhancement",
+    "approved-enhancement",
+    "needs-triage"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-enhancement"
+  },
+  {
+   "number": 4039,
+   "title": "Share POSIX shell quoting helper across lifecycle code",
+   "labels": [
+    "approved-enhancement"
+   ],
+   "author": "yansigit",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-enhancement"
+  },
+  {
+   "number": 4521,
+   "title": "test(#4445): Batch 10 \u2014 capability subsystem (epic #4445)",
+   "labels": [
+    "approved-enhancement",
+    "type: chore"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-enhancement"
+  },
+  {
+   "number": 5560,
+   "title": "chore(#5556): Pi hook and lifecycle parity \u2014 Phase 3",
+   "labels": [
+    "approved-enhancement",
+    "area: installer",
+    "type: chore"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-enhancement"
+  },
+  {
+   "number": 73,
+   "title": "Vertical MVP Slice \u2014 Phase 1 of 4: planner-side machinery",
+   "labels": [
+    "enhancement",
+    "approved-feature",
+    "feature-request",
+    "needs-maintainer-review"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-feature"
+  },
+  {
+   "number": 1451,
+   "title": "feat(capability): wire the gsd capability install/update/remove/list management CLI (epic #1244)",
+   "labels": [
+    "approved-feature",
+    "area: commands",
+    "feature-request",
+    "needs-triage",
+    "priority: high"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-feature"
+  },
+  {
+   "number": 2613,
+   "title": "feat(#2584): Phase 2 \u2014 worktree create verb + orchestrator-exec-with-cwd primitive",
+   "labels": [
+    "approved-feature"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-feature"
+  },
+  {
+   "number": 3993,
+   "title": "feat(#3646): Phase 1 \u2014 implement per-task external-tracker content-resolution seam",
+   "labels": [
+    "approved-feature",
+    "needs-maintainer-review",
+    "needs-triage"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "enhancement",
+     "feature"
+    ],
+    "outcome": [
+     "feature-proposal"
+    ]
+   },
+   "basis": "maintainer label approved-feature"
+  },
+  {
+   "number": 646,
+   "title": "fix: generate root SKILL.md index in stageSkillsForRuntimeAsSkills",
+   "labels": [
+    "wontfix",
+    "area: installer"
+   ],
+   "author": "jmbaquerosanchez",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "not-actionable"
+    ]
+   },
+   "basis": "maintainer label wontfix"
+  },
+  {
+   "number": 2696,
+   "title": "GSD model_policy has no effect on opencode (Skill() runs inline, no agent dispatch)",
+   "labels": [
+    "wontfix"
+   ],
+   "author": "magnetrong",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "not-actionable"
+    ]
+   },
+   "basis": "maintainer label wontfix"
+  },
+  {
+   "number": 3340,
+   "title": "windows append rejects existing ledger entries with status: \"resolved\" (validator bug)",
+   "labels": [
+    "wontfix"
+   ],
+   "author": "fernanheys",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "not-actionable"
+    ]
+   },
+   "basis": "maintainer label wontfix"
+  },
+  {
+   "number": 4027,
+   "title": "Codex-native GSD plugin",
+   "labels": [
+    "wontfix",
+    "feature-request"
+   ],
+   "author": "yansigit",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "not-actionable"
+    ]
+   },
+   "basis": "maintainer label wontfix"
+  },
+  {
+   "number": 4884,
+   "title": "phase.complete advances past an integer phase when a later decimal phase already has a directory",
+   "labels": [
+    "wontfix"
+   ],
+   "author": "jushyi",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "not-actionable"
+    ]
+   },
+   "basis": "maintainer label wontfix"
+  },
+  {
+   "number": 5494,
+   "title": "execute:wave:post ui gate declares `query: \"ui.safety-gate\"`, which gsd-tools cannot resolve (\"Unknown command: ui\")",
+   "labels": [
+    "wontfix"
+   ],
+   "author": "AltDoug",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "not-actionable"
+    ]
+   },
+   "basis": "maintainer label wontfix"
+  },
+  {
+   "number": 216,
+   "title": "chore(infra): exclude sdk/src tests from root test runner (gsd-test v1.2.0 compatibility)",
+   "labels": [
+    "enhancement",
+    "approved-enhancement",
+    "area: workflow",
+    "needs-info"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "needs-info"
+    ]
+   },
+   "basis": "maintainer label needs-info"
+  },
+  {
+   "number": 381,
+   "title": "chore: workflow gsd_run launcher defined once-per-file but called across separate bash blocks (per-block reachability)",
+   "labels": [
+    "bug",
+    "area: workflows",
+    "confirmed-bug",
+    "needs-info"
+   ],
+   "author": "trek-e",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "needs-info"
+    ]
+   },
+   "basis": "maintainer label needs-info"
+  },
+  {
+   "number": 1650,
+   "title": "model profile not working in  OpenCode",
+   "labels": [
+    "bug",
+    "needs-info",
+    "runtime: opencode"
+   ],
+   "author": "ecow",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "needs-info"
+    ]
+   },
+   "basis": "maintainer label needs-info"
+  },
+  {
+   "number": 1697,
+   "title": "validate.health: checklist-style phase declarations in collapsed milestone <details> blocks cause false W002/W007",
+   "labels": [
+    "needs-info"
+   ],
+   "author": "RossFischerUX",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "needs-info"
+    ]
+   },
+   "basis": "maintainer label needs-info"
+  },
+  {
+   "number": 1989,
+   "title": "[Enhancement] Add LSP tool to code-facing agent tool lists",
+   "labels": [
+    "enhancement",
+    "needs-info",
+    "capability-candidate"
+   ],
+   "author": "CCapitao",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "needs-info"
+    ]
+   },
+   "basis": "maintainer label needs-info"
+  },
+  {
+   "number": 2167,
+   "title": "GPT-5.6 Ultra appears to cause overlapping agent orchestration in gsd-plan-phase",
+   "labels": [
+    "bug",
+    "needs-info"
+   ],
+   "author": "CIO-DOTNET",
+   "expect": {
+    "kind": [
+     "bug",
+     "enhancement",
+     "feature",
+     "question",
+     "other"
+    ],
+    "outcome": [
+     "needs-info"
+    ]
+   },
+   "basis": "maintainer label needs-info"
+  }
+ ]
+}

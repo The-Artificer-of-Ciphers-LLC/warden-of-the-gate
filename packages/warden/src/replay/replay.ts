@@ -13,7 +13,7 @@ import type { AgentRunner, Budgets } from '../runner/agent-runner.ts';
  *  never turn anything on, a synthetic set can never qualify, and activation is a separate, explicit owner step that does not exist here. */
 export interface PullFileCase { path: string; status: string; patch: string }
 export interface ReviewCase { id: string; kind: 'review'; title: string; files: PullFileCase[]; expect: { clean: true } | { mustFind: Array<{ path: string; lineMin: number; lineMax: number }> } }
-export interface TriageCase { id: string; kind: 'triage'; title: string; body: string; expect: { kind: string; outcome: string } }
+export interface TriageCase { id: string; kind: 'triage'; title: string; body: string; expect: { kind: string | string[]; outcome: string | string[] } }
 export interface ReplaySet { name: string; curatedBy: string; synthetic?: boolean; cases: Array<ReviewCase | TriageCase> }
 export interface Thresholds { minPrs: number; minIssues: number; minRecall: number; maxFalsePositiveRate: number; minAcceptedRate: number; minTriageAccuracy: number }
 export const DEFAULT_THRESHOLDS: Thresholds = { minPrs: 20, minIssues: 20, minRecall: 0.7, maxFalsePositiveRate: 0.3, minAcceptedRate: 0.9, minTriageAccuracy: 0.7 };
@@ -23,16 +23,19 @@ export interface ReplayReport { set: string; curatedBy: string; synthetic: boole
   metrics: { acceptedRate: number; recall: number | null; falsePositiveRate: number | null; triageAccuracy: number | null };
   qualification: { qualified: boolean; reasons: string[]; thresholds: Thresholds }; activation: 'not performed: a separate, explicit owner step' }
 
+/** A maintainer label can allow several correct answers: an expectation is one value or a non-empty list of acceptable values. */
+const oneOf = (want: string | string[], got: string) => (Array.isArray(want) ? want.includes(got) : want === got);
+const present = (v: unknown) => (Array.isArray(v) ? v.length > 0 && v.every((x) => typeof x === 'string' && x) : typeof v === 'string' && !!v);
 export function validateSet(s: unknown): string | null {
   const x = s as ReplaySet; if (!x || typeof x !== 'object' || !Array.isArray(x.cases) || typeof x.name !== 'string' || !x.name) return 'a replay set needs a name and a cases array';
   const ids = new Set<string>();
   for (const c of x.cases) { if (!c?.id || ids.has(c.id)) return `case id missing or duplicated: ${c?.id}`; ids.add(c.id);
     if (c.kind === 'review') { if (!c.files?.length || !c.expect) return `review case ${c.id} needs files and an expectation`; if ('mustFind' in c.expect && !c.expect.mustFind.length) return `review case ${c.id}: mustFind is empty (use {clean:true})`; }
-    else if (c.kind === 'triage') { if (!c.expect?.kind || !c.expect?.outcome) return `triage case ${c.id} needs expect.kind and expect.outcome`; } else return `unknown case kind in ${(c as { id: string }).id}`; }
+    else if (c.kind === 'triage') { if (!present(c.expect?.kind) || !present(c.expect?.outcome)) return `triage case ${c.id} needs expect.kind and expect.outcome`; } else return `unknown case kind in ${(c as { id: string }).id}`; }
   return null;
 }
 
-export interface ReplayOpts { runner: AgentRunner; localModels: string[]; budgets: Budgets; thresholds?: Partial<Thresholds>; stopped?: () => boolean | Promise<boolean>; signal?: AbortSignal }
+export interface ReplayOpts { onCase?: (r: CaseResult, done: number, total: number) => void; runner: AgentRunner; localModels: string[]; budgets: Budgets; thresholds?: Partial<Thresholds>; stopped?: () => boolean | Promise<boolean>; signal?: AbortSignal }
 export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayReport> {
   const bad = validateSet(set); if (bad) throw new Error(bad);
   const th = { ...DEFAULT_THRESHOLDS, ...o.thresholds }; const dir = mkdtempSync(join(tmpdir(), 'warden-replay-')); const results: CaseResult[] = [];
@@ -47,11 +50,11 @@ export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayRe
         const findings = r.marker?.findings ?? []; const must = 'mustFind' in c.expect ? c.expect.mustFind : [];
         const hits = must.filter((m) => findings.some((f) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax)).length;
         const fp = findings.filter((f) => !must.some((m) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax)).length;
-        results.push({ id: c.id, kind: 'review', outcome: r.kind, hits, expected: must.length, findings: findings.length, falsePositives: fp });
+        results.push({ id: c.id, kind: 'review', outcome: r.kind, hits, expected: must.length, findings: findings.length, falsePositives: fp }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       } else {
         const n = world.addIssue({ title: c.title, body: c.body, author: 'reporter' }); let rec: TriageRecord | null = null;
         const r = await runTriage({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: () => world.now() });
-        const out = r.marker?.output; results.push({ id: c.id, kind: 'triage', outcome: r.kind, matched: !!out && out.kind === c.expect.kind && out.outcome === c.expect.outcome });
+        const out = r.marker?.output; results.push({ id: c.id, kind: 'triage', outcome: r.kind, matched: !!out && oneOf(c.expect.kind, out.kind) && oneOf(c.expect.outcome, out.outcome) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       }
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }

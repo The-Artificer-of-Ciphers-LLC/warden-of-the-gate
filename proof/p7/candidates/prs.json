@@ -1,0 +1,361 @@
+{
+ "repo": "open-gsd/gsd-core",
+ "mined_at": "2026-11-19T04:08:24Z",
+ "method": "Scanned titles/bodies of all 2578 merged PRs plus linked issue text for later regression/introduced-by/follow-up references to small PRs, then read both diffs and mapped post-image lines from the introducing PR patch hunks (all lines in range verified as added). Clean cases are small PRs merged 2026-06-01..09-15 with no later PR/issue text referencing them (GitHub search plus regex verification), skimmed for visible defects.",
+ "cases": [
+  {
+   "number": 482,
+   "title": "fix(#481): remove residual dead silent-expiry poll helper + Atomics.wait in bug-1974",
+   "kind": "mustFind",
+   "path": "tests/bug-1974-context-exhaustion-record.test.cjs",
+   "lineMin": 129,
+   "lineMax": 131,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/493",
+    "quote": "Re-adds the guard removed in #482. Refs #490. (restore bounded Windows EBUSY cleanup retry in afterEach)"
+   },
+   "changes": 28,
+   "patchChars": 1412,
+   "note": "#482 removed the afterEach outer retry guard; #493 restored it after Windows EBUSY made next red."
+  },
+  {
+   "number": 2031,
+   "title": "fix(#2018): applySurface empty manifest no longer deletes gsd-* agents",
+   "kind": "mustFind",
+   "path": "tests/surface-empty-manifest-agents.test.cjs",
+   "lineMin": 29,
+   "lineMax": 29,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/2033",
+    "quote": "Fixes a `lint-tests` failure on `next` introduced by #2031 (#2018): the regression test ... used raw `fs.rmSync()` in `afterEach`"
+   },
+   "changes": 91,
+   "patchChars": 6032,
+   "note": "Raw fs.rmSync in test afterEach tripped local/no-raw-rmsync-in-tests; fix swaps to helpers.cleanup."
+  },
+  {
+   "number": 3656,
+   "title": "fix(#3582): stop the cold-tree fixture racing concurrent hook builds",
+   "kind": "mustFind",
+   "path": "tests/gsd-check-update-worker-platform-gate.test.cjs",
+   "lineMin": 219,
+   "lineMax": 222,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/3665",
+    "quote": "This is a follow-up to #3656, fixing a defect in the guard that PR added."
+   },
+   "changes": 168,
+   "patchChars": 10559,
+   "note": "Post-snapshot raw readdir comparison of shared hooks/ raced concurrent build-hooks staging dir; fix filters both snapshots."
+  },
+  {
+   "number": 5685,
+   "title": "fix(#5627): look through wrapper options in the secret-read guard",
+   "kind": "mustFind",
+   "path": "hooks/gsd-secret-read-guard.js",
+   "lineMin": 166,
+   "lineMax": 167,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/5874",
+    "quote": "The secret-read guard's `WRAPPERS` table (added in #5685) left out three value-taking options that sudo(8) and doas(1) document"
+   },
+   "changes": 177,
+   "patchChars": 10630,
+   "note": "WRAPPERS table omits sudo -a/-c and doas -a so option value is read as command word (guard fails open)."
+  },
+  {
+   "number": 4021,
+   "title": "fix(#4010): confine stateReplaceField to same-line whitespace so an empty field's following line survives",
+   "kind": "mustFind",
+   "path": "src/state-document.cts",
+   "lineMin": 556,
+   "lineMax": 556,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/4453",
+    "quote": "#4010 (PR #4021) narrowed this pattern's label-to-value gap to same-line whitespace but did not anchor it"
+   },
+   "changes": 190,
+   "patchChars": 12824,
+   "note": "boldPattern left unanchored, so a quoted bold label mid-prose is rewritten and the rest of the line destroyed."
+  },
+  {
+   "number": 4228,
+   "title": "fix(#3990): state the RED/GREEN/REFACTOR cycle once, embed tdd.md conditionally",
+   "kind": "mustFind",
+   "path": "gsd-core/workflows/execute-phase.md",
+   "lineMin": 760,
+   "lineMax": 760,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/4284",
+    "quote": "both executor dispatch backends previously referenced an unassigned `${TDD_APPLICABLE}` placeholder"
+   },
+   "changes": 158,
+   "patchChars": 12823,
+   "note": "TDD_APPLICABLE is used but never assigned in either backend; tdd.md embed silently dropped (issue #4264: Introduced by #4228)."
+  },
+  {
+   "number": 5363,
+   "title": "fix(#4854): init verbs emit the ROADMAP display name, not the directory slug",
+   "kind": "mustFind",
+   "path": "src/init.cts",
+   "lineMin": 243,
+   "lineMax": 245,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/6023",
+    "quote": "`roadmap get-phase` and every init verb's `phase_name` kept the `(INSERTED)` marker that `phase insert` writes into the heading"
+   },
+   "changes": 150,
+   "patchChars": 11316,
+   "note": "resolvePhaseDisplayName prefers raw ROADMAP heading name, which keeps the (INSERTED) marker (issue #5824: carried since #5363)."
+  },
+  {
+   "number": 6074,
+   "title": "ci(#6073): re-run Tests when fix-next is added or removed",
+   "kind": "mustFind",
+   "path": ".github/workflows/test.yml",
+   "lineMin": 11,
+   "lineMax": 16,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/6093",
+    "quote": "#6074 added `labeled`/`unlabeled` to the Tests `pull_request` trigger. Every label change started a full Tests run and cancelled the run in progress"
+   },
+   "changes": 10,
+   "patchChars": 1326,
+   "note": "Adding labeled/unlabeled to pull_request types makes every label event cancel in-flight Tests runs."
+  },
+  {
+   "number": 585,
+   "title": "Enhancement(#41): /gsd-ship extracts per-commit gate_status into a PR-body TDD Audit + squash trailer",
+   "kind": "mustFind",
+   "path": "get-shit-done/workflows/ship.md",
+   "lineMin": 197,
+   "lineMax": 203,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/2467",
+    "quote": "PR #585 shipped the consumer/extraction logic and assumed commits would carry `gate_status:` trailers."
+   },
+   "changes": 165,
+   "patchChars": 9057,
+   "note": "Step 8 reads gate_status trailers nothing writes, so every commit counts missing and the TDD Audit table is noise."
+  },
+  {
+   "number": 1499,
+   "title": "fix(#1498): regenerate capability-registry.cjs in npm version lifecycle hook",
+   "kind": "mustFind",
+   "path": "package.json",
+   "lineMin": 89,
+   "lineMax": 89,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/1502",
+    "quote": "The `npm version` lifecycle hook (added in #1499) runs `gen-capability-registry.cjs --write`, which requires ... a gitignored `build:lib` / `tsc` output artifact."
+   },
+   "changes": 39,
+   "patchChars": 2770,
+   "note": "version script depends on unbuilt gitignored output; release workflow ran npm version before build:lib."
+  },
+  {
+   "number": 85,
+   "title": "fix(3805): schema-aware log_to_state row appending in fast.md",
+   "kind": "mustFind",
+   "path": "get-shit-done/workflows/fast.md",
+   "lineMin": 79,
+   "lineMax": 82,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/2214",
+    "quote": "`/gsd-fast`'s `log_to_state` step has never appended a Quick Task row to `STATE.md` since PR #85."
+   },
+   "changes": 177,
+   "patchChars": 9625,
+   "note": "awk NF-1 over-counts columns by one so the -eq 5 gate is unsatisfiable."
+  },
+  {
+   "number": 3091,
+   "title": "fix(#2969): ratchet completed_plans up for gap-closure plans under deriveProgressKeys",
+   "kind": "mustFind",
+   "path": "src/state-transition.cts",
+   "lineMin": 211,
+   "lineMax": 214,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/5669",
+    "quote": "compared counters with `typeof x === 'number'`. Parsed frontmatter scalars are strings, so both sides were `-Infinity` and the stored value always won"
+   },
+   "changes": 79,
+   "patchChars": 5882,
+   "note": "Ratchet-up comparison never fires on string frontmatter values (issue #5619: makes the #2969 ratchet unreachable)."
+  },
+  {
+   "number": 366,
+   "title": "ci: run affected tests in PR workflow lanes",
+   "kind": "mustFind",
+   "path": "scripts/affected-tests-lib.cjs",
+   "lineMin": 112,
+   "lineMax": 113,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/395",
+    "quote": "PR #366 (ci #365) switched PR lanes to `npm run test:affected` with no suite scoping. `affected-tests-lib.cjs` had no install/slow exclusion"
+   },
+   "changes": 353,
+   "patchChars": 13916,
+   "note": "Smoke fallback selects the install tarball test on PR lanes (Windows failed); install/slow suites not excluded."
+  },
+  {
+   "number": 4230,
+   "title": "fix(#3968): measure commit claims at all three surfaces — ledger, verifier BLOCKER, porcelain HANDOFF",
+   "kind": "mustFind",
+   "path": "gsd-core/workflows/verify-work.md",
+   "lineMin": 181,
+   "lineMax": 183,
+   "fix": {
+    "ref": "https://github.com/open-gsd/gsd-core/pull/4813",
+    "quote": "measured `plan_head_before..HEAD` — verify-time HEAD. That window grows with every later plan's task and SUMMARY commits"
+   },
+   "changes": 144,
+   "patchChars": 12662,
+   "note": "ACTUAL commit count measured to verify-time HEAD flags honest plans as commit_claim_mismatch (issue #4670: introduced by #3968/#4230)."
+  },
+  {
+   "number": 3107,
+   "title": "fix(#3020): verify graphify tool identity before reporting compatibility",
+   "kind": "clean",
+   "changes": 83,
+   "patchChars": 7209,
+   "note": "src graphify identity check; no later reference; merged 2026-08-06, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 4006,
+   "title": "fix(#3795): read the interrupted agent id before clearing the stale marker",
+   "kind": "clean",
+   "changes": 62,
+   "patchChars": 4540,
+   "note": "workflow shell reorder reads id before rm; merged 2026-08-28, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 1621,
+   "title": "fix(#1619): normalize pruned mise node execPath to the stable shim in normalizeNodePath",
+   "kind": "clean",
+   "changes": 83,
+   "patchChars": 5182,
+   "note": "installer mise shim path normalization; merged 2026-06-23, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 577,
+   "title": "fix(#492): manifest effort.agent_overrides and effort.default now fall back correctly",
+   "kind": "clean",
+   "changes": 64,
+   "patchChars": 3298,
+   "note": "effort fallback to canonical defaults; merged 2026-06-01, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 1552,
+   "title": "fix(#1551): match dash-separated milestone phase IDs in roadmap analyze checklist scan",
+   "kind": "clean",
+   "changes": 46,
+   "patchChars": 2589,
+   "note": "roadmap checklist regex accepts dash IDs; merged 2026-06-22, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 3140,
+   "title": "fix(#3052): preserve frontmatter last_activity_desc on same-date body prose conflict",
+   "kind": "clean",
+   "changes": 69,
+   "patchChars": 3292,
+   "note": "state frontmatter same-date preserve; merged 2026-08-07, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 4048,
+   "title": "fix(#3895): delete the mempalace-curator's model frontmatter pin — the fleet's only hardcoded model",
+   "kind": "clean",
+   "changes": 38,
+   "patchChars": 2865,
+   "note": "agent frontmatter pin removal; merged 2026-08-29, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 4420,
+   "title": "fix(#4276): read the quoting, not just the digits, before eating an IO number",
+   "kind": "clean",
+   "changes": 31,
+   "patchChars": 3510,
+   "note": "test helper quoting read; merged 2026-09-07, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 1546,
+   "title": "fix(#1545): make no-phantom-issue-refs walk() robust to broken symlinks",
+   "kind": "clean",
+   "changes": 44,
+   "patchChars": 2701,
+   "note": "lint test robust to broken symlinks; merged 2026-06-21, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 3396,
+   "title": "fix(#3321): exclude .claude/.planning from no-phantom-issue-refs SKIP_DIRS",
+   "kind": "clean",
+   "changes": 41,
+   "patchChars": 2662,
+   "note": "lint SKIP_DIRS addition; merged 2026-08-13, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 4062,
+   "title": "fix(#3900): overlay walker skips non-regular files — a repo-root socket no longer fails 32 tests",
+   "kind": "clean",
+   "changes": 79,
+   "patchChars": 5254,
+   "note": "test helper skips non-regular files; merged 2026-08-29, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 2023,
+   "title": "fix(#1581): config-set no longer silently coerces Infinity / project_code",
+   "kind": "clean",
+   "changes": 82,
+   "patchChars": 5855,
+   "note": "config-set Number.isFinite and project_code string; merged 2026-07-05, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 1130,
+   "title": "fix: route nested sub_repos by longest prefix, not first array-order match (#391)",
+   "kind": "clean",
+   "changes": 83,
+   "patchChars": 5260,
+   "note": "sub_repo longest-prefix routing; merged 2026-06-12, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 4534,
+   "title": "fix(#4383): require phase before planned-phase writes",
+   "kind": "clean",
+   "changes": 50,
+   "patchChars": 3807,
+   "note": "planned-phase requires phase; merged 2026-09-09, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 3935,
+   "title": "fix(#3729): hoist the .planning and CI gates above the graphify hook's node parse",
+   "kind": "clean",
+   "changes": 112,
+   "patchChars": 6873,
+   "note": "hook gates hoisted above node parse; merged 2026-08-27, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 848,
+   "title": "chore(#846): remove unused PR-size labeler (size/S–XL) workflow",
+   "kind": "clean",
+   "changes": 78,
+   "patchChars": 4310,
+   "note": "remove unused size-check workflow and its required-check refs; merged 2026-06-08, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 3317,
+   "title": "docs(#3316): standing counter-test rule for error/fallback branches",
+   "kind": "clean",
+   "changes": 40,
+   "patchChars": 4677,
+   "note": "docs counter-test rule; merged 2026-08-10, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  },
+  {
+   "number": 4684,
+   "title": "test(#4528): migrate final seam-dispatch batch and retire the timeout-literal allowlist",
+   "kind": "clean",
+   "changes": 78,
+   "patchChars": 11030,
+   "note": "test timeout-constant migration; merged 2026-09-13, no later PR/issue text mentions it (full-text search), no defect seen on skim."
+  }
+ ]
+}

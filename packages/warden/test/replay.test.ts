@@ -48,3 +48,9 @@ test('a stop mid-replay means the set is not qualified; malformed sets are rejec
   for (const bad of [{}, { name: 'x', cases: [{ id: 'a', kind: 'review', files: [], expect: { clean: true } }] }, { name: 'x', cases: [{ id: 'a', kind: 'triage', expect: {} }] }, { name: 'x', cases: [{ id: 'a', kind: 'zzz' }] }]) assert.ok(validateSet(bad));
   const mm = new Model(smart); await assert.rejects(runReplay({ name: 'x', curatedBy: 'm', cases: [{ id: 'a', kind: 'zzz' } as never] }, o(mm))); assert.equal(mm.calls, 0);
 });
+
+test('a triage expectation may list several acceptable kinds and outcomes; an empty list is rejected', async () => {
+  const { validateSet } = await import('../src/replay/replay.ts');
+  assert.equal(validateSet({ name: 'x', curatedBy: 'm', cases: [{ id: 't1', kind: 'triage', title: 't', body: 'b', expect: { kind: ['bug', 'question'], outcome: ['needs-info'] } }] }), null);
+  assert.match(String(validateSet({ name: 'x', curatedBy: 'm', cases: [{ id: 't1', kind: 'triage', title: 't', body: 'b', expect: { kind: [], outcome: 'needs-info' } }] })), /needs expect\.kind/);
+});
