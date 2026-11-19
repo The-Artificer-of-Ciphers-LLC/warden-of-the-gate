@@ -97,4 +97,7 @@ export class FakeStore implements Store {
     i.pull.merged = true; i.state = 'closed'; this.touch(); await this.maybeLost('mergePull');
   }
   async closeIssue(n: number) { await this.lat(); this.issue(n).state = 'closed'; this.touch(); }
+  /** Simulated factory publisher surface: the branch tip must have been recorded (as a push would) in `branchHeads`. */
+  async createPull(o: { head: string; base: string; title: string; body: string; draft: boolean }) { await this.lat(); const heads = (this.w as unknown as { branchHeads?: Record<string, string> }).branchHeads ?? {}; const sha = heads[o.head]; if (!sha) { const e: Error & { status?: number } = new Error('422 head branch not found'); e.status = 422; throw e; } const n = this.w.addIssue({ isPr: true, title: o.title, body: o.body, author: this.who, draft: o.draft }); this.w.issues.get(n)!.pull = { head: sha, headRef: o.head, base: heads[o.base] ?? 'base', ci: 'none', files: [] }; this.touch(); return { number: n, url: `sim://pull/${n}`, headSha: sha }; }
+  async branchHead(branch: string) { return this.getBranchHead(branch); }
 }
