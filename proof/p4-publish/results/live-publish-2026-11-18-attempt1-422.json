@@ -1,0 +1,32 @@
+{
+  "startedAt": "2026-11-19T03:16:35.619Z",
+  "sandbox": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "baseBranch": "fixture/p4-live-base-mwmzaw84",
+  "baseSha": "b669d0d2d8230df1b90dc3a05db10c9f54399f5d",
+  "setup": 1,
+  "credentials": 0,
+  "issue": 220,
+  "plan": {
+    "eligible": true,
+    "kind": "bug",
+    "resume": true,
+    "attempts": {
+      "completed": 0,
+      "launchRetries": 0
+    }
+  },
+  "live": {
+    "code": 4,
+    "ms": 195863
+  },
+  "pulls": [],
+  "verified": false,
+  "branchTip": null,
+  "mainUntouched": true,
+  "tokens": {
+    "minted": 0,
+    "revokeStatuses": []
+  },
+  "finishedAt": "2026-11-19T03:19:56.813Z",
+  "failure": "HTTP 422 from GitHub when issuing the publish credential: \"The permissions requested are not granted to this installation.\" The model run completed before the push step needed the credential (the credential is requested lazily at push time)."
+}
