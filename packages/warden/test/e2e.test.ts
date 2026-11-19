@@ -205,7 +205,8 @@ test('run --task review: needs one --item, dry-run plans with no model call, and
 
 test('run --task triage: one issue per invocation, dry-run plans without a model call, and live refuses honestly until a harness is selected', async () => {
   const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'Saving crashes the app', '--body', 'Steps: open, save, crash.');
-  assert.equal((await e.json('run', '--task', 'triage')).code, 2);
+  { const scan = await e.json('run', '--task', 'triage', '--dry-run'); assert.equal(scan.code, 0); assert.equal(scan.data.mutations, 0); assert.deepEqual(scan.data.run, []); assert.match(scan.data.skipped[0].why, /no Warden state/); }
+  assert.equal((await e.json('run', '--task', 'triage', '--item', 'x')).code, 2);
   const before = worldHash(e);
   const plan = await e.json('run', '--task', 'triage', '--item', '3', '--dry-run'); assert.equal(plan.code, 0); assert.equal(plan.data.plan.action, 'run'); assert.equal(plan.data.mutations, 0);
   const live = await e.json('run', '--task', 'triage', '--item', '3'); assert.equal(live.code, 4); assert.equal(live.data.outcome, 'blocked'); assert.equal(live.data.marker, null);
