@@ -244,6 +244,14 @@ Matt Pocock's ~70-minute end-to-end build with his own skills, plus the primary 
 - **Not adopted:** merge-then-review, parallel implementers and auto-merge; they rest on a single-user repo and a frontier model.
 - **Do not copy his token thresholds** (his own view is that the smart/dumb-zone line is moving); measure per local model.
 
+### External check: Hedin, "What it takes to set intelligence free" (Lovable, Nov 2026)
+
+Infrastructure talk on long-running agents, read in full 2026-11-19. Full analysis and the implication table: [TALK-LOVABLE.md](TALK-LOVABLE.md). Scale and speed numbers are self-reported product claims.
+
+- **Strengthened:** the serialized single-writer choice. Lovable's elaborate multi-agent framework made the product worse and they retreated to a simple system (corroborated by Lovable's own Nov 2026 engineering post).
+- **Worth adopting small:** an append-only, replayable per-item event log (prompt rendered from the log) with stateless workers, for crash recovery, shadow-mode audit and per-model compaction; maintainer comments queued as events at safe points.
+- **Not adopted:** VM checkpoint/fork, parallel forked agents, unbounded 10-hour runs, and the premise that users need not read the code.
+
 ## Implications for Roadmap
 
 The six phases match the owner's six v1 rollout stages.
@@ -375,6 +383,7 @@ The six phases match the owner's six v1 rollout stages.
 - **Talk, read in full 2026-11-14 (HIGH for what it claims; product numbers self-reported):** Zach Lloyd, "How to Build a Software Factory That Improves Itself", Warp — https://www.youtube.com/watch?v=nKjPBAw_N_0 (uploaded 2026-11-09; reading edition: https://ai.engineer/talks/nKjPBAw_N_0-build-software-factory-that-improves-itself; transcript archived at sources/lloyd-factory-transcript.md); analysis in TALK-FACTORY.md.
 - **Talk, read in full 2026-11-18 (HIGH for what it claims; LOW as outcome evidence: self-reported single-user demo):** Matt Pocock, "Watch me ship a 21,000-line feature with mattpocock/skills" — https://www.youtube.com/watch?v=jVBlkOF8sHk; skill sources read via the GitHub API from https://github.com/mattpocock/skills (`retro`, `pr`, `triage`, `implement-spec`, `in-progress/software-factory`); analysis in TALK-POCOCK-WALKTHROUGH.md (transcript deliberately not archived).
 - **Talk, read in full 2026-11-14 (HIGH for what it claims; motivating stats are his citations of "public research", not independently verified):** Rajath Mahendrappa Kotyal, "Your Spec Has Bugs. Catch Them Before Your Agent Codes.", AWS — https://www.youtube.com/watch?v=0EnLxIbAvYk (uploaded 2026-11-11; reading edition: https://ai.engineer/talks/0EnLxIbAvYk-your-spec-has-bugs-catch-them-before; transcript archived at sources/kotyal-spec-transcript.md); analysis in TALK-SPEC-BUGS.md.
+- **Talk, read in full 2026-11-19 (HIGH for what it claims; scale/speed numbers self-reported):** Fabian Hedin, "What it takes to set intelligence free", Lovable — https://www.youtube.com/watch?v=pZWPq_ZAmM4 (transcript archived at sources/hedin-lovable-transcript.md; event/date unconfirmed); analysis in TALK-LOVABLE.md.
 - **Primary (HIGH):**
   - Local CLI help and `auth status` for Claude Code 2.1.322.
   - `man launchd.plist`.
