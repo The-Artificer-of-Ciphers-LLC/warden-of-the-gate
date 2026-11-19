@@ -270,3 +270,9 @@ test('replay: --set is required, an invalid set is rejected, a valid set validat
   const ok = await e.json('replay', '--set', new URL('../fixtures/replay/synthetic.json', import.meta.url).pathname, '--validate-only'); assert.equal(ok.code, 0); assert.equal(ok.data.synthetic, true);
   const live = await e.json('replay', '--set', new URL('../fixtures/replay/synthetic.json', import.meta.url).pathname); assert.equal(live.code, 0); assert.equal(live.data.qualification.qualified, false); assert.match(live.data.activation, /explicit owner step/);
 });
+
+test('discord sync: needs a channel id; a live sync without a bot token is blocked (the owner supplies it); dry-run needs none and writes nothing', async () => {
+  const e = await cliEnv(); assert.equal((await e.json('discord', 'sync')).code, 2); assert.equal((await e.json('discord', 'sync', '--channel', 'abc')).code, 2);
+  const before = worldHash(e); const dry = await e.json('discord', 'sync', '--channel', '123456', '--dry-run'); assert.equal(dry.code, 0); assert.equal(dry.data.dryRun, true); assert.equal(worldHash(e), before);
+  const live = await e.json('discord', 'sync', '--channel', '123456'); assert.equal(live.code, 4); assert.equal(live.data.reason, 'no-discord-token');
+});

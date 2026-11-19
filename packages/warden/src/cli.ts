@@ -15,6 +15,7 @@ import { adopt } from './commands/adopt.ts';
 import { data } from './commands/data.ts';
 import { upgrade } from './commands/upgrade.ts';
 import { replay } from './commands/replay.ts';
+import { discord } from './commands/discord.ts';
 import { credentials } from './commands/credentials.ts';
 import { sim } from './commands/sim.ts';
 import { redact } from './util.ts';
@@ -34,6 +35,7 @@ const HELP = `warden ${CLI_VERSION}  (warden.yml schema v${WARDEN_SCHEMA_VERSION
   adopt --selection FILE --confirm          (adopt ONLY the selected items; never part of setup/run)
   data status | export --scope S --out FILE [--confirm] | purge --scope S [--older-than-days N] [--include-decisions] [--confirm]
   upgrade --dry-run                         (report changes; nothing is applied)
+  discord sync --channel ID [--dry-run]     (post/edit approval cards; notifications only, decisions stay on GitHub)
   replay --set FILE [--runner opencode] [--validate-only]   (replay a curated set in a simulated repo; measures and reports, never activates)
   approvals request|list|check --item N ...
   credentials configure --confirm --app-id N --installation-id N --app-login LOGIN [--key-path FILE] [--approve-control-read] [--replace]
@@ -64,6 +66,7 @@ export async function main(argv: string[], io: { env?: NodeJS.ProcessEnv; cwd?: 
     else if (a === 'data') r = await data(c, b ?? '');
     else if (a === 'upgrade') r = await upgrade(c);
     else if (a === 'replay') r = await replay(c);
+    else if (a === 'discord') r = await discord(c, b ?? '');
     else if (a === 'approvals') r = await approvals(c, b ?? '');
     else if (a === 'credentials') r = await credentials(c, b ?? '');
     else if (a === 'sim') r = await sim(c, b ?? '');
