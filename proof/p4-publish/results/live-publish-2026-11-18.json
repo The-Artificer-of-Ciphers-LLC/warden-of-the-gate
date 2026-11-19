@@ -1,0 +1,56 @@
+{
+  "startedAt": "2026-11-19T03:16:35.619Z",
+  "sandbox": "The-Artificer-of-Ciphers-LLC/warden-p0-sandbox",
+  "baseBranch": "fixture/p4-live-base-mwmzaw84",
+  "baseSha": "b669d0d2d8230df1b90dc3a05db10c9f54399f5d",
+  "setup": 1,
+  "credentials": 0,
+  "issue": 220,
+  "plan": {
+    "eligible": true,
+    "kind": "bug",
+    "resume": true,
+    "attempts": {
+      "completed": 0,
+      "launchRetries": 0
+    }
+  },
+  "live": {
+    "code": 0,
+    "outcome": "opened",
+    "notice": "Opened PR #221 on warden/bug-220 (two-way door). It still needs Review and the merge gates: Implement claims neither.",
+    "pr": {
+      "number": 221,
+      "url": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/pull/221"
+    },
+    "evidence": {
+      "sufficient": true,
+      "reasons": []
+    },
+    "ms": 266255
+  },
+  "pulls": [
+    {
+      "number": 221,
+      "draft": true,
+      "head": "warden/bug-220",
+      "headSha": "7116d030982ab5b409d54467fab039ab0627c6ed",
+      "base": "fixture/p4-live-base-mwmzaw84",
+      "author": "warden-p0-sandbox-app[bot]",
+      "url": "https://github.com/The-Artificer-of-Ciphers-LLC/warden-p0-sandbox/pull/221"
+    }
+  ],
+  "verified": true,
+  "branchTip": "7116d030982ab5b409d54467fab039ab0627c6ed",
+  "mainUntouched": true,
+  "tokens": {
+    "minted": 2,
+    "revokeStatuses": [
+      204,
+      204
+    ]
+  },
+  "finishedAt": "2026-11-19T03:39:45.217Z",
+  "retriedAfter": "installation granted Contents write",
+  "mainUnchanged": "c4764f527215a5c85f6fbc272daaff39ecc33a23"
+}
