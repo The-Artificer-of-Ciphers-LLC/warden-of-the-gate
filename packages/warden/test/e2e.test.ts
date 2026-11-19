@@ -264,3 +264,9 @@ test('run --publisher github: refused honestly when the backend cannot create pu
   const e = await cliEnv(); await e.sim('sim', 'issue', '--title', 'Needs work', '--body', 'x');
   const x = await e.json('run', '--task', 'implement', '--item', '3', '--publisher', 'github'); assert.equal(x.code, 4); assert.equal(x.data.reason, 'publisher-unavailable');
 });
+
+test('replay: --set is required, an invalid set is rejected, a valid set validates without a model, and nothing is activated', async () => {
+  const e = await cliEnv(); assert.equal((await e.json('replay')).code, 2);
+  const ok = await e.json('replay', '--set', new URL('../fixtures/replay/synthetic.json', import.meta.url).pathname, '--validate-only'); assert.equal(ok.code, 0); assert.equal(ok.data.synthetic, true);
+  const live = await e.json('replay', '--set', new URL('../fixtures/replay/synthetic.json', import.meta.url).pathname); assert.equal(live.code, 0); assert.equal(live.data.qualification.qualified, false); assert.match(live.data.activation, /explicit owner step/);
+});
