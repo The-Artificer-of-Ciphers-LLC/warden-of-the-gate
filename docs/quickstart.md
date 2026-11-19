@@ -79,6 +79,7 @@ Review the example workflows in `packages/warden/templates/workflows/` (`warden-
 
 ```bash
 warden run --task triage --item 12 --runner opencode      # one issue: a draft proposal card, nothing posted
+warden run --task triage --runner opencode                # bounded scan of tracked issues awaiting triage: finite items and wall time, then exit
 warden run --task review --item 34 --runner opencode      # one PR: read-only, bound to one head
 warden run --task review --runner opencode                # bounded scan: finite items and wall time, then exit
 ```

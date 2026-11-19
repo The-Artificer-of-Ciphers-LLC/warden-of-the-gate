@@ -125,10 +125,20 @@ export async function run(c: Ctx): Promise<Result> {
     }
     if (task === 'triage') {
       // P3 Triage (shadow): ONE issue per invocation, local only. Nothing is posted, labelled or closed; the result is a draft proposal card.
-      const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task triage requires --item N (one issue per invocation)' };
       mkdirSync(st.path('triage'), { recursive: true, mode: 0o700 });
       const tkv: TriageKV = { read: (n) => st.readJson(st.path('triage', `${n}.json`)), write: (n, rec) => st.writeJson(st.path('triage', `${n}.json`), rec) };
       const maxAttempts = 3;
+      if (!str(c.flags, 'item')) {
+        // Bounded scan over tracked issues awaiting triage: finite items and wall time, serial, then exit. Shadow only; nothing is scheduled.
+        const ts = await import('../scan/triage-scan.ts'); const tcfg = { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('triage', 'packets') };
+        const tcaps = { maxItems: cfg.runtime.budgets.maxItems, starveAfterHours: 168, maxFactoryImplementationPrs: cfg.runtime.budgets.maxFactoryImplementationPrs, openFactoryImplementationPrs: 0 };
+        if (c.flags['dry-run']) { const pick = await ts.eligibleIssues(store, { kvFor: () => tkv, cfg: tcfg, skip }); const sel = select(pick.cands, tcaps); return { code: 0, data: { task, outcome: 'proposed', mode: 'dry-run', run: sel.run.map((x) => x.item), pending: sel.deferred, blocked: sel.blocked, skipped: pick.skipped, mutations: 0 }, text: `task triage (dry-run): would triage ${sel.run.length} issue(s) (${sel.deferred.length} deferred, ${sel.blocked.length} blocked, ${pick.skipped.length} skipped); no model call, no writes` }; }
+        const sRunner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url') }) : new NotReadyRunner();
+        const rep = await ts.scanTriage({ store, runner: sRunner, kvFor: () => tkv, cfg: tcfg, caps: tcaps, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest, skip });
+        mkdirSync(st.path('runs'), { recursive: true, mode: 0o700 }); const file = st.path('runs', `triage-scan-${rep.startedAt.replace(/[:.]/g, '-')}.json`); st.writeJson(file, rep);
+        return { code: rep.completed.some((x) => x.outcome === 'rejected') ? 1 : rep.completed.length || !rep.pending.length ? 0 : 4, data: { task, outcome: 'scanned', ...rep, runner: sRunner.name, reportFile: file }, text: `task triage (scan, shadow): ${rep.completed.length} completed (${rep.completed.map((x) => `#${x.item} ${x.outcome}`).join(', ') || 'none'}), ${rep.pending.length} pending, ${rep.blocked.length} blocked, ${rep.skipped.length} skipped${rep.stoppedEarly ? `; stopped early: ${rep.stoppedEarly}` : ''}` };
+      }
+      const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task triage: --item must be an issue number' };
       if (c.flags['dry-run']) { const p = await planTriage(store, item, tkv, maxAttempts); return { code: p.action === 'blocked' ? 4 : 0, data: { task, outcome: 'proposed', mode: 'dry-run', plan: p, mutations: 0 }, text: `task triage (dry-run) #${item}: ${p.action}: ${p.why}; no model call, no repository mutation` }; }
       const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url') }) : new NotReadyRunner();
       const o = await runTriage({ store, item, runner, kv: tkv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest,
