@@ -145,24 +145,42 @@ export class OpenCodeRunner implements AgentRunner {
       if (ses.status !== 200) return { outcome: 'failed', reason: `create session ${ses.status}`, usage: usage() };
       const sid = ses.body.data.id as string;
       const p = await s.api('POST', `/api/session/${sid}/prompt`, { text: built.text }); if (p.status !== 200) return { outcome: 'failed', reason: `prompt ${p.status}`, usage: usage() };
-      const created = (p.body.data.time?.created ?? 0) - 1; let interrupted = false;
+      let created = (p.body.data.time?.created ?? 0) - 1; let interrupted = false;
       const onAbort = () => { interrupted = true; void s!.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); };
       if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
-      let msgs: any[] = []; let idle: any;
-      while (!idle) {
-        const r = await s.api('GET', `/api/session/${sid}/message`); msgs = (r.body?.data ?? []) as any[];
-        const asst = msgs.filter((m) => m.type === 'assistant'); const tools = asst.flatMap((m) => (m.content ?? []).filter((c: any) => c.type !== 'text' && c.type !== 'reasoning')).length;
-        monitor.observe({ toolCalls: Math.max(0, tools - monitor.toolCalls), modelTurns: Math.max(0, asst.length - monitor.modelTurns) });
-        if (monitor.exceeded) { await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
-        idle = msgs.find((m) => m.type === 'idle' && (m.time?.created ?? 0) >= created);
-        if (!idle) await new Promise((res) => setTimeout(res, 400));
+      const seen = new Set<string>(); const key = (m: any) => String(m.id ?? JSON.stringify(m).slice(0, 200));   // messages of earlier rounds, by id (the API's ordering is not relied on)
+      // One bounded REPAIR round: a model may end its turn with prose or a tool call that cannot run here (this session has no such tool) instead of the JSON object.
+      // It is told once, in the same session, to answer with the object only; the second reply is judged exactly like the first.
+      for (let round = 0; round < 2; round++) {
+        let msgs: any[] = []; let idle: any;
+        while (!idle) {
+          const r = await s.api('GET', `/api/session/${sid}/message`); msgs = (r.body?.data ?? []) as any[];
+          const asst = msgs.filter((m) => m.type === 'assistant'); const tools = asst.flatMap((m) => (m.content ?? []).filter((c: any) => c.type !== 'text' && c.type !== 'reasoning')).length;
+          monitor.observe({ toolCalls: Math.max(0, tools - monitor.toolCalls), modelTurns: Math.max(0, asst.length - monitor.modelTurns) });
+          if (monitor.exceeded) { await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
+          idle = msgs.find((m) => !seen.has(key(m)) && m.type === 'idle' && (m.time?.created ?? 0) >= created);
+          if (!idle) await new Promise((res) => setTimeout(res, 400));
+        }
+        signal.removeEventListener('abort', onAbort);
+        if (interrupted || idle.outcome === 'interrupted') return { outcome: 'interrupted', reason: 'session interrupted', usage: usage() };
+        if (idle.outcome !== 'succeeded') return { outcome: 'failed', reason: `session ended ${String(idle.outcome)}`, usage: usage() };
+        const mine = msgs.filter((m) => !seen.has(key(m)) && m.type === 'assistant');
+        const text = mine.flatMap((m) => (m.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text)).join('').trim();
+        const j = extractJson(text);
+        if (!j.error) return { outcome: 'completed', structuredOutput: j.value, usage: usage() };
+        if (round === 0) {
+          for (const m of msgs) seen.add(key(m));
+          const rp = await s.api('POST', `/api/session/${sid}/prompt`, { text: 'Your last reply did not contain the required JSON object. No tools are available in this session: do not call any. Reply now with only the single JSON object that conforms to the schema.' });
+          if (rp.status !== 200) return { outcome: 'failed', reason: `repair prompt ${rp.status}`, usage: usage() };
+          created = (rp.body.data.time?.created ?? 0) - 1; if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
+          continue;
+        }
+        // Say what the reply actually contained: an empty final text next to reasoning parts is a different failure from malformed JSON.
+        const parts = mine.flatMap((m) => (m.content ?? []) as Array<{ type: string }>); const kinds = new Map<string, number>(); for (const c of parts) kinds.set(c.type, (kinds.get(c.type) ?? 0) + 1);
+        const shape = `after one repair round; assistant parts: ${[...kinds].map(([k, n]) => `${k} x${n}`).join(', ') || 'none'}; text chars ${text.length}`;
+        return { outcome: 'failed', reason: `reply was not JSON: ${j.error} (${shape})`.slice(0, 300), usage: usage() };
       }
-      signal.removeEventListener('abort', onAbort);
-      if (interrupted || idle.outcome === 'interrupted') return { outcome: 'interrupted', reason: 'session interrupted', usage: usage() };
-      if (idle.outcome !== 'succeeded') return { outcome: 'failed', reason: `session ended ${String(idle.outcome)}`, usage: usage() };
-      const text = msgs.filter((m) => m.type === 'assistant').flatMap((m) => (m.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text)).join('').trim();
-      const j = extractJson(text); if (j.error) return { outcome: 'failed', reason: `reply was not JSON: ${j.error}`.slice(0, 200), usage: usage() };
-      return { outcome: 'completed', structuredOutput: j.value, usage: usage() };
+      return { outcome: 'failed', reason: 'no reply', usage: usage() };
     } catch (e) { return { outcome: signal.aborted ? 'interrupted' : 'failed', reason: String((e as Error).message).slice(0, 300), usage: usage() }; }
     finally { await s?.stop(); }
   }
