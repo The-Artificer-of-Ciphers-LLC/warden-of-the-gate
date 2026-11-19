@@ -42,7 +42,9 @@ export function loadConfigs(c: Ctx): Loaded | { errors: string[] } {
 }
 
 export type Role = 'operator' | 'submit' | 'writer';
-export interface Backend { name: string; open(role: Role, repository?: string): Store | null; unavailable?: string; submitLogin?: string }
+export interface Backend { name: string; open(role: Role, repository?: string): Store | null; unavailable?: string; submitLogin?: string;
+  /** Factory publishing access (contents + pull-request write on THIS repository only), issued by the App through the controller and bounded by the protected ceiling; never a PAT or the operator token. */
+  publish?(): { store: Store; token: () => Promise<string> } | null }
 /** Each live credential source is explicitly selected; App failure never selects a human or runner credential. */
 export function openBackend(c: Ctx, cfg: WardenConfig): Backend {
   const spec = str(c.flags, 'backend') ?? c.env.WARDEN_BACKEND ?? 'github';
@@ -107,6 +109,18 @@ export function openBackend(c: Ctx, cfg: WardenConfig): Backend {
     }
     return new HttpStore(repository, controller, req, installation.appLogin);
   }
+  be.publish = () => {
+    const st = openStorage(c, cfg.repository); const installation = st.readJson<unknown>(st.path('github.json'));
+    if (!installation) return null;
+    if (!validInstallation(installation)) throw new CredentialUnavailable('denied', 'invalid protected App installation configuration');
+    const ceiling = ceilingFor(st, cfg); if (!ceiling) return null;
+    const req: CredentialRequest = { operation: 'publish', repository: cfg.repository, permissions: { contents: 'write', pull_requests: 'write', metadata: 'read' } };
+    const denied = cfg.credentials.automation === 'opt-out' ? 'credential automation is opted out' : credentialDenial(ceiling, req);
+    if (denied) throw new CredentialUnavailable('denied', `publishing is outside the operator ceiling: ${denied}`);
+    controller ??= new CredentialController({ issuer: new GitHubAppIssuer(installation), ceiling, stateDir: st.credentialsDir, now: c.now });
+    const ctl = controller;
+    return { store: new HttpStore(cfg.repository, ctl, req, installation.appLogin), token: () => ctl.token(req) };
+  };
   return be;
 }
 
