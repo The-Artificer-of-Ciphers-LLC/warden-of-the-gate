@@ -129,7 +129,7 @@ export class OpenCodeRunner implements AgentRunner {
    *  the JSON Schema and enforces the context budget. Contributor content is data: the session has no tools to act on it. */
   private buildPrompt(req: SessionRequest): { text: string } | { error: string } {
     const task = readFileSync(path.join(req.packetDir, 'prompt.txt'), 'utf8');
-    const text = [task, 'Reply with a single JSON object and nothing else (no prose, no code fences). It must conform to this JSON Schema:', JSON.stringify(req.resultSchema)].join('\n');
+    const text = [task, 'No tools are available in this session: everything you need is above, so do not call any tool and do not read files. Think briefly, then reply with a single JSON object and nothing else (no prose, no code fences). It must conform to this JSON Schema:', JSON.stringify(req.resultSchema)].join('\n');
     return text.length > this.o.maxPromptChars ? { error: `packet is ${text.length} characters, over the ${this.o.maxPromptChars}-character context budget` } : { text };
   }
 

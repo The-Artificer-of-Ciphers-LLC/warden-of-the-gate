@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { loadConfigs, openStorage, str } from './common.ts';
 import type { Ctx, Result } from './common.ts';
@@ -13,6 +14,14 @@ import type { ReplaySet } from '../replay/replay.ts';
 export async function replay(c: Ctx): Promise<Result> {
   const file = str(c.flags, 'set'); if (!file || !existsSync(file)) return { code: 2, data: {}, text: 'replay: --set FILE (a replay set JSON) is required' };
   let set: ReplaySet; try { set = JSON.parse(readFileSync(file, 'utf8')) as ReplaySet; } catch (e) { return { code: 2, data: {}, text: `replay: the set is not valid JSON: ${(e as Error).message}` }; }
+  // `--split dev|holdout`: a stable half of the cases (by hash of the case id) for TUNING. A half never reaches the qualification size, so it can never qualify: the
+  // honest number comes only from the untouched holdout, run once after tuning.
+  const split = str(c.flags, 'split');
+  if (split) {
+    if (split !== 'dev' && split !== 'holdout') return { code: 2, data: {}, text: 'replay: --split must be dev or holdout' };
+    const half = (id: string) => (createHash('sha256').update(id).digest()[0] & 1) === 0 ? 'dev' : 'holdout';
+    set = { ...set, name: `${set.name} [${split}]`, cases: set.cases.filter((x) => half(x.id) === split) };
+  }
   const bad = validateSet(set); if (bad) return { code: 2, data: { problem: bad }, text: `replay: invalid set: ${bad}` };
   if (c.flags['validate-only']) return { code: 0, data: { name: set.name, cases: set.cases.length, synthetic: !!set.synthetic }, text: `replay: set "${set.name}" is valid (${set.cases.length} case(s))` };
   const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'replay: configuration invalid:\n' + cfgs.errors.join('\n') };
