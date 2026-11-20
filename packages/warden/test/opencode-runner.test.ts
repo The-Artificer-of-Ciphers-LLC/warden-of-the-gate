@@ -24,3 +24,17 @@ test('preflight fails closed when the harness is missing or the endpoint is not 
 test('parseVersion reads the real `opencode --version` output shape and rejects garbage', () => {
   assert.equal(parseVersion('opencode v2.2.7\n'), '2.2.7'); assert.equal(parseVersion('2.2.7'), '2.2.7'); assert.equal(parseVersion('no version'), undefined);
 });
+
+test('the loaded context window is read from the endpoint (read-only GET), not guessed; unreadable keeps the configured fallback', async () => {
+  const { createServer } = await import('node:http'); let hits = 0; let path = '';
+  const srv = createServer((req, res) => { hits++; path = String(req.url); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ id: 'm1', loaded_context_length: 262144 })); });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r())); const port = (srv.address() as { port: number }).port;
+  try {
+    const a = new OpenCodeRunner({ modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1` }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
+    await a.learnContext(); assert.equal(a.o.contextLimit, 262144); assert.equal(hits, 1); assert.equal(path, '/api/v0/models/m1');
+    const b = new OpenCodeRunner({ modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1`, contextLimit: 8192 }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
+    await b.learnContext(); assert.equal(b.o.contextLimit, 8192); assert.equal(hits, 1, 'an explicit window is never overridden or queried');
+  } finally { srv.close(); }
+  const c = new OpenCodeRunner({ modelId: 'm1', baseURL: 'http://127.0.0.1:1/v1' }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
+  await c.learnContext(); assert.equal(c.o.contextLimit, 131072);
+});

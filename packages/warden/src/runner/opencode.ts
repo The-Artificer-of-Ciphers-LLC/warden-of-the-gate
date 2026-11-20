@@ -47,9 +47,20 @@ export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
   private o: Required<Omit<OpenCodeOptions, 'pinned'>> & { pinned: string };
   constructor(o: OpenCodeOptions) {
-    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:1235/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 32768,
-      outputLimit: o.outputLimit ?? 4096, maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000 };
-    this.pinnedVersion = this.o.pinned;
+    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:1235/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 131072, /* fallback only: the real loaded window is read from the endpoint before each session (see learnContext) */
+      outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000 };
+    this.pinnedVersion = this.o.pinned; this.ctxExplicit = o.contextLimit !== undefined;
+  }
+  private ctxExplicit = false; private ctxLearned = false;
+  /** Reads the window the model is actually LOADED with from LM Studio's read-only listing (a GET: nothing is loaded, unloaded or changed). A configured window that is
+   *  smaller than the real one makes OpenCode compact early and fail; a larger one overflows. Unreadable -> the configured fallback is kept. Loopback only (checked at start). */
+  private async learnContext(): Promise<void> {
+    if (this.ctxExplicit || this.ctxLearned) return; this.ctxLearned = true;
+    try {
+      const u = new URL(this.o.baseURL); const r = await fetch(`${u.origin}/api/v0/models/${encodeURIComponent(this.o.modelId)}`, { signal: AbortSignal.timeout(5000) });
+      const n = Number(((await r.json()) as { loaded_context_length?: number }).loaded_context_length);
+      if (Number.isInteger(n) && n >= 4096) this.o.contextLimit = n;
+    } catch { /* keep the fallback */ }
   }
 
   private config(): Record<string, unknown> {
@@ -129,7 +140,7 @@ export class OpenCodeRunner implements AgentRunner {
    *  the JSON Schema and enforces the context budget. Contributor content is data: the session has no tools to act on it. */
   private buildPrompt(req: SessionRequest): { text: string } | { error: string } {
     const task = readFileSync(path.join(req.packetDir, 'prompt.txt'), 'utf8');
-    const text = [task, 'No tools are available in this session: everything you need is above, so do not call any tool and do not read files. Think briefly, then reply with a single JSON object and nothing else (no prose, no code fences). It must conform to this JSON Schema:', JSON.stringify(req.resultSchema)].join('\n');
+    const text = [task, (req.repoContext ? 'You may use the read and list tools on the repository snapshot for context, but you must finish with your answer. Think briefly, then reply' : 'No tools are available in this session: everything you need is above, so do not call any tool and do not read files. Think briefly, then reply') + ' with a single JSON object and nothing else (no prose, no code fences). It must conform to this JSON Schema:', JSON.stringify(req.resultSchema)].join('\n');
     return text.length > this.o.maxPromptChars ? { error: `packet is ${text.length} characters, over the ${this.o.maxPromptChars}-character context budget` } : { text };
   }
 
@@ -139,6 +150,7 @@ export class OpenCodeRunner implements AgentRunner {
     let s: Server | undefined;
     try {
       const wsDir = realpathSync(req.workspace?.dir ?? req.packetDir); const writable = !!req.workspace?.writable;
+      await this.learnContext();
       s = await this.start(wsDir, signal, writable);
       const re = await this.resolve(s); if (!re.ok) return { outcome: 'failed', reason: `routing re-check failed at execution time: ${re.reasons.join('; ')}`, usage: usage() };
       const ses = await s.api('POST', '/api/session', { title: 'warden-review', model: { id: this.o.modelId, providerID: 'lmstudio' }, location: { directory: wsDir }, permissions: [DENY_ALL, ...req.tools.allow.map((a) => ({ action: a, resource: '*', effect: 'allow' as const }))] });
@@ -163,14 +175,14 @@ export class OpenCodeRunner implements AgentRunner {
         }
         signal.removeEventListener('abort', onAbort);
         if (interrupted || idle.outcome === 'interrupted') return { outcome: 'interrupted', reason: 'session interrupted', usage: usage() };
-        if (idle.outcome !== 'succeeded') return { outcome: 'failed', reason: `session ended ${String(idle.outcome)}`, usage: usage() };
+        if (idle.outcome !== 'succeeded') return { outcome: 'failed', reason: `session ended ${String(idle.outcome)}: ${JSON.stringify({ idle, errs: msgs.filter((m) => m.error || m.type === 'error').map((m) => m.error ?? m).slice(-2) }).slice(0, 240)}`, usage: usage() };
         const mine = msgs.filter((m) => !seen.has(key(m)) && m.type === 'assistant');
         const text = mine.flatMap((m) => (m.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text)).join('').trim();
         const j = extractJson(text);
         if (!j.error) return { outcome: 'completed', structuredOutput: j.value, usage: usage() };
         if (round === 0) {
           for (const m of msgs) seen.add(key(m));
-          const rp = await s.api('POST', `/api/session/${sid}/prompt`, { text: 'Your last reply did not contain the required JSON object. No tools are available in this session: do not call any. Reply now with only the single JSON object that conforms to the schema.' });
+          const rp = await s.api('POST', `/api/session/${sid}/prompt`, { text: 'Your last reply did not contain the required JSON object. Do not call any tool now. Reply now with only the single JSON object that conforms to the schema.' });
           if (rp.status !== 200) return { outcome: 'failed', reason: `repair prompt ${rp.status}`, usage: usage() };
           created = (rp.body.data.time?.created ?? 0) - 1; if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
           continue;

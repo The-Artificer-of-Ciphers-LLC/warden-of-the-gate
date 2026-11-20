@@ -54,3 +54,13 @@ test('a triage expectation may list several acceptable kinds and outcomes; an em
   assert.equal(validateSet({ name: 'x', curatedBy: 'm', cases: [{ id: 't1', kind: 'triage', title: 't', body: 'b', expect: { kind: ['bug', 'question'], outcome: ['needs-info'] } }] }), null);
   assert.match(String(validateSet({ name: 'x', curatedBy: 'm', cases: [{ id: 't1', kind: 'triage', title: 't', body: 'b', expect: { kind: [], outcome: 'needs-info' } }] })), /needs expect\.kind/);
 });
+
+test('replay enforces the wall-time budget with a REAL clock (the fake world clock is frozen and must not disable the cap)', async () => {
+  const runner = { name: 'slow', pinnedVersion: '0', async preflight() { return { ok: true, resolvedModel: 'local-default', isolation: 'seatbelt', failures: [] }; },
+    async run(_req: unknown, signal: AbortSignal, mon: { observe(d: object): string | null }) { while (!signal.aborted) { mon.observe({}); await new Promise((r) => setTimeout(r, 20)); } return { outcome: 'interrupted' as const, usage: { toolCalls: 0, modelTurns: 0, wallMs: 0 } }; } };
+  const set = { name: 's', curatedBy: 'x', synthetic: true, cases: [{ id: 'pr-1', kind: 'review' as const, title: 't', files: [{ path: 'a.ts', status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b' }], expect: { clean: true as const } }] };
+  const t0 = Date.now();
+  const rep = await runReplay(set, { runner: runner as never, localModels: ['local-default'], budgets: { maxToolCalls: 5, maxModelTurns: 5, wallTimeMs: 150 } });
+  assert.ok(Date.now() - t0 < 5000, 'the session was cut off by the budget instead of running forever');
+  assert.equal(rep.results[0].outcome, 'rejected'); assert.match(rep.results[0].reason ?? '', /wall-time budget/);
+});
