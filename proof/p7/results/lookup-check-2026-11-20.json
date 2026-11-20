@@ -1,0 +1,1893 @@
+{
+ "repo": "open-gsd/gsd-core",
+ "ranAt": "2026-11-20T23:16:29.608Z",
+ "contextChars": 16000,
+ "cases": [
+  {
+   "id": "pr-482",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 1,
+   "changes": 28,
+   "changesOnGitHub": 28,
+   "patchChars": 1412,
+   "pack": {
+    "status": "complete",
+    "items": 7,
+    "chars": 3543,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1704,
+    "byTier": {
+     "precise": 0,
+     "inferred": 3,
+     "text": 4
+    },
+    "byKind": {
+     "removed-still-used": 4,
+     "definition": 2,
+     "enclosing": 1
+    },
+    "coverage": [
+     {
+      "path": "tests/bug-1974-context-exhaustion-record.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "eslint-rules/no-magic-sleep-in-tests.cjs",
+    "tests/bug-1974-context-exhaustion-record.test.cjs",
+    "scripts/ci-rebase-check.cjs",
+    "tests/helpers.cjs"
+   ],
+   "defect": {
+    "path": "tests/bug-1974-context-exhaustion-record.test.cjs",
+    "tier": "inferred",
+    "regionInPack": true
+   },
+   "laterFix": {
+    "pr": 493,
+    "otherFiles": [],
+    "cited": []
+   },
+   "wallMs": 2626
+  },
+  {
+   "id": "pr-2031",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 91,
+   "changesOnGitHub": 91,
+   "patchChars": 6032,
+   "pack": {
+    "status": "complete",
+    "items": 10,
+    "chars": 8255,
+    "cut": 0,
+    "stale": 0,
+    "ms": 2963,
+    "byTier": {
+     "precise": 4,
+     "inferred": 1,
+     "text": 5
+    },
+    "byKind": {
+     "caller": 3,
+     "enclosing": 1,
+     "definition": 1,
+     "usage": 5
+    },
+    "coverage": [
+     {
+      "path": ".changeset/2018-applysurface-empty-manifest-agents.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/surface.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/surface-empty-manifest-agents.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/surface.cts",
+    "tests/surface-empty-manifest-agents.test.cjs",
+    "tests/runtime-artifact-layout-install-profiles.test.cjs",
+    "tests/runtime-artifact-layout-surface.test.cjs",
+    "CONTEXT.md",
+    "eslint-rules/no-raw-rmsync-in-tests.cjs"
+   ],
+   "defect": {
+    "path": "tests/surface-empty-manifest-agents.test.cjs",
+    "tier": "inferred",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 2033,
+    "otherFiles": [
+     "tests/gate-predicate-evaluator.test.cjs"
+    ],
+    "cited": []
+   },
+   "wallMs": 4009
+  },
+  {
+   "id": "pr-3656",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 2,
+   "changes": 168,
+   "changesOnGitHub": 168,
+   "patchChars": 10534,
+   "pack": {
+    "status": "complete",
+    "items": 9,
+    "chars": 9620,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3151,
+    "byTier": {
+     "precise": 0,
+     "inferred": 9,
+     "text": 0
+    },
+    "byKind": {
+     "definition": 5,
+     "caller": 2,
+     "enclosing": 2
+    },
+    "coverage": [
+     {
+      "path": "tests/gsd-check-update-worker-platform-gate.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/helpers/cold-runtime-lib-fixture.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/helpers.cjs",
+    "tests/helpers/cold-runtime-lib-fixture.cjs",
+    "tests/gsd-check-update-worker-platform-gate.test.cjs"
+   ],
+   "defect": {
+    "path": "tests/gsd-check-update-worker-platform-gate.test.cjs",
+    "tier": "inferred",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 3665,
+    "otherFiles": [],
+    "cited": []
+   },
+   "wallMs": 4811
+  },
+  {
+   "id": "pr-5685",
+   "half": "dev",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 177,
+   "changesOnGitHub": 177,
+   "patchChars": 10628,
+   "pack": {
+    "status": "complete",
+    "items": 19,
+    "chars": 9546,
+    "cut": 0,
+    "stale": 0,
+    "ms": 4600,
+    "byTier": {
+     "precise": 0,
+     "inferred": 17,
+     "text": 2
+    },
+    "byKind": {
+     "removed-still-used": 2,
+     "definition": 7,
+     "caller": 7,
+     "enclosing": 3
+    },
+    "coverage": [
+     {
+      "path": ".changeset/brave-koalas-howl.md",
+      "tier": "text"
+     },
+     {
+      "path": "hooks/gsd-secret-read-guard.js",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/gsd-secret-read-guard.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "hooks/gsd-windsurf-pre-command.js",
+    "hooks/lib/filename-classification.js",
+    "hooks/gsd-secret-read-guard.js",
+    "tests/gsd-secret-read-guard.test.cjs"
+   ],
+   "defect": {
+    "path": "hooks/gsd-secret-read-guard.js",
+    "tier": "inferred",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 5874,
+    "otherFiles": [
+     ".changeset/tidy-birds-tumble.md"
+    ],
+    "cited": []
+   },
+   "wallMs": 6945
+  },
+  {
+   "id": "pr-4021",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 190,
+   "changesOnGitHub": 190,
+   "patchChars": 12824,
+   "pack": {
+    "status": "complete",
+    "items": 18,
+    "chars": 11704,
+    "cut": 0,
+    "stale": 0,
+    "ms": 4566,
+    "byTier": {
+     "precise": 9,
+     "inferred": 5,
+     "text": 4
+    },
+    "byKind": {
+     "definition": 3,
+     "caller": 7,
+     "enclosing": 4,
+     "usage": 4
+    },
+    "coverage": [
+     {
+      "path": ".changeset/state-empty-field-preserve-following-line.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/state-document.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/state-document.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/pattern.cts",
+    "src/state-document.cts",
+    "src/state-transition.cts",
+    "tests/state-document.test.cjs",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/enhancement.yml",
+    ".github/workflows/install-smoke.yml"
+   ],
+   "defect": {
+    "path": "src/state-document.cts",
+    "tier": "precise",
+    "regionInPack": true
+   },
+   "laterFix": {
+    "pr": 4453,
+    "otherFiles": [
+     ".changeset/calm-goats-bark.md",
+     "tests/state.test.cjs"
+    ],
+    "cited": []
+   },
+   "wallMs": 6663
+  },
+  {
+   "id": "pr-4228",
+   "half": "dev",
+   "kind": "mustFind",
+   "files": 9,
+   "changes": 158,
+   "changesOnGitHub": 158,
+   "patchChars": 12821,
+   "pack": {
+    "status": "complete",
+    "items": 19,
+    "chars": 13641,
+    "cut": 0,
+    "stale": 0,
+    "ms": 4041,
+    "byTier": {
+     "precise": 0,
+     "inferred": 9,
+     "text": 10
+    },
+    "byKind": {
+     "caller": 6,
+     "referenced-file": 1,
+     "enclosing": 3,
+     "usage": 9
+    },
+    "coverage": [
+     {
+      "path": ".changeset/patient-jaguars-rally.md",
+      "tier": "text"
+     },
+     {
+      "path": "agents/gsd-executor.md",
+      "tier": "text"
+     },
+     {
+      "path": "gsd-core/workflows/execute-phase.md",
+      "tier": "text"
+     },
+     {
+      "path": "gsd-core/workflows/execute-phase/steps/executor-isolation-dispatch.md",
+      "tier": "text"
+     },
+     {
+      "path": "gsd-core/workflows/execute-plan.md",
+      "tier": "text"
+     },
+     {
+      "path": "scripts/npm-audit-baseline.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/no-bare-gsd-tools-command-position.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/npm-integrity-gate.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/tdd-single-statement.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "scripts/npm-audit-baseline.cjs",
+    "tests/npm-integrity-gate.test.cjs",
+    "tests/tdd-single-statement.test.cjs",
+    "gsd-core/references/tdd.md",
+    "tests/safe-resume-gate-anchoring.test.cjs",
+    "agents/gsd-planner.md",
+    "gsd-core/templates/phase-prompt.md",
+    "eslint-rules/no-unbounded-dirname-walk.cjs",
+    "scripts/lint-legacy-dir-name.cjs",
+    "eslint-rules/lib/readfilesync-trace.cjs",
+    "tests/readfilesync-trace-parity.test.cjs"
+   ],
+   "defect": {
+    "path": "gsd-core/workflows/execute-phase.md",
+    "tier": "text",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 4284,
+    "otherFiles": [
+     ".changeset/mellow-seals-climb.md",
+     "docs/INVENTORY-MANIFEST.json",
+     "gsd-core/workflows/execute-phase/steps/tdd-applicability-resolution.md",
+     "scripts/lint-workflow-shellcheck-baseline.json",
+     "tests/executor-isolation-prompt-contract.test.cjs",
+     "tests/fixtures/install-tree/antigravity.json",
+     "tests/fixtures/install-tree/augment.json",
+     "tests/fixtures/install-tree/claude-local.json",
+     "tests/fixtures/install-tree/claude.json",
+     "tests/fixtures/install-tree/cline.json",
+     "tests/fixtures/install-tree/codebuddy.json",
+     "tests/fixtures/install-tree/codex.json",
+     "tests/fixtures/install-tree/copilot.json",
+     "tests/fixtures/install-tree/cursor.json",
+     "tests/fixtures/install-tree/hermes.json",
+     "tests/fixtures/install-tree/kilo.json",
+     "tests/fixtures/install-tree/kimi-code.json",
+     "tests/fixtures/install-tree/kimi.json",
+     "tests/fixtures/install-tree/opencode.json",
+     "tests/fixtures/install-tree/pi.json",
+     "tests/fixtures/install-tree/qwen.json",
+     "tests/fixtures/install-tree/trae.json",
+     "tests/fixtures/install-tree/windsurf.json",
+     "tests/fixtures/install-tree/zcode.json",
+     "tests/tdd-backend-wiring.test.cjs"
+    ],
+    "cited": []
+   },
+   "wallMs": 6663
+  },
+  {
+   "id": "pr-5363",
+   "half": "dev",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 150,
+   "changesOnGitHub": 150,
+   "patchChars": 11339,
+   "pack": {
+    "status": "partial",
+    "items": 20,
+    "chars": 15828,
+    "cut": 15,
+    "stale": 0,
+    "ms": 5892,
+    "byTier": {
+     "precise": 10,
+     "inferred": 10,
+     "text": 0
+    },
+    "byKind": {
+     "definition": 9,
+     "caller": 6,
+     "enclosing": 5
+    },
+    "coverage": [
+     {
+      "path": ".changeset/mellow-eagles-frolic.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/init.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/init.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/fixtures/index.cjs",
+    "tests/helpers.cjs",
+    "src/init.cts",
+    "tests/init.test.cjs"
+   ],
+   "defect": {
+    "path": "src/init.cts",
+    "tier": "precise",
+    "regionInPack": true
+   },
+   "laterFix": {
+    "pr": 6023,
+    "otherFiles": [
+     ".changeset/nimble-birds-hum.md",
+     "src/commands.cts",
+     "src/phase-entry-grammar.cts",
+     "src/phase.cts",
+     "src/roadmap-parser.cts",
+     "src/roadmap-upgrade.cts",
+     "src/roadmap.cts",
+     "tests/phase-entry-grammar.test.cjs",
+     "tests/roadmap.test.cjs"
+    ],
+    "cited": []
+   },
+   "wallMs": 8502
+  },
+  {
+   "id": "pr-6074",
+   "half": "dev",
+   "kind": "mustFind",
+   "files": 1,
+   "changes": 10,
+   "changesOnGitHub": 10,
+   "patchChars": 1326,
+   "pack": {
+    "status": "complete",
+    "items": 6,
+    "chars": 4759,
+    "cut": 0,
+    "stale": 0,
+    "ms": 230,
+    "byTier": {
+     "precise": 0,
+     "inferred": 0,
+     "text": 6
+    },
+    "byKind": {
+     "usage": 6
+    },
+    "coverage": [
+     {
+      "path": ".github/workflows/test.yml",
+      "tier": "text"
+     }
+    ]
+   },
+   "citedPaths": [
+    "CONTRIBUTING.md",
+    "docs/research/merge-queue-red-next-recovery.md",
+    "docs/TESTING-SUITES.md",
+    "tests/ci-conformance-pr-gating.test.cjs"
+   ],
+   "defect": {
+    "path": ".github/workflows/test.yml",
+    "tier": "text",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 6093,
+    "otherFiles": [
+     ".github/workflows/fix-next-rerun.yml",
+     "CONTRIBUTING.md",
+     "docs/TESTING-SUITES.md",
+     "scripts/ci-fix-next-rerun.cjs",
+     "scripts/ci-next-health.cjs",
+     "tests/ci-fix-next-rerun-wiring.test.cjs",
+     "tests/ci-fix-next-rerun.test.cjs",
+     "tests/ci-next-health.test.cjs"
+    ],
+    "cited": [
+     "CONTRIBUTING.md",
+     "docs/TESTING-SUITES.md"
+    ]
+   },
+   "wallMs": 2862
+  },
+  {
+   "id": "pr-585",
+   "half": "dev",
+   "kind": "mustFind",
+   "files": 4,
+   "changes": 165,
+   "changesOnGitHub": 165,
+   "patchChars": 9055,
+   "pack": {
+    "status": "complete",
+    "items": 13,
+    "chars": 8033,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1614,
+    "byTier": {
+     "precise": 0,
+     "inferred": 2,
+     "text": 11
+    },
+    "byKind": {
+     "caller": 1,
+     "enclosing": 1,
+     "usage": 11
+    },
+    "coverage": [
+     {
+      "path": ".changeset/feat-41-ship-tdd-audit.md",
+      "tier": "text"
+     },
+     {
+      "path": "docs/ship-pr-body-sections.md",
+      "tier": "text"
+     },
+     {
+      "path": "get-shit-done/workflows/ship.md",
+      "tier": "text"
+     },
+     {
+      "path": "tests/feat-41-ship-tdd-audit-gate-status.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/feat-41-ship-tdd-audit-gate-status.test.cjs",
+    "CONTEXT.md",
+    "docs/FEATURES.md",
+    "get-shit-done/workflows/complete-milestone.md",
+    "docs/INVENTORY.md",
+    "rollout-next-phase1.sh",
+    "get-shit-done/workflows/pr-branch.md",
+    "get-shit-done/workflows/reapply-patches.md",
+    "tests/bug-1906-hook-relative-paths.test.cjs"
+   ],
+   "defect": {
+    "path": "get-shit-done/workflows/ship.md",
+    "tier": "text",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 2467,
+    "otherFiles": [
+     ".changeset/clever-moles-frolic.md",
+     "gsd-core/workflows/ship.md",
+     "tests/fixtures/golden-install-parity/antigravity.json",
+     "tests/fixtures/golden-install-parity/augment.json",
+     "tests/fixtures/golden-install-parity/claude-local.json",
+     "tests/fixtures/golden-install-parity/claude.json",
+     "tests/fixtures/golden-install-parity/cline.json",
+     "tests/fixtures/golden-install-parity/codebuddy.json",
+     "tests/fixtures/golden-install-parity/codex.json",
+     "tests/fixtures/golden-install-parity/copilot.json",
+     "tests/fixtures/golden-install-parity/cursor.json",
+     "tests/fixtures/golden-install-parity/hermes.json",
+     "tests/fixtures/golden-install-parity/kilo.json",
+     "tests/fixtures/golden-install-parity/kimi.json",
+     "tests/fixtures/golden-install-parity/opencode.json",
+     "tests/fixtures/golden-install-parity/pi.json",
+     "tests/fixtures/golden-install-parity/qwen.json",
+     "tests/fixtures/golden-install-parity/trae.json",
+     "tests/fixtures/golden-install-parity/windsurf.json",
+     "tests/fixtures/golden-install-parity/zcode.json",
+     "tests/workflow-compat.test.cjs",
+     "tests/workflow-size-baseline.json"
+    ],
+    "cited": []
+   },
+   "wallMs": 3184
+  },
+  {
+   "id": "pr-1499",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 39,
+   "changesOnGitHub": 39,
+   "patchChars": 2770,
+   "pack": {
+    "status": "complete",
+    "items": 9,
+    "chars": 9969,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1867,
+    "byTier": {
+     "precise": 0,
+     "inferred": 5,
+     "text": 4
+    },
+    "byKind": {
+     "referenced-file": 3,
+     "enclosing": 1,
+     "definition": 1,
+     "usage": 4
+    },
+    "coverage": [
+     {
+      "path": ".changeset/patient-tunas-jump.md",
+      "tier": "text"
+     },
+     {
+      "path": "package.json",
+      "tier": "text"
+     },
+     {
+      "path": "tests/issue-844-manifest-version-sync.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "gsd-core/bin/lib/capability-registry.cjs",
+    "scripts/gen-capability-registry.cjs",
+    "scripts/sync-manifest-versions.cjs",
+    "tests/issue-844-manifest-version-sync.test.cjs",
+    "CONTEXT.md",
+    ".claude-plugin/plugin.json"
+   ],
+   "defect": {
+    "path": "package.json",
+    "tier": "text",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 1502,
+    "otherFiles": [
+     ".github/workflows/release.yml"
+    ],
+    "cited": []
+   },
+   "wallMs": 3551
+  },
+  {
+   "id": "pr-85",
+   "half": "dev",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 177,
+   "changesOnGitHub": 177,
+   "patchChars": 9631,
+   "pack": {
+    "status": "complete",
+    "items": 13,
+    "chars": 9337,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1692,
+    "byTier": {
+     "precise": 0,
+     "inferred": 2,
+     "text": 11
+    },
+    "byKind": {
+     "referenced-file": 1,
+     "enclosing": 2,
+     "usage": 10
+    },
+    "coverage": [
+     {
+      "path": ".changeset/3805-fast-md-log-to-state-schema-aware.md",
+      "tier": "text"
+     },
+     {
+      "path": "get-shit-done/workflows/fast.md",
+      "tier": "text"
+     },
+     {
+      "path": "tests/bug-3805-fast-md-log-to-state-schema.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "get-shit-done/workflows/quick.md",
+    "tests/bug-3805-fast-md-log-to-state-schema.test.cjs",
+    "commands/gsd/fast.md",
+    "docs/INVENTORY-MANIFEST.json",
+    "docs/INVENTORY.md",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/enhancement.yml",
+    "agents/gsd-advisor-researcher.md",
+    "docs/AGENTS.md",
+    "agents/gsd-code-fixer.md",
+    "agents/gsd-verifier.md"
+   ],
+   "defect": {
+    "path": "get-shit-done/workflows/fast.md",
+    "tier": "text",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 2214,
+    "otherFiles": [
+     ".changeset/happy-seals-roam.md",
+     "gsd-core/workflows/fast.md",
+     "tests/fix-2133-fast-md-log-to-state-schema.test.cjs",
+     "tests/fixtures/golden-install-parity/antigravity.json",
+     "tests/fixtures/golden-install-parity/augment.json",
+     "tests/fixtures/golden-install-parity/claude-local.json",
+     "tests/fixtures/golden-install-parity/claude.json",
+     "tests/fixtures/golden-install-parity/cline.json",
+     "tests/fixtures/golden-install-parity/codebuddy.json",
+     "tests/fixtures/golden-install-parity/codex.json",
+     "tests/fixtures/golden-install-parity/copilot.json",
+     "tests/fixtures/golden-install-parity/cursor.json",
+     "tests/fixtures/golden-install-parity/hermes.json",
+     "tests/fixtures/golden-install-parity/kilo.json",
+     "tests/fixtures/golden-install-parity/kimi.json",
+     "tests/fixtures/golden-install-parity/opencode.json",
+     "tests/fixtures/golden-install-parity/pi.json",
+     "tests/fixtures/golden-install-parity/qwen.json",
+     "tests/fixtures/golden-install-parity/trae.json",
+     "tests/fixtures/golden-install-parity/windsurf.json",
+     "tests/fixtures/golden-install-parity/zcode.json",
+     "tests/workflow-size-baseline.json"
+    ],
+    "cited": []
+   },
+   "wallMs": 3754
+  },
+  {
+   "id": "pr-3091",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 3,
+   "changes": 79,
+   "changesOnGitHub": 79,
+   "patchChars": 5882,
+   "pack": {
+    "status": "complete",
+    "items": 9,
+    "chars": 6876,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3597,
+    "byTier": {
+     "precise": 2,
+     "inferred": 3,
+     "text": 4
+    },
+    "byKind": {
+     "caller": 1,
+     "enclosing": 2,
+     "definition": 2,
+     "usage": 4
+    },
+    "coverage": [
+     {
+      "path": ".changeset/lucky-tunas-leap.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/state-transition.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/state-transition.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/state.cts",
+    "src/state-transition.cts",
+    "tests/state-transition.test.cjs",
+    "docs/adr/1769-state-md-transition-module.md",
+    "tests/frontmatter.test.cjs",
+    "tests/state.test.cjs"
+   ],
+   "defect": {
+    "path": "src/state-transition.cts",
+    "tier": "precise",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 5669,
+    "otherFiles": [
+     ".changeset/lively-tunas-bark.md"
+    ],
+    "cited": []
+   },
+   "wallMs": 5580
+  },
+  {
+   "id": "pr-366",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 6,
+   "changes": 353,
+   "changesOnGitHub": 353,
+   "patchChars": 13912,
+   "pack": {
+    "status": "partial",
+    "items": 24,
+    "chars": 15972,
+    "cut": 2,
+    "stale": 0,
+    "ms": 1689,
+    "byTier": {
+     "precise": 0,
+     "inferred": 23,
+     "text": 1
+    },
+    "byKind": {
+     "definition": 2,
+     "caller": 5,
+     "referenced-file": 2,
+     "enclosing": 15
+    },
+    "coverage": [
+     {
+      "path": ".github/workflows/test.yml",
+      "tier": "text"
+     },
+     {
+      "path": "docs/TESTING-SUITES.md",
+      "tier": "text"
+     },
+     {
+      "path": "package.json",
+      "tier": "text"
+     },
+     {
+      "path": "scripts/affected-tests-lib.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "scripts/run-affected-tests.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/affected-tests-lib.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/bug-1736-local-install-commands.test.cjs",
+    "tests/augment-conversion.test.cjs",
+    "scripts/affected-tests-lib.cjs",
+    "docs/TESTING-SUITES.md",
+    "scripts/run-affected-tests.cjs",
+    "tests/affected-tests-lib.test.cjs"
+   ],
+   "defect": {
+    "path": "scripts/affected-tests-lib.cjs",
+    "tier": "inferred",
+    "regionInPack": true
+   },
+   "laterFix": {
+    "pr": 395,
+    "otherFiles": [
+     ".changeset/370-affected-tests-exclude-install-slow.md",
+     "scripts/run-tests.cjs"
+    ],
+    "cited": []
+   },
+   "wallMs": 2688
+  },
+  {
+   "id": "pr-4230",
+   "half": "holdout",
+   "kind": "mustFind",
+   "files": 8,
+   "changes": 144,
+   "changesOnGitHub": 144,
+   "patchChars": 12662,
+   "pack": {
+    "status": "complete",
+    "items": 12,
+    "chars": 9157,
+    "cut": 0,
+    "stale": 0,
+    "ms": 4609,
+    "byTier": {
+     "precise": 0,
+     "inferred": 4,
+     "text": 8
+    },
+    "byKind": {
+     "caller": 3,
+     "enclosing": 1,
+     "usage": 8
+    },
+    "coverage": [
+     {
+      "path": ".changeset/zesty-cranes-dance.md",
+      "tier": "text"
+     },
+     {
+      "path": ".github/workflows/test.yml",
+      "tier": "text"
+     },
+     {
+      "path": "agents/gsd-executor.md",
+      "tier": "text"
+     },
+     {
+      "path": "gsd-core/workflows/pause-work.md",
+      "tier": "text"
+     },
+     {
+      "path": "gsd-core/workflows/verify-work.md",
+      "tier": "text"
+     },
+     {
+      "path": "tests/ci-test-job-timeout-budget.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/no-bare-gsd-tools-command-position.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/summary-commit-verification.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/summary-commit-verification.test.cjs",
+    "tests/ci-test-job-timeout-budget.test.cjs",
+    "gsd-core/workflows/resume-project.md",
+    "agents/gsd-verifier.md",
+    "gsd-core/workflows/eval-review.md",
+    "gsd-core/workflows/secure-phase.md",
+    "scripts/lint-legacy-dir-name.cjs",
+    "tests/getdirname-registry-derivation.test.cjs",
+    "eslint-rules/lib/readfilesync-trace.cjs",
+    "tests/readfilesync-trace-parity.test.cjs"
+   ],
+   "defect": {
+    "path": "gsd-core/workflows/verify-work.md",
+    "tier": "text",
+    "regionInPack": false
+   },
+   "laterFix": {
+    "pr": 4813,
+    "otherFiles": [
+     ".changeset/bold-otters-cheer.md",
+     "tests/fixtures/compact-content-benchmark-baseline.json"
+    ],
+    "cited": []
+   },
+   "wallMs": 6740
+  },
+  {
+   "id": "pr-3107",
+   "half": "holdout",
+   "kind": "clean",
+   "files": 3,
+   "changes": 83,
+   "changesOnGitHub": 83,
+   "patchChars": 7199,
+   "pack": {
+    "status": "complete",
+    "items": 13,
+    "chars": 8444,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3534,
+    "byTier": {
+     "precise": 7,
+     "inferred": 6,
+     "text": 0
+    },
+    "byKind": {
+     "definition": 4,
+     "caller": 2,
+     "enclosing": 7
+    },
+    "coverage": [
+     {
+      "path": ".changeset/zesty-jaguars-travel.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/graphify.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/graphify.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/shell-command-projection.cts",
+    "src/graphify.cts",
+    "tests/graphify.test.cjs"
+   ],
+   "wallMs": 5081
+  },
+  {
+   "id": "pr-4006",
+   "half": "holdout",
+   "kind": "clean",
+   "files": 4,
+   "changes": 62,
+   "changesOnGitHub": 62,
+   "patchChars": 4540,
+   "pack": {
+    "status": "complete",
+    "items": 8,
+    "chars": 5761,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3702,
+    "byTier": {
+     "precise": 0,
+     "inferred": 2,
+     "text": 6
+    },
+    "byKind": {
+     "caller": 1,
+     "enclosing": 1,
+     "usage": 6
+    },
+    "coverage": [
+     {
+      "path": ".changeset/jolly-yaks-click.md",
+      "tier": "text"
+     },
+     {
+      "path": "gsd-core/workflows/execute-plan.md",
+      "tier": "text"
+     },
+     {
+      "path": "tests/execute-plan-interrupted-agent-guard.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/no-bare-gsd-tools-command-position.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/execute-plan-interrupted-agent-guard.test.cjs",
+    "src/init.cts",
+    "tests/qa/scenarios/abandoned-mid-execute-resume.json",
+    "scripts/lint-legacy-dir-name.cjs",
+    "tests/getdirname-registry-derivation.test.cjs",
+    "eslint-rules/lib/readfilesync-trace.cjs",
+    "tests/readfilesync-trace-parity.test.cjs"
+   ],
+   "wallMs": 5566
+  },
+  {
+   "id": "pr-1621",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 83,
+   "changesOnGitHub": 83,
+   "patchChars": 5180,
+   "pack": {
+    "status": "complete",
+    "items": 9,
+    "chars": 7011,
+    "cut": 0,
+    "stale": 0,
+    "ms": 2922,
+    "byTier": {
+     "precise": 4,
+     "inferred": 1,
+     "text": 4
+    },
+    "byKind": {
+     "caller": 3,
+     "enclosing": 2,
+     "usage": 4
+    },
+    "coverage": [
+     {
+      "path": ".changeset/1619-mise-shim-node-path.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/runtime-hooks-surface.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/install.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/runtime-hooks-surface.cts",
+    "tests/install.test.cjs",
+    "CONTEXT.md",
+    "tests/bug-3181-node-cellar-path.test.cjs",
+    "tests/bug-2979-hook-absolute-node.test.cjs"
+   ],
+   "wallMs": 4359
+  },
+  {
+   "id": "pr-577",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 64,
+   "changesOnGitHub": 64,
+   "patchChars": 3298,
+   "pack": {
+    "status": "complete",
+    "items": 12,
+    "chars": 7488,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1343,
+    "byTier": {
+     "precise": 0,
+     "inferred": 10,
+     "text": 2
+    },
+    "byKind": {
+     "definition": 6,
+     "caller": 2,
+     "enclosing": 2,
+     "usage": 2
+    },
+    "coverage": [
+     {
+      "path": ".changeset/plucky-yaks-forage.md",
+      "tier": "text"
+     },
+     {
+      "path": "get-shit-done/bin/lib/core.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/bug-492-effort-manifest-fallback.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "get-shit-done/bin/lib/configuration.cjs",
+    "tests/bug-130-finishinstall-opencode-testmode.test.cjs",
+    "tests/helpers.cjs",
+    "get-shit-done/bin/lib/core.cjs",
+    "tests/bug-492-effort-manifest-fallback.test.cjs",
+    "bin/install.js"
+   ],
+   "wallMs": 2257
+  },
+  {
+   "id": "pr-1552",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 46,
+   "changesOnGitHub": 46,
+   "patchChars": 2589,
+   "pack": {
+    "status": "complete",
+    "items": 11,
+    "chars": 7075,
+    "cut": 0,
+    "stale": 0,
+    "ms": 2345,
+    "byTier": {
+     "precise": 2,
+     "inferred": 6,
+     "text": 3
+    },
+    "byKind": {
+     "definition": 5,
+     "caller": 1,
+     "enclosing": 2,
+     "usage": 3
+    },
+    "coverage": [
+     {
+      "path": ".changeset/sunny-deer-roar.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/roadmap.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/roadmap.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/helpers.cjs",
+    "src/roadmap.cts",
+    "tests/roadmap.test.cjs",
+    "agents/gsd-roadmapper.md"
+   ],
+   "wallMs": 3608
+  },
+  {
+   "id": "pr-3140",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 69,
+   "changesOnGitHub": 69,
+   "patchChars": 3290,
+   "pack": {
+    "status": "complete",
+    "items": 12,
+    "chars": 9155,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3073,
+    "byTier": {
+     "precise": 3,
+     "inferred": 6,
+     "text": 3
+    },
+    "byKind": {
+     "definition": 5,
+     "caller": 2,
+     "enclosing": 2,
+     "usage": 3
+    },
+    "coverage": [
+     {
+      "path": ".changeset/rapid-sloths-romp.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/state.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/state.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/fixtures/index.cjs",
+    "tests/helpers.cjs",
+    "src/state.cts",
+    "tests/state.test.cjs",
+    "src/state-transition.cts"
+   ],
+   "wallMs": 4870
+  },
+  {
+   "id": "pr-4048",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 38,
+   "changesOnGitHub": 38,
+   "patchChars": 2863,
+   "pack": {
+    "status": "complete",
+    "items": 7,
+    "chars": 6335,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3195,
+    "byTier": {
+     "precise": 0,
+     "inferred": 3,
+     "text": 4
+    },
+    "byKind": {
+     "enclosing": 1,
+     "definition": 2,
+     "usage": 4
+    },
+    "coverage": [
+     {
+      "path": ".changeset/kind-eagles-rally.md",
+      "tier": "text"
+     },
+     {
+      "path": "agents/gsd-mempalace-curator.md",
+      "tier": "text"
+     },
+     {
+      "path": "tests/agent-frontmatter.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/agent-frontmatter.test.cjs",
+    "eslint-rules/lib/readfilesync-trace.cjs",
+    "tests/readfilesync-trace-parity.test.cjs",
+    "scripts/lint-legacy-dir-name.cjs",
+    "tests/getdirname-registry-derivation.test.cjs"
+   ],
+   "wallMs": 4804
+  },
+  {
+   "id": "pr-4420",
+   "half": "holdout",
+   "kind": "clean",
+   "files": 2,
+   "changes": 31,
+   "changesOnGitHub": 31,
+   "patchChars": 3510,
+   "pack": {
+    "status": "complete",
+    "items": 6,
+    "chars": 7853,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3848,
+    "byTier": {
+     "precise": 0,
+     "inferred": 6,
+     "text": 0
+    },
+    "byKind": {
+     "caller": 3,
+     "enclosing": 3
+    },
+    "coverage": [
+     {
+      "path": "tests/commit-files-pathspec.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/helpers/shipped-command-scan.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/helpers/shipped-command-scan.cjs",
+    "tests/commit-files-pathspec.test.cjs"
+   ],
+   "wallMs": 5944
+  },
+  {
+   "id": "pr-1546",
+   "half": "dev",
+   "kind": "clean",
+   "files": 1,
+   "changes": 44,
+   "changesOnGitHub": 44,
+   "patchChars": 2701,
+   "pack": {
+    "status": "complete",
+    "items": 5,
+    "chars": 2281,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1705,
+    "byTier": {
+     "precise": 0,
+     "inferred": 5,
+     "text": 0
+    },
+    "byKind": {
+     "caller": 3,
+     "definition": 2
+    },
+    "coverage": [
+     {
+      "path": "tests/no-phantom-issue-refs.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/no-phantom-issue-refs.test.cjs"
+   ],
+   "wallMs": 3017
+  },
+  {
+   "id": "pr-3396",
+   "half": "holdout",
+   "kind": "clean",
+   "files": 1,
+   "changes": 41,
+   "changesOnGitHub": 41,
+   "patchChars": 2660,
+   "pack": {
+    "status": "complete",
+    "items": 3,
+    "chars": 3057,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3256,
+    "byTier": {
+     "precise": 0,
+     "inferred": 3,
+     "text": 0
+    },
+    "byKind": {
+     "enclosing": 1,
+     "definition": 2
+    },
+    "coverage": [
+     {
+      "path": "tests/no-phantom-issue-refs.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/no-phantom-issue-refs.test.cjs"
+   ],
+   "wallMs": 5081
+  },
+  {
+   "id": "pr-4062",
+   "half": "dev",
+   "kind": "clean",
+   "files": 4,
+   "changes": 79,
+   "changesOnGitHub": 79,
+   "patchChars": 5254,
+   "pack": {
+    "status": "complete",
+    "items": 10,
+    "chars": 9812,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3911,
+    "byTier": {
+     "precise": 0,
+     "inferred": 9,
+     "text": 1
+    },
+    "byKind": {
+     "definition": 3,
+     "caller": 3,
+     "enclosing": 3,
+     "usage": 1
+    },
+    "coverage": [
+     {
+      "path": ".changeset/vivid-lynx-zip.md",
+      "tier": "text"
+     },
+     {
+      "path": "tests/helpers/cold-runtime-lib-fixture.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/helpers/overlay-repo.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/overlay-repo-helpers.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/helpers/inject-stdin-error.cjs",
+    "tests/helpers.cjs",
+    "tests/helpers/cold-runtime-lib-fixture.cjs",
+    "tests/helpers/overlay-repo.cjs",
+    "tests/overlay-repo-helpers.test.cjs",
+    "hooks/lib/cursor-workspace.js"
+   ],
+   "wallMs": 6044
+  },
+  {
+   "id": "pr-2023",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 82,
+   "changesOnGitHub": 82,
+   "patchChars": 5855,
+   "pack": {
+    "status": "complete",
+    "items": 12,
+    "chars": 8653,
+    "cut": 0,
+    "stale": 0,
+    "ms": 2637,
+    "byTier": {
+     "precise": 5,
+     "inferred": 7,
+     "text": 0
+    },
+    "byKind": {
+     "definition": 9,
+     "caller": 1,
+     "enclosing": 2
+    },
+    "coverage": [
+     {
+      "path": ".changeset/1581-config-set-coercion.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/config.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/config.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/io.cts",
+    "tests/helpers.cjs",
+    "src/config.cts",
+    "tests/config.test.cjs"
+   ],
+   "wallMs": 4240
+  },
+  {
+   "id": "pr-1130",
+   "half": "dev",
+   "kind": "clean",
+   "files": 2,
+   "changes": 83,
+   "changesOnGitHub": 83,
+   "patchChars": 5260,
+   "pack": {
+    "status": "partial",
+    "items": 9,
+    "chars": 5056,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1598,
+    "byTier": {
+     "precise": 0,
+     "inferred": 3,
+     "text": 6
+    },
+    "byKind": {
+     "enclosing": 2,
+     "definition": 1,
+     "usage": 6
+    },
+    "coverage": [
+     {
+      "path": "src/commands.cts",
+      "tier": "text"
+     },
+     {
+      "path": "tests/commands.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/commands.test.cjs",
+    "src/learnings.cts",
+    "tests/enh-2833-phase-lifecycle-statusline.test.cjs",
+    "tests/progress-forensic.test.cjs",
+    "src/validate.cts",
+    "tests/bug-3739-gap-checker-padded-prefix-context.test.cjs",
+    "tests/phase-locator.test.cjs"
+   ],
+   "wallMs": 2872
+  },
+  {
+   "id": "pr-4534",
+   "half": "dev",
+   "kind": "clean",
+   "files": 3,
+   "changes": 50,
+   "changesOnGitHub": 50,
+   "patchChars": 3807,
+   "pack": {
+    "status": "complete",
+    "items": 9,
+    "chars": 5339,
+    "cut": 0,
+    "stale": 0,
+    "ms": 5471,
+    "byTier": {
+     "precise": 4,
+     "inferred": 0,
+     "text": 5
+    },
+    "byKind": {
+     "definition": 2,
+     "caller": 1,
+     "enclosing": 1,
+     "usage": 5
+    },
+    "coverage": [
+     {
+      "path": ".changeset/steady-moles-guard.md",
+      "tier": "text"
+     },
+     {
+      "path": "src/state.cts",
+      "tier": "precise"
+     },
+     {
+      "path": "tests/state.test.cjs",
+      "tier": "deleted"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/io.cts",
+    "src/state.cts",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/enhancement.yml",
+    ".kilo/plugins/gsd-core.js"
+   ],
+   "wallMs": 7452
+  },
+  {
+   "id": "pr-3935",
+   "half": "holdout",
+   "kind": "clean",
+   "files": 3,
+   "changes": 112,
+   "changesOnGitHub": 112,
+   "patchChars": 6873,
+   "pack": {
+    "status": "complete",
+    "items": 8,
+    "chars": 8085,
+    "cut": 0,
+    "stale": 0,
+    "ms": 3660,
+    "byTier": {
+     "precise": 0,
+     "inferred": 7,
+     "text": 1
+    },
+    "byKind": {
+     "definition": 5,
+     "caller": 2,
+     "usage": 1
+    },
+    "coverage": [
+     {
+      "path": ".changeset/daring-tigers-squeak.md",
+      "tier": "text"
+     },
+     {
+      "path": "hooks/gsd-graphify-update.sh",
+      "tier": "text"
+     },
+     {
+      "path": "tests/graphify-auto-update.slow.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/helpers.cjs",
+    "tests/graphify-auto-update.slow.test.cjs",
+    "tests/windows-robustness.test.cjs"
+   ],
+   "wallMs": 5660
+  },
+  {
+   "id": "pr-848",
+   "half": "holdout",
+   "kind": "clean",
+   "files": 6,
+   "changes": 78,
+   "changesOnGitHub": 78,
+   "patchChars": 4310,
+   "pack": {
+    "status": "complete",
+    "items": 8,
+    "chars": 3924,
+    "cut": 0,
+    "stale": 0,
+    "ms": 1471,
+    "byTier": {
+     "precise": 0,
+     "inferred": 1,
+     "text": 7
+    },
+    "byKind": {
+     "removed-still-used": 1,
+     "enclosing": 1,
+     "usage": 6
+    },
+    "coverage": [
+     {
+      "path": ".github/rulesets/main-protection.json",
+      "tier": "text"
+     },
+     {
+      "path": ".github/rulesets/release-branches.json",
+      "tier": "text"
+     },
+     {
+      "path": ".github/workflows/pr-gate.yml",
+      "tier": "deleted"
+     },
+     {
+      "path": "scripts/ci-test-scope.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "scripts/setup-branch-protection.sh",
+      "tier": "text"
+     },
+     {
+      "path": "tests/ci-test-scope.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "src/worktree-safety.cts",
+    "tests/ci-test-scope.test.cjs",
+    ".github/workflows/close-draft-prs-sweep.yml",
+    ".github/workflows/close-draft-prs.yml",
+    ".github/workflows/branch-cleanup.yml"
+   ],
+   "wallMs": 2765
+  },
+  {
+   "id": "pr-3317",
+   "half": "dev",
+   "kind": "clean",
+   "files": 2,
+   "changes": 40,
+   "changesOnGitHub": 40,
+   "patchChars": 4677,
+   "pack": {
+    "status": "complete",
+    "items": 6,
+    "chars": 5486,
+    "cut": 0,
+    "stale": 0,
+    "ms": 292,
+    "byTier": {
+     "precise": 0,
+     "inferred": 1,
+     "text": 5
+    },
+    "byKind": {
+     "referenced-file": 3,
+     "usage": 3
+    },
+    "coverage": [
+     {
+      "path": "CONTRIBUTING.md",
+      "tier": "text"
+     },
+     {
+      "path": "TESTING-STANDARDS.md",
+      "tier": "text"
+     }
+    ]
+   },
+   "citedPaths": [
+    "TESTING-STANDARDS.md",
+    "CONTRIBUTING.md",
+    "tests/worktree-safety.test.cjs",
+    "src/worktree-safety.cts"
+   ],
+   "wallMs": 1372
+  },
+  {
+   "id": "pr-4684",
+   "half": "dev",
+   "kind": "clean",
+   "files": 7,
+   "changes": 78,
+   "changesOnGitHub": 78,
+   "patchChars": 11028,
+   "pack": {
+    "status": "partial",
+    "items": 17,
+    "chars": 15908,
+    "cut": 16,
+    "stale": 0,
+    "ms": 4731,
+    "byTier": {
+     "precise": 0,
+     "inferred": 17,
+     "text": 0
+    },
+    "byKind": {
+     "definition": 5,
+     "caller": 2,
+     "referenced-file": 4,
+     "enclosing": 6
+    },
+    "coverage": [
+     {
+      "path": "TESTING-STANDARDS.md",
+      "tier": "text"
+     },
+     {
+      "path": "eslint-rules/no-adhoc-timeout-literal.allowlist.json",
+      "tier": "deleted"
+     },
+     {
+      "path": "eslint.config.mjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/cjs-command-router-adapter.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/dispatcher.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/run-tests-temp-root.test.cjs",
+      "tier": "inferred"
+     },
+     {
+      "path": "tests/shell-command-projection-dispatch.test.cjs",
+      "tier": "inferred"
+     }
+    ]
+   },
+   "citedPaths": [
+    "tests/helpers/timeouts.cjs",
+    "tests/helpers/inject-stdin-error.cjs",
+    "tests/agent-hint-routing-1689.test.cjs",
+    "tests/helpers.cjs",
+    "tests/cjs-command-router-adapter.test.cjs",
+    "tests/dispatcher.test.cjs",
+    "tests/run-tests-temp-root.test.cjs",
+    "tests/shell-command-projection-dispatch.test.cjs"
+   ],
+   "wallMs": 6737
+  }
+ ]
+}

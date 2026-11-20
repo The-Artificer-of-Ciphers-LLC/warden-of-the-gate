@@ -5,6 +5,7 @@ All notable changes to `@taoc/warden`. This file is a release-candidate record: 
 ## Unreleased
 
 - Retro task: deterministic evidence packet, validated proposals-only output, local-outbox report branch.
+- Review code lookup (ADR 0013): `run --task review --lookup-clone DIR` and `replay --lookup-clone DIR [--context-chars N]` give the reviewer a prefetched, cited repository context pack (precise TypeScript, inferred JavaScript, text tiers). `typescript` 6.0.3 is now a runtime dependency. Replay cases may carry `head`/`base` commits; replay results report context stats and per-case wall time.
 
 ## 0.1.0-p4 (release candidate, unpublished)
 
@@ -19,4 +20,4 @@ All notable changes to `@taoc/warden`. This file is a release-candidate record: 
 - Node >= 22.18. macOS with Seatbelt (`sandbox-exec`) is required for any model-backed task; the only tested macOS major is 27.
 - OpenCode is pinned to 2.2.7; the local model is served by LM Studio on loopback. There is no hosted fallback.
 - `warden.yml` schemaVersion 1 and `ORDERS.yaml` schemaVersion 1. There is no migration engine: unsupported versions fail with an actionable message.
-- Not covered: Linux or Windows hosts, non-TypeScript lookup, a published package, live activation.
+- Not covered: Linux or Windows hosts, lookup beyond TypeScript/JavaScript (other languages get text search only), a published package, live activation.

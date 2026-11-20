@@ -9,7 +9,7 @@ import type { AgentRunner } from '../runner/agent-runner.ts';
 import { runReplay, validateSet } from '../replay/replay.ts';
 import type { ReplaySet } from '../replay/replay.ts';
 
-/** `warden replay --set FILE [--runner opencode] [--validate-only]`: replay a maintainer-curated set against the local model in a SIMULATED repository and print a
+/** `warden replay --set FILE [--runner opencode] [--validate-only] [--split dev|holdout] [--lookup-clone DIR] [--context-chars N]`: replay a maintainer-curated set against the local model in a SIMULATED repository and print a
  *  measured report plus a qualification verdict. It never touches GitHub and never activates anything. */
 export async function replay(c: Ctx): Promise<Result> {
   const file = str(c.flags, 'set'); if (!file || !existsSync(file)) return { code: 2, data: {}, text: 'replay: --set FILE (a replay set JSON) is required' };
@@ -27,8 +27,12 @@ export async function replay(c: Ctx): Promise<Result> {
   const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { code: 1, data: { errors: cfgs.errors }, text: 'replay: configuration invalid:\n' + cfgs.errors.join('\n') };
   const cfg = cfgs.warden; let st; try { st = openStorage(c, cfg.repository); } catch (e) { return { code: 4, data: { outcome: 'blocked' }, text: `replay blocked: ${(e as Error).message}` }; }
   const local = readLocalStop(st); if (local.stopped) return { code: 4, data: { outcome: 'blocked', reason: 'local stop in force' }, text: 'replay blocked: local stop in force' };
+  // `--lookup-clone DIR`: a local clone holding every case's head commit; each review then gets the repository context pack (docs/adr/0013-code-lookup.md).
+  const lookupClone = str(c.flags, 'lookup-clone'); if (lookupClone && !existsSync(lookupClone)) return { code: 2, data: {}, text: `replay: --lookup-clone ${lookupClone} does not exist` };
+  const contextChars = str(c.flags, 'context-chars') ? Number(str(c.flags, 'context-chars')) : undefined;
+  if (contextChars !== undefined && !(Number.isInteger(contextChars) && contextChars >= 0)) return { code: 2, data: {}, text: 'replay: --context-chars must be a non-negative integer' };
   const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url'), maxPromptChars: 60_000 }) : new NotReadyRunner();
-  const rep = await runReplay(set, { runner, localModels: cfg.runtime.modelPool, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, stopped: () => readLocalStop(st).stopped, onCase: (r, done, total) => console.error(`replay ${done}/${total} ${r.id} ${r.outcome}${r.matched !== undefined ? (r.matched ? ' matched' : ' no-match') : r.hits !== undefined ? ` hits ${r.hits}/${r.expected} findings ${r.findings}` : ''}`) });
+  const rep = await runReplay(set, { lookupClone, maxContextChars: contextChars, maxPromptChars: 60_000, runner, localModels: cfg.runtime.modelPool, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, stopped: () => readLocalStop(st).stopped, onCase: (r, done, total) => console.error(`replay ${done}/${total} ${r.id} ${r.outcome}${r.matched !== undefined ? (r.matched ? ' matched' : ' no-match') : r.hits !== undefined ? ` hits ${r.hits}/${r.expected} findings ${r.findings}` : ''}${r.context ? ` context ${r.context.status} ${r.context.items} item(s)` : ''}`) });
   mkdirSync(st.path('replay'), { recursive: true, mode: 0o700 }); const out = st.path('replay', `report-${new Date(c.now()).toISOString().replace(/[:.]/g, '-')}.json`); st.writeJson(out, rep);
   return { code: 0, data: { ...rep, reportFile: out } as unknown as Record<string, unknown>, text: `replay "${rep.set}": ${rep.prs} PR / ${rep.issues} issue case(s); qualified: ${rep.qualification.qualified}${rep.qualification.reasons.map((r) => `\n  - ${r}`).join('')}\nactivation: ${rep.activation}` };
 }
