@@ -18,7 +18,7 @@ export interface ReplaySet { name: string; curatedBy: string; synthetic?: boolea
 export interface Thresholds { minPrs: number; minIssues: number; minRecall: number; maxFalsePositiveRate: number; minAcceptedRate: number; minTriageAccuracy: number }
 export const DEFAULT_THRESHOLDS: Thresholds = { minPrs: 20, minIssues: 20, minRecall: 0.7, maxFalsePositiveRate: 0.3, minAcceptedRate: 0.9, minTriageAccuracy: 0.7 };
 
-export interface CaseResult { id: string; kind: 'review' | 'triage'; outcome: string; hits?: number; expected?: number; findings?: number; falsePositives?: number; matched?: boolean }
+export interface CaseResult { id: string; kind: 'review' | 'triage'; outcome: string; hits?: number; expected?: number; findings?: number; falsePositives?: number; matched?: boolean; reason?: string; got?: { kind: string; outcome: string } }
 export interface ReplayReport { set: string; curatedBy: string; synthetic: boolean; cases: number; prs: number; issues: number; results: CaseResult[];
   metrics: { acceptedRate: number; recall: number | null; falsePositiveRate: number | null; triageAccuracy: number | null };
   qualification: { qualified: boolean; reasons: string[]; thresholds: Thresholds }; activation: 'not performed: a separate, explicit owner step' }
@@ -50,11 +50,11 @@ export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayRe
         const findings = r.marker?.findings ?? []; const must = 'mustFind' in c.expect ? c.expect.mustFind : [];
         const hits = must.filter((m) => findings.some((f) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax)).length;
         const fp = findings.filter((f) => !must.some((m) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax)).length;
-        results.push({ id: c.id, kind: 'review', outcome: r.kind, hits, expected: must.length, findings: findings.length, falsePositives: fp }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
+        results.push({ id: c.id, kind: 'review', outcome: r.kind, hits, expected: must.length, findings: findings.length, falsePositives: fp, ...(r.reason ? { reason: r.reason } : {}) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       } else {
         const n = world.addIssue({ title: c.title, body: c.body, author: 'reporter' }); let rec: TriageRecord | null = null;
         const r = await runTriage({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: () => world.now() });
-        const out = r.marker?.output; results.push({ id: c.id, kind: 'triage', outcome: r.kind, matched: !!out && oneOf(c.expect.kind, out.kind) && oneOf(c.expect.outcome, out.outcome) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
+        const out = r.marker?.output; results.push({ id: c.id, kind: 'triage', outcome: r.kind, matched: !!out && oneOf(c.expect.kind, out.kind) && oneOf(c.expect.outcome, out.outcome), ...(r.reason ? { reason: r.reason } : {}), ...(out ? { got: { kind: String(out.kind), outcome: String(out.outcome) } } : {}) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       }
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
