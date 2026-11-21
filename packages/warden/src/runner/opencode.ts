@@ -163,19 +163,21 @@ export class OpenCodeRunner implements AgentRunner {
       const seen = new Set<string>(); const key = (m: any) => String(m.id ?? JSON.stringify(m).slice(0, 200));   // messages of earlier rounds, by id (the API's ordering is not relied on)
       // One bounded REPAIR round: a model may end its turn with prose or a tool call that cannot run here (this session has no such tool) instead of the JSON object.
       // It is told once, in the same session, to answer with the object only; the second reply is judged exactly like the first.
+      const dbg = (round: number, ms: any[]) => { if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug ${JSON.stringify({ wallMs: Date.now() - t0, round, messages: ms.map((m) => { const { content, ...rest } = m; return { ...rest, parts: (content ?? []).map((c: any) => ({ type: c.type, chars: JSON.stringify(c).length })) }; }) }).slice(0, 4000)}\n`); };
       for (let round = 0; round < 2; round++) {
         let msgs: any[] = []; let idle: any;
         while (!idle) {
           const r = await s.api('GET', `/api/session/${sid}/message`); msgs = (r.body?.data ?? []) as any[];
           const asst = msgs.filter((m) => m.type === 'assistant'); const tools = asst.flatMap((m) => (m.content ?? []).filter((c: any) => c.type !== 'text' && c.type !== 'reasoning')).length;
           monitor.observe({ toolCalls: Math.max(0, tools - monitor.toolCalls), modelTurns: Math.max(0, asst.length - monitor.modelTurns) });
-          if (monitor.exceeded) { await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
+          if (monitor.exceeded) { dbg(round, msgs); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
           idle = msgs.find((m) => !seen.has(key(m)) && m.type === 'idle' && (m.time?.created ?? 0) >= created);
           if (!idle) await new Promise((res) => setTimeout(res, 400));
         }
         signal.removeEventListener('abort', onAbort);
         if (interrupted || idle.outcome === 'interrupted') return { outcome: 'interrupted', reason: 'session interrupted', usage: usage() };
         if (idle.outcome !== 'succeeded') return { outcome: 'failed', reason: `session ended ${String(idle.outcome)}: ${JSON.stringify({ idle, errs: msgs.filter((m) => m.error || m.type === 'error').map((m) => m.error ?? m).slice(-2) }).slice(0, 240)}`, usage: usage() };
+        dbg(round, msgs);
         const mine = msgs.filter((m) => !seen.has(key(m)) && m.type === 'assistant');
         const text = mine.flatMap((m) => (m.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text)).join('').trim();
         const j = extractJson(text);
