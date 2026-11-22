@@ -20,7 +20,7 @@ const HARDEN_ENV: Record<string, string> = {
 };
 const DENY_ALL = { action: '*', resource: '*', effect: 'deny' as const };
 
-export interface OpenCodeOptions { bin?: string; pinned?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; maxPromptChars?: number; startupMs?: number }
+export interface OpenCodeOptions { bin?: string; pinned?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; /** false turns OpenCode's automatic compaction off (an experiment switch; default is OpenCode's own). */ autoCompact?: boolean; maxPromptChars?: number; startupMs?: number }
 
 export function classifyBaseURL(raw: string): { local: boolean; host: string; port?: number; reason?: string } {
   let u: URL; try { u = new URL(raw); } catch { return { local: false, host: raw, reason: 'unparseable URL' }; }
@@ -45,10 +45,10 @@ interface Server { base: string; child: ChildProcess; stateDir: string; pid: num
 
 export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
-  private o: Required<Omit<OpenCodeOptions, 'pinned'>> & { pinned: string };
+  private o: Required<Omit<OpenCodeOptions, 'pinned' | 'autoCompact'>> & { pinned: string; autoCompact?: boolean };
   constructor(o: OpenCodeOptions) {
     this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:1235/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 131072, /* fallback only: the real loaded window is read from the endpoint before each session (see learnContext) */
-      outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000 };
+      outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
     this.pinnedVersion = this.o.pinned; this.ctxExplicit = o.contextLimit !== undefined;
   }
   private ctxExplicit = false; private ctxLearned = false;
@@ -67,6 +67,7 @@ export class OpenCodeRunner implements AgentRunner {
     return { model: `lmstudio/${this.o.modelId}`,
       providers: { lmstudio: { name: 'LM Studio (local)', package: '@ai-sdk/openai-compatible', settings: { baseURL: this.o.baseURL },
         models: { [this.o.modelId]: { name: this.o.modelId, limit: { context: this.o.contextLimit, output: this.o.outputLimit } } } } },
+      ...(this.o.autoCompact === false ? { compaction: { auto: false } } : {}),
       update: 'disable', share: 'disabled', policies: [{ action: 'provider.use', resource: 'opencode', effect: 'deny' }] };
   }
 

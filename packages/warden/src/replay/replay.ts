@@ -18,7 +18,7 @@ export interface ReplaySet { name: string; curatedBy: string; synthetic?: boolea
 export interface Thresholds { minPrs: number; minIssues: number; minRecall: number; maxFalsePositiveRate: number; minAcceptedRate: number; minTriageAccuracy: number }
 export const DEFAULT_THRESHOLDS: Thresholds = { minPrs: 20, minIssues: 20, minRecall: 0.7, maxFalsePositiveRate: 0.3, minAcceptedRate: 0.9, minTriageAccuracy: 0.7 };
 
-export interface CaseResult { id: string; kind: 'review' | 'triage'; outcome: string; hits?: number; expected?: number; findings?: number; falsePositives?: number; matched?: boolean; reason?: string; got?: { kind: string; outcome: string } }
+export interface CaseResult { id: string; kind: 'review' | 'triage'; outcome: string; hits?: number; expected?: number; findings?: number; falsePositives?: number; matched?: boolean; reason?: string; got?: { kind: string; outcome: string }; /** Measured wall time of the case in ms. */ wallMs?: number }
 export interface ReplayReport { set: string; curatedBy: string; synthetic: boolean; cases: number; prs: number; issues: number; results: CaseResult[];
   metrics: { acceptedRate: number; recall: number | null; falsePositiveRate: number | null; triageAccuracy: number | null };
   qualification: { qualified: boolean; reasons: string[]; thresholds: Thresholds }; activation: 'not performed: a separate, explicit owner step' }
@@ -41,6 +41,7 @@ export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayRe
   const th = { ...DEFAULT_THRESHOLDS, ...o.thresholds }; const dir = mkdtempSync(join(tmpdir(), 'warden-replay-')); const results: CaseResult[] = [];
   try {
     for (const c of set.cases) {
+      const t0 = Date.now();
       if (await o.stopped?.() || o.signal?.aborted) { results.push({ id: c.id, kind: c.kind, outcome: 'not-run: stopped' }); continue; }
       const world = new FakeWorld(); world.clock = Date.parse('2026-01-01T00:00:00Z'); const store = world.view('operator');
       const cfg = { maxAttempts: 1, budgets: o.budgets, localModels: o.localModels, expectedModel: o.localModels[0], packetRoot: dir };
@@ -56,6 +57,7 @@ export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayRe
         const r = await runTriage({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: Date.now });
         const out = r.marker?.output; results.push({ id: c.id, kind: 'triage', outcome: r.kind, matched: !!out && oneOf(c.expect.kind, out.kind) && oneOf(c.expect.outcome, out.outcome), ...(r.reason ? { reason: r.reason } : {}), ...(out ? { got: { kind: String(out.kind), outcome: String(out.outcome) } } : {}) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       }
+      results[results.length - 1]!.wallMs = Date.now() - t0;
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
   const rv = results.filter((x) => x.kind === 'review'); const tr = results.filter((x) => x.kind === 'triage'); const ran = results.filter((x) => !x.outcome.startsWith('not-run'));
