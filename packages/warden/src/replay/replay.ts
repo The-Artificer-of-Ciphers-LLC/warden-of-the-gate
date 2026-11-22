@@ -12,13 +12,13 @@ import type { AgentRunner, Budgets } from '../runner/agent-runner.ts';
  *  configured local model in a SIMULATED repository (nothing touches GitHub). The result is a measured report and a qualification VERDICT only: this module can
  *  never turn anything on, a synthetic set can never qualify, and activation is a separate, explicit owner step that does not exist here. */
 export interface PullFileCase { path: string; status: string; patch: string }
-export interface ReviewCase { id: string; kind: 'review'; title: string; files: PullFileCase[]; expect: { clean: true } | { mustFind: Array<{ path: string; lineMin: number; lineMax: number }> } }
+export interface ReviewCase { id: string; kind: 'review'; title: string; /** Base commit of the PR, for an optional read-only repository snapshot. */ base?: string; files: PullFileCase[]; expect: { clean: true } | { mustFind: Array<{ path: string; lineMin: number; lineMax: number }> } }
 export interface TriageCase { id: string; kind: 'triage'; title: string; body: string; expect: { kind: string | string[]; outcome: string | string[] } }
 export interface ReplaySet { name: string; curatedBy: string; synthetic?: boolean; cases: Array<ReviewCase | TriageCase> }
 export interface Thresholds { minPrs: number; minIssues: number; minRecall: number; maxFalsePositiveRate: number; minAcceptedRate: number; minTriageAccuracy: number }
 export const DEFAULT_THRESHOLDS: Thresholds = { minPrs: 20, minIssues: 20, minRecall: 0.7, maxFalsePositiveRate: 0.3, minAcceptedRate: 0.9, minTriageAccuracy: 0.7 };
 
-export interface CaseResult { id: string; kind: 'review' | 'triage'; outcome: string; hits?: number; expected?: number; findings?: number; falsePositives?: number; matched?: boolean; reason?: string; got?: { kind: string; outcome: string } }
+export interface CaseResult { id: string; kind: 'review' | 'triage'; outcome: string; hits?: number; expected?: number; findings?: number; falsePositives?: number; /** The review's findings as returned, each marked with whether it matched an expected one. */ items?: Array<Record<string, unknown> & { matched: boolean }>; matched?: boolean; reason?: string; got?: { kind: string; outcome: string }; /** Measured wall time of the case in ms. */ wallMs?: number }
 export interface ReplayReport { set: string; curatedBy: string; synthetic: boolean; cases: number; prs: number; issues: number; results: CaseResult[];
   metrics: { acceptedRate: number; recall: number | null; falsePositiveRate: number | null; triageAccuracy: number | null };
   qualification: { qualified: boolean; reasons: string[]; thresholds: Thresholds }; activation: 'not performed: a separate, explicit owner step' }
@@ -35,27 +35,29 @@ export function validateSet(s: unknown): string | null {
   return null;
 }
 
-export interface ReplayOpts { onCase?: (r: CaseResult, done: number, total: number) => void; runner: AgentRunner; localModels: string[]; budgets: Budgets; thresholds?: Partial<Thresholds>; stopped?: () => boolean | Promise<boolean>; signal?: AbortSignal }
+export interface ReplayOpts { onCase?: (r: CaseResult, done: number, total: number) => void; runner: AgentRunner; /** Writes the repository at `base` into `dest` (read-only context for the reviewer). */ contextFor?: (base: string, dest: string) => void; localModels: string[]; budgets: Budgets; thresholds?: Partial<Thresholds>; stopped?: () => boolean | Promise<boolean>; signal?: AbortSignal }
 export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayReport> {
   const bad = validateSet(set); if (bad) throw new Error(bad);
   const th = { ...DEFAULT_THRESHOLDS, ...o.thresholds }; const dir = mkdtempSync(join(tmpdir(), 'warden-replay-')); const results: CaseResult[] = [];
   try {
     for (const c of set.cases) {
+      const t0 = Date.now();
       if (await o.stopped?.() || o.signal?.aborted) { results.push({ id: c.id, kind: c.kind, outcome: 'not-run: stopped' }); continue; }
       const world = new FakeWorld(); world.clock = Date.parse('2026-01-01T00:00:00Z'); const store = world.view('operator');
       const cfg = { maxAttempts: 1, budgets: o.budgets, localModels: o.localModels, expectedModel: o.localModels[0], packetRoot: dir };
       if (c.kind === 'review') {
         const n = world.addIssue({ isPr: true, title: c.title, author: 'contributor' }); world.issues.get(n)!.pull = { head: 'a'.repeat(40), base: 'b'.repeat(40), ci: 'passing', files: c.files.map((f) => ({ ...f })) };
-        let rec: ReviewRecord | null = null; const r = await runReview({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: () => world.now() });
+        let rec: ReviewRecord | null = null; const r = await runReview({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: Date.now, ...(o.contextFor && c.base ? { context: (d: string) => o.contextFor!(c.base!, d) } : {}) });
         const findings = r.marker?.findings ?? []; const must = 'mustFind' in c.expect ? c.expect.mustFind : [];
         const hits = must.filter((m) => findings.some((f) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax)).length;
         const fp = findings.filter((f) => !must.some((m) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax)).length;
-        results.push({ id: c.id, kind: 'review', outcome: r.kind, hits, expected: must.length, findings: findings.length, falsePositives: fp, ...(r.reason ? { reason: r.reason } : {}) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
+        results.push({ id: c.id, kind: 'review', outcome: r.kind, hits, expected: must.length, findings: findings.length, falsePositives: fp, items: findings.map((f) => ({ ...(f as object), matched: must.some((m) => f.path === m.path && f.line >= m.lineMin && f.line <= m.lineMax) })), ...(r.reason ? { reason: r.reason } : {}) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       } else {
         const n = world.addIssue({ title: c.title, body: c.body, author: 'reporter' }); let rec: TriageRecord | null = null;
-        const r = await runTriage({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: () => world.now() });
+        const r = await runTriage({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: Date.now });
         const out = r.marker?.output; results.push({ id: c.id, kind: 'triage', outcome: r.kind, matched: !!out && oneOf(c.expect.kind, out.kind) && oneOf(c.expect.outcome, out.outcome), ...(r.reason ? { reason: r.reason } : {}), ...(out ? { got: { kind: String(out.kind), outcome: String(out.outcome) } } : {}) }); o.onCase?.(results[results.length - 1], results.length, set.cases.length);
       }
+      results[results.length - 1]!.wallMs = Date.now() - t0;
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
   const rv = results.filter((x) => x.kind === 'review'); const tr = results.filter((x) => x.kind === 'triage'); const ran = results.filter((x) => !x.outcome.startsWith('not-run'));
