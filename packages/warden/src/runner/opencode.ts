@@ -164,7 +164,7 @@ export class OpenCodeRunner implements AgentRunner {
       const seen = new Set<string>(); const key = (m: any) => String(m.id ?? JSON.stringify(m).slice(0, 200));   // messages of earlier rounds, by id (the API's ordering is not relied on)
       // One bounded REPAIR round: a model may end its turn with prose or a tool call that cannot run here (this session has no such tool) instead of the JSON object.
       // It is told once, in the same session, to answer with the object only; the second reply is judged exactly like the first.
-      const dbg = (round: number, ms: any[]) => { if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug ${JSON.stringify({ wallMs: Date.now() - t0, round, messages: ms.map((m) => { const { content, ...rest } = m; return { ...rest, parts: (content ?? []).map((c: any) => ({ type: c.type, chars: JSON.stringify(c).length })) }; }) }).slice(0, 4000)}\n`); };
+      const dbg = (round: number, ms: any[]) => { if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug ${JSON.stringify({ wallMs: Date.now() - t0, round, messages: ms.map((m) => { const { content, ...rest } = m; return { ...rest, parts: (content ?? []).map((c: any) => ({ type: c.type, chars: JSON.stringify(c).length, ...(c.type === 'tool' ? { head: JSON.stringify(c).slice(0, 360) } : {}) })) }; }) }).slice(0, 40000)}\n`); };
       let nudged = false; let selfInterrupt = false;
       for (let round = 0; round < 2; round++) {
         let msgs: any[] = []; let idle: any;
