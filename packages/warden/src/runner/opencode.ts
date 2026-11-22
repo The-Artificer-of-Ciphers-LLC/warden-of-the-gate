@@ -20,7 +20,7 @@ const HARDEN_ENV: Record<string, string> = {
 };
 const DENY_ALL = { action: '*', resource: '*', effect: 'deny' as const };
 
-export interface OpenCodeOptions { bin?: string; pinned?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; /** false turns OpenCode's automatic compaction off (an experiment switch; default is OpenCode's own). */ autoCompact?: boolean; maxPromptChars?: number; startupMs?: number }
+export interface OpenCodeOptions { bin?: string; pinned?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; /** false turns OpenCode's automatic compaction off (an experiment switch; default is OpenCode's own). */ autoCompact?: boolean; /** share of the loaded window (0..1) at which a session is told to answer now; 0 disables. */ windowGuard?: number; maxPromptChars?: number; startupMs?: number }
 
 export function classifyBaseURL(raw: string): { local: boolean; host: string; port?: number; reason?: string } {
   let u: URL; try { u = new URL(raw); } catch { return { local: false, host: raw, reason: 'unparseable URL' }; }
@@ -45,10 +45,10 @@ interface Server { base: string; child: ChildProcess; stateDir: string; pid: num
 
 export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
-  private o: Required<Omit<OpenCodeOptions, 'pinned' | 'autoCompact'>> & { pinned: string; autoCompact?: boolean };
+  private o: Required<Omit<OpenCodeOptions, 'pinned' | 'autoCompact' | 'windowGuard'>> & { pinned: string; autoCompact?: boolean; windowGuard: number };
   constructor(o: OpenCodeOptions) {
     this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:1235/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 131072, /* fallback only: the real loaded window is read from the endpoint before each session (see learnContext) */
-      outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
+      outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ windowGuard: o.windowGuard ?? 0, maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
     this.pinnedVersion = this.o.pinned; this.ctxExplicit = o.contextLimit !== undefined;
   }
   private ctxExplicit = false; private ctxLearned = false;
@@ -165,17 +165,27 @@ export class OpenCodeRunner implements AgentRunner {
       // One bounded REPAIR round: a model may end its turn with prose or a tool call that cannot run here (this session has no such tool) instead of the JSON object.
       // It is told once, in the same session, to answer with the object only; the second reply is judged exactly like the first.
       const dbg = (round: number, ms: any[]) => { if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug ${JSON.stringify({ wallMs: Date.now() - t0, round, messages: ms.map((m) => { const { content, ...rest } = m; return { ...rest, parts: (content ?? []).map((c: any) => ({ type: c.type, chars: JSON.stringify(c).length })) }; }) }).slice(0, 4000)}\n`); };
+      let nudged = false; let selfInterrupt = false;
       for (let round = 0; round < 2; round++) {
         let msgs: any[] = []; let idle: any;
         while (!idle) {
           const r = await s.api('GET', `/api/session/${sid}/message`); msgs = (r.body?.data ?? []) as any[];
           const asst = msgs.filter((m) => m.type === 'assistant'); const tools = asst.flatMap((m) => (m.content ?? []).filter((c: any) => c.type !== 'text' && c.type !== 'reasoning')).length;
           monitor.observe({ toolCalls: Math.max(0, tools - monitor.toolCalls), modelTurns: Math.max(0, asst.length - monitor.modelTurns) });
+          // Window guard: with compaction off nothing trims the conversation, so once the last turn's prompt passes a share of the loaded window the session is told, once, to stop reading and answer.
+          const lastIn = Math.max(0, ...asst.map((m) => Number(m.tokens?.input ?? 0)));
+          if (!nudged && this.o.windowGuard > 0 && lastIn > this.o.windowGuard * this.o.contextLimit) { nudged = true; selfInterrupt = true; await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); }
           if (monitor.exceeded) { dbg(round, msgs); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
           idle = msgs.find((m) => !seen.has(key(m)) && m.type === 'idle' && (m.time?.created ?? 0) >= created);
           if (!idle) await new Promise((res) => setTimeout(res, 400));
         }
         signal.removeEventListener('abort', onAbort);
+        if (selfInterrupt && idle.outcome === 'interrupted' && !interrupted) {   // our own window-guard interrupt: ask for the answer in the same session, judged like any other reply
+          selfInterrupt = false; for (const m of msgs) seen.add(key(m));
+          const np = await s.api('POST', `/api/session/${sid}/prompt`, { text: 'The context window is nearly full. Do not call any tool now. Reply now with only the single JSON object that conforms to the schema, based on what you have already read.' });
+          if (np.status !== 200) return { outcome: 'failed', reason: `window-guard prompt ${np.status}`, usage: usage() };
+          created = (np.body.data.time?.created ?? 0) - 1; round--; continue;
+        }
         if (interrupted || idle.outcome === 'interrupted') return { outcome: 'interrupted', reason: 'session interrupted', usage: usage() };
         if (idle.outcome !== 'succeeded') return { outcome: 'failed', reason: `session ended ${String(idle.outcome)}: ${JSON.stringify({ idle, errs: msgs.filter((m) => m.error || m.type === 'error').map((m) => m.error ?? m).slice(-2) }).slice(0, 240)}`, usage: usage() };
         dbg(round, msgs);
