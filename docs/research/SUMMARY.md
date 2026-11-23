@@ -260,6 +260,15 @@ Opinion talk on human attention, durable agents and code-mode plus classifier wo
 - **Worth a small look:** an evidence-based wall cap (measured 10 to 63 minute cases vs a 1800 s default); a "not verified" line on cards; telling triage not to trust diagnoses inside an issue (first-party Earendil essay); a decision on behaviour when the owner stops attending.
 - **Not adopted:** hosted flex-scheduling and sandbox suspension, a second classifier model picked by the agent, code mode with write effects. Each conflicts with the loopback-only provider, the owner's model rule, or "AI proposes, scripts dispose". Cloudflare origin of code mode and Earendil's Pi were checked at first-party pages; the tar post he mentions and the captioned model names could not be identified.
 
+
+### External check: Horthy, "12 Rules for a Software Factory That Doesn't Ship Slop" (Factory, Nov 2026)
+
+Keynote on forward/back pressure and an anti-slop manifesto, read in full 2026-11-23. Full analysis, claim mapping, verification table and proposed (not applied) PRD/ADR updates: [TALK-HORTHY-12-RULES.md](TALK-HORTHY-12-RULES.md). Most figures (SlopCodeBench 15%/16.3%, "30% of PRs merging without review", 40,000 installs, 100ish rules) could not be traced to a primary source and are the speaker's unverified claims.
+
+- **Strengthened:** human-gated, evidence-gated design; lint and static checks as back pressure (already in the PRD ladder); the review-cost asymmetry as a reason to watch reviewer output volume.
+- **Worth a small look (owner decisions):** whether nits block by default (13 of 18 clean-dev findings were real extras, mostly nits); one sentence making model-drafted text untrusted context for later sessions.
+- **Not adopted:** his benchmark figures as thresholds, HTML cards, feature-flag tooling, any PRD edit for the manifesto.
+
 ## Implications for Roadmap
 
 The six phases match the owner's six v1 rollout stages.
@@ -393,6 +402,7 @@ The six phases match the owner's six v1 rollout stages.
 - **Talk, read in full 2026-11-14 (HIGH for what it claims; motivating stats are his citations of "public research", not independently verified):** Rajath Mahendrappa Kotyal, "Your Spec Has Bugs. Catch Them Before Your Agent Codes.", AWS — https://www.youtube.com/watch?v=0EnLxIbAvYk (uploaded 2026-11-11; reading edition: https://ai.engineer/talks/0EnLxIbAvYk-your-spec-has-bugs-catch-them-before; transcript archived at sources/kotyal-spec-transcript.md); analysis in TALK-SPEC-BUGS.md.
 - **Talk, read in full 2026-11-19 (HIGH for what it claims; scale/speed numbers self-reported):** Fabian Hedin, "What it takes to set intelligence free", Lovable — https://www.youtube.com/watch?v=pZWPq_ZAmM4 (transcript archived at sources/hedin-lovable-transcript.md; event/date unconfirmed); analysis in TALK-LOVABLE.md.
 - **Talk, read in full 2026-11-22 (HIGH for what it claims; his usage data self-reported and unverified):** Armin Ronacher, "Build the Workshop Before the Software Factory", Earendil, AI Engineer — https://www.youtube.com/watch?v=JNexz3Tbiu8 (transcript archived at sources/ronacher-workshop-before-factory-transcript.md); first-party checks: https://blog.cloudflare.com/code-mode/, https://github.com/earendil-works/pi, https://earendil.com/posts/pi-1-0/, https://lucumr.pocoo.org/2026/5/24/pi-oss/; analysis in TALK-RONACHER-WORKSHOP.md.
+- **Talk, read in full 2026-11-23 (HIGH for what it claims; numbers unverified):** Dex Horthy, "12 Rules for a Software Factory That Doesn't Ship Slop", Factory, AI Engineer — https://www.youtube.com/watch?v=-NFMsM2y0Vk (transcript archived at sources/horthy-12-rules-software-factory-transcript.md); first-party checks: https://arxiv.org/abs/2603.24755, https://scbench.ai, https://github.com/dmmulroy/anti-slop, https://gist.github.com/dexhorthy/4cc96f01be5b1208519e75dad250a948, https://pages.faros.ai/hubfs/AI_Engineering_Report_2026_The_Acceleration_Whiplash_Faros.pdf; analysis in TALK-HORTHY-12-RULES.md.
 - **Primary (HIGH):**
   - Local CLI help and `auth status` for Claude Code 2.1.322.
   - `man launchd.plist`.
