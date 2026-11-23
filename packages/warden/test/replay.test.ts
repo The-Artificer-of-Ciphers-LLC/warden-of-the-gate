@@ -73,3 +73,11 @@ test('a finding outside mustFind that evidence showed to be real is counted as a
   assert.equal(r0.findings, 3); assert.equal(r0.realExtras, 1); assert.equal(r0.falsePositives, 1); assert.ok(Math.abs((rep.metrics.falsePositiveRate ?? 0) - 1 / 3) < 1e-9);
   const without = await runReplay({ ...base, cases: [pr] }, o(noisy)); assert.equal(without.results[0].falsePositives, 2); assert.equal(without.results[0].realExtras, undefined);
 });
+
+test('each replay case gets its own packet directory: one case never sees files left by the previous case', async () => {
+  const seen: string[] = [];
+  const spy = new Model((r) => { seen.push(r.packetDir); return r.task === 'review' ? { verdict: 'no findings', findings: [] } : { kind: 'question', outcome: 'needs-info', summary: 's', questions: ['q1?', 'q2?'] }; });
+  const s = set(); const prs = s.cases.filter((c) => c.kind === 'review');
+  await runReplay({ ...s, cases: prs }, o(spy));
+  assert.equal(new Set(seen).size, prs.length); assert.ok(prs.length >= 2);
+});

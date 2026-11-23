@@ -44,7 +44,7 @@ export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayRe
       const t0 = Date.now();
       if (await o.stopped?.() || o.signal?.aborted) { results.push({ id: c.id, kind: c.kind, outcome: 'not-run: stopped' }); continue; }
       const world = new FakeWorld(); world.clock = Date.parse('2026-01-01T00:00:00Z'); const store = world.view('operator');
-      const cfg = { maxAttempts: 1, budgets: o.budgets, localModels: o.localModels, expectedModel: o.localModels[0], packetRoot: dir };
+      const cfg = { maxAttempts: 1, budgets: o.budgets, localModels: o.localModels, expectedModel: o.localModels[0], packetRoot: join(dir, c.id) };   // one packet root PER CASE: every simulated case is item 1 at the same fake head, so a shared root would let a case read the previous case's repo snapshot and patches
       if (c.kind === 'review') {
         const n = world.addIssue({ isPr: true, title: c.title, author: 'contributor' }); world.issues.get(n)!.pull = { head: 'a'.repeat(40), base: 'b'.repeat(40), ci: 'passing', files: c.files.map((f) => ({ ...f })) };
         let rec: ReviewRecord | null = null; const r = await runReview({ store, item: n, runner: o.runner, cfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: Date.now, ...(o.contextFor && c.base ? { context: (d: string) => o.contextFor!(c.base!, d) } : {}) });
