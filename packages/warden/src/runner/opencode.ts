@@ -39,6 +39,7 @@ export function extractJson(text: string): { value?: unknown; error?: string } {
   try { return { value: JSON.parse(candidate) }; } catch (e) { return { error: (e as Error).message }; }
 }
 
+const WARDEN_DEBUG_CAP = process.env.WARDEN_RUNNER_DEBUG === 'full' ? 400_000 : 40_000;
 const freePort = () => new Promise<number>((resolve) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => resolve(p)); }); });
 
 interface Server { base: string; child: ChildProcess; stateDir: string; pid: number; logs: () => string; api: (method: string, p: string, body?: unknown, signal?: AbortSignal) => Promise<{ status: number; body: any }>; stop: () => Promise<void> }
@@ -51,16 +52,16 @@ export class OpenCodeRunner implements AgentRunner {
       outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ windowGuard: o.windowGuard ?? 0, maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
     this.pinnedVersion = this.o.pinned; this.ctxExplicit = o.contextLimit !== undefined;
   }
-  private ctxExplicit = false; private ctxLearned = false;
+  private ctxExplicit = false; private ctxLearned = false; /** true once the window is known for certain (configured, or read from the endpoint); the window guard never runs on the 131072 fallback. */ private get ctxKnown() { return this.ctxExplicit || this.ctxLearned; }
   /** Reads the window the model is actually LOADED with from LM Studio's read-only listing (a GET: nothing is loaded, unloaded or changed). A configured window that is
    *  smaller than the real one makes OpenCode compact early and fail; a larger one overflows. Unreadable -> the configured fallback is kept. Loopback only (checked at start). */
   private async learnContext(): Promise<void> {
-    if (this.ctxExplicit || this.ctxLearned) return; this.ctxLearned = true;
+    if (this.ctxExplicit || this.ctxLearned) return;
     try {
       const u = new URL(this.o.baseURL); const r = await fetch(`${u.origin}/api/v0/models/${encodeURIComponent(this.o.modelId)}`, { signal: AbortSignal.timeout(5000) });
       const n = Number(((await r.json()) as { loaded_context_length?: number }).loaded_context_length);
-      if (Number.isInteger(n) && n >= 4096) this.o.contextLimit = n;
-    } catch { /* keep the fallback */ }
+      if (Number.isInteger(n) && n >= 4096) { this.o.contextLimit = n; this.ctxLearned = true; }
+    } catch { /* keep the fallback; the lookup is retried before the next session */ }
   }
 
   private config(): Record<string, unknown> {
@@ -152,6 +153,7 @@ export class OpenCodeRunner implements AgentRunner {
     try {
       const wsDir = realpathSync(req.workspace?.dir ?? req.packetDir); const writable = !!req.workspace?.writable;
       await this.learnContext();
+      if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-ctx ${JSON.stringify({ contextLimit: this.o.contextLimit, outputLimit: this.o.outputLimit, windowGuard: this.o.windowGuard, explicit: this.ctxExplicit, learned: this.ctxLearned })}\n`);
       s = await this.start(wsDir, signal, writable);
       const re = await this.resolve(s); if (!re.ok) return { outcome: 'failed', reason: `routing re-check failed at execution time: ${re.reasons.join('; ')}`, usage: usage() };
       const ses = await s.api('POST', '/api/session', { title: 'warden-review', model: { id: this.o.modelId, providerID: 'lmstudio' }, location: { directory: wsDir }, permissions: [DENY_ALL, ...req.tools.allow.map((a) => ({ action: a, resource: '*', effect: 'allow' as const }))] });
@@ -164,7 +166,7 @@ export class OpenCodeRunner implements AgentRunner {
       const seen = new Set<string>(); const key = (m: any) => String(m.id ?? JSON.stringify(m).slice(0, 200));   // messages of earlier rounds, by id (the API's ordering is not relied on)
       // One bounded REPAIR round: a model may end its turn with prose or a tool call that cannot run here (this session has no such tool) instead of the JSON object.
       // It is told once, in the same session, to answer with the object only; the second reply is judged exactly like the first.
-      const dbg = (round: number, ms: any[]) => { if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug ${JSON.stringify({ wallMs: Date.now() - t0, round, messages: ms.map((m) => { const { content, ...rest } = m; return { ...rest, parts: (content ?? []).map((c: any) => ({ type: c.type, chars: JSON.stringify(c).length, ...(c.type === 'tool' ? { head: JSON.stringify(c).slice(0, 360) } : {}) })) }; }) }).slice(0, 40000)}\n`); };
+      const dbg = (round: number, ms: any[]) => { if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug ${JSON.stringify({ wallMs: Date.now() - t0, round, messages: ms.map((m) => { const { content, ...rest } = m; return { ...rest, parts: (content ?? []).map((c: any) => ({ type: c.type, chars: JSON.stringify(c).length, ...(c.type === 'tool' ? { head: JSON.stringify(c).slice(0, 360) } : {}), ...(process.env.WARDEN_RUNNER_DEBUG === 'full' && (c.type === 'reasoning' || c.type === 'text') ? { text: String(c.text ?? '').slice(-6000) } : {}) })) }; }) }).slice(0, WARDEN_DEBUG_CAP)}\n`); };
       let nudged = false; let selfInterrupt = false;
       for (let round = 0; round < 2; round++) {
         let msgs: any[] = []; let idle: any;
@@ -174,7 +176,7 @@ export class OpenCodeRunner implements AgentRunner {
           monitor.observe({ toolCalls: Math.max(0, tools - monitor.toolCalls), modelTurns: Math.max(0, asst.length - monitor.modelTurns) });
           // Window guard: with compaction off nothing trims the conversation, so once the last turn's prompt passes a share of the loaded window the session is told, once, to stop reading and answer.
           const lastIn = Math.max(0, ...asst.map((m) => Number(m.tokens?.input ?? 0)));
-          if (!nudged && this.o.windowGuard > 0 && lastIn > this.o.windowGuard * this.o.contextLimit) { nudged = true; selfInterrupt = true; await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); }
+          if (!nudged && this.o.windowGuard > 0 && this.ctxKnown && lastIn > this.o.windowGuard * this.o.contextLimit) { nudged = true; selfInterrupt = true; if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-guard ${JSON.stringify({ lastIn, threshold: this.o.windowGuard * this.o.contextLimit, contextLimit: this.o.contextLimit, wallMs: Date.now() - t0 })}\n`); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); }
           if (monitor.exceeded) { dbg(round, msgs); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
           idle = msgs.find((m) => !seen.has(key(m)) && m.type === 'idle' && (m.time?.created ?? 0) >= created);
           if (!idle) await new Promise((res) => setTimeout(res, 400));
