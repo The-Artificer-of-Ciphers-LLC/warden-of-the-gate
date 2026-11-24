@@ -1,10 +1,11 @@
 # PRD: The Warden of the Gate
 
 - **Status:** Draft - owner product review complete; implementation proofs pending
-- **Date:** 2026-11-17
+- **Date:** 2026-11-17 (research reconciliation 2026-11-24)
 - **Owner:** @trek-e
 - **Supporting decisions:** [ADR index](../../README.md); all ADRs remain editable working drafts.
-- **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md).
+- **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md), [pitfalls](../research/PITFALLS.md), [summary](../research/SUMMARY.md) and the `TALK-*` notes in [research](../research/).
+- **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Open owner decisions](#open-owner-decisions-from-the-research-reconciliation) lists research points that need a ruling rather than an edit.
 - **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
 
 ## TL;DR
@@ -70,6 +71,10 @@ Effective authority is the intersection of mandatory platform constraints, the o
 - Exclude home credentials, unrelated files and unrestricted network access. Any allowed network/resource access is explicit and bounded. Do not run fetched code or repository plugins in privileged bookkeeping.
 - Missing isolation or unknown authorization blocks the affected action visibly. No unsafe fallback into the maintainer's login environment.
 - Structured-output validation is necessary, not sufficient: the deterministic core independently checks identity, scope, current inputs, evidence, policy and requested effects.
+- **[R]** Issue and PR text, comments, reporter-asserted diagnoses, and Warden's own earlier prose (comments, cards, summaries) are untrusted context for later sessions: never instructions and never evidence. State and accepted findings come from the ledger's validated records, not from re-reading Warden's prose. Identify actors by numeric user/App ID, not login or display name.
+- **[R]** Evaluate `.github/warden.yml`, `.github/ORDERS.yaml`, Warden workflows and any repository rule files Warden enforces from the trusted base revision only. A PR that changes them gets full review and a maintainer decision, never delta review.
+- **[R]** Actions hardening: no workflow checks out or runs PR code with write credentials (no `pull_request_target` execution of contributor code); untrusted event text reaches scripts through environment variables, never inline expressions; third-party actions are pinned by full commit SHA; workflows pass a workflow linter such as actionlint or zizmor in CI. The App requests no `workflows` permission, and factory branches use a reserved prefix protected by a repository ruleset.
+- **[R]** Validate every outgoing comment, review and card before posting: length cap, no secrets or credential-like strings, no @mentions or team pings except configured maintainers, no external images, labels only from the task's allowlist. A failed check blocks that effect visibly.
 
 ### Eligible auto-merge
 
@@ -103,6 +108,8 @@ One Warden-owned ledger comment per issue/PR is authoritative. Configurable labe
 
 State names are semantic identifiers; displayed label names are configurable. Store blocker reason and intended resumption when blocked. Processing leases/attempts are separate from workflow state.
 
+**[R]** Trust a ledger comment only when its author is the configured App's numeric ID; a look-alike comment from anyone else is ignored and reported. Encode the ledger payload so item text cannot terminate or forge its marker. GitHub caps a comment body at 65,536 characters, so the ledger compacts history (keeping current state, open obligations and references to archived records) before it nears the cap; it never silently truncates. A label edit by an authorized maintainer becomes an override request through the writer; any other drift is re-projected from the ledger with a short explanation.
+
 Independent facets include work kind (bug, feature, enhancement, dependency, documentation and configured categories), finding severity, change risk, ownership, and low-effort indicators. A quick win is not a mutually exclusive kind or workflow state.
 
 ### Principal transitions
@@ -110,6 +117,7 @@ Independent facets include work kind (bug, feature, enhancement, dependency, doc
 | Event | Required transition/effect |
 |---|---|
 | New/adopted issue | `needs-triage`; missing information routes to `needs-info` |
+| **[R]** Reporter supplies requested information | `needs-info` returns to `needs-triage`; the reporter-information clock stops |
 | Confirmed unclaimed bug within authority | `ready` |
 | Feature/enhancement proposal | `needs-decision`; approved criteria/design allow `ready` |
 | Contributor volunteers | Assign immediately, record commitment window, enter `claimed`; not factory-ready |
@@ -142,6 +150,9 @@ All Intake/Claim/Sweep and local-result effects share one serialized Actions pos
 - Actions outage means visible pending operations, not an unsynchronized local write fallback.
 - CI/approval events may reevaluate gates against an already accepted current review and finalize an eligible merge without launching AI. They cannot replace missing review or authorize new scope.
 - A comment revision counter or local lease alone is not distributed compare-and-swap. No unqualified exactly-once transaction promise.
+- **[R]** Events caused by Warden's own App must not re-trigger Warden work loops; workflows filter on the App's ID before acting.
+- **[R]** Pace mutations to respect GitHub's secondary rate limits; honor `retry-after` and back off, leaving the remaining operations visibly pending rather than dropping them.
+- **[R]** Cap closures per sweep run and per day (configurable). Excess eligible closures are deferred and reported, so a defect in clock logic cannot mass-close the backlog.
 
 The concrete durable inbox and recovery protocol must pass a capability proof before live posting. Do not create a competing repository ledger file.
 
@@ -155,7 +166,7 @@ Inspect metadata, template completeness and explicit routing rules; initialize a
 
 ### Triage - local AI
 
-Investigate the report against current code, approved rules and relevant prior decisions. Confirm a bug only with suitable evidence; otherwise request precise information or escalate uncertainty. Classify kind, finding severity and change risk separately.
+Investigate the report against current code, approved rules and relevant prior decisions. Confirm a bug only with suitable evidence; otherwise request precise information or escalate uncertainty. Classify kind, finding severity and change risk separately. **[R]** Reuse a completed triage until the reporter or a maintainer adds material information, or relevant code or policy changes; a scan does not re-triage an unchanged issue. **[R]** A cause, fix or severity that the reporter asserts is a claim to verify, not a finding; the triage record says which parts Warden confirmed independently.
 
 For features/enhancements, propose scope, observable acceptance criteria, approach, affected areas, interfaces, migration implications, blast radius, alternatives and unresolved questions. Approval is required before implementation. Triage owns this proposal; a separate design task is unnecessary.
 
@@ -187,7 +198,13 @@ Recheck the current code/design before work. Material scope, acceptance-criteria
 
 Start from trusted base on a factory branch. For takeover, read the abandoned diff as data, assess the approach, port sound contributions with credit, and complete the whole agreed solution. Never blindly execute its branch, hooks or installation scripts.
 
-Use the strongest appropriate reproducer, implement the approved change, and run trusted verification. Bug fixes normally need fail-before/pass-after; features need evidence against approved criteria. Preserve baseline failures separately. Submit the validated PR-opening intent with scope, approach, acceptance evidence, verification, prior-work attribution and a **Merge Danger** summary of risk/blast radius. Opening a PR is not review or merge.
+Use the strongest appropriate reproducer, implement the approved change, and run trusted verification. Bug fixes normally need fail-before/pass-after; features need evidence against approved criteria. **[R]** If no static or dynamic reproducer can be made to fail first, Implement stops and returns the issue to Triage with what it tried, rather than submitting an unproven fix. Preserve baseline failures separately. Submit the validated PR-opening intent with scope, approach, acceptance evidence, verification, prior-work attribution and a **Merge Danger** summary of risk/blast radius. Opening a PR is not review or merge.
+
+**[R]** The PR description also states how Warden read any ambiguous acceptance criterion and lists the choices the approved spec did not determine, so a reviewer sees them first. These are reading aids, not approval. Where the spec is contradictory or a choice would change approved scope, interfaces or behavior, Implement abstains and routes the item to `needs-decision` instead of guessing.
+
+**[R]** Factory commits satisfy the repository's DCO/CLA requirements. Contributor credit uses `Co-authored-by` trailers built from the contributor's GitHub-provided noreply address, never an address scraped from commit or comment text.
+
+**[R]** Keep factory PRs within a configurable reviewable size. Work that would exceed it is split into approved, separately mergeable steps, or returned to `needs-decision` with a proposed split.
 
 ### Review - local read-only AI and deterministic gates
 
@@ -200,6 +217,10 @@ Review candidate changes against relevant base context, approved requirements, r
 - CI/approval-only updates reevaluate gates without another model review.
 - Failed/interrupted attempts may retry and are auditable; they are not duplicate completed reviews.
 - Use independent verification of evidence; model self-reported success is not a trusted check result.
+- **[R]** After a rebase, force-push or update-branch, compute the delta by patch equivalence against the reviewed commits (an interdiff), so a base merge or rebase alone does not trigger a full re-review and a rewritten commit is not hidden.
+- **[R]** Bind each posted review to the reviewed `commit_id` and validate every inline position against that diff before posting. Give each finding a stable fingerprint (rule, anchor, normalized location) so a repeated finding updates the existing one instead of posting a duplicate. Cap findings per review (configurable) and rank them by severity; the ledger keeps the full list.
+- **[R]** A diff that GitHub will not return in full, or that exceeds the configured reviewable size, is reported as too large to review reliably and routed to the author or maintainer with a request to split. It is never partially reviewed and passed.
+- **[R]** Review also reports spec gaps and conflicts: an approved criterion the change cannot satisfy as written, or behavior the spec does not determine. These route to `needs-decision`, not to the author.
 
 Review never edits code. Route factory findings to Rework, contributor findings to the author, and genuine decisions to the maintainer. Record the completed review identity only after validation. If all gates pass, submit the merge intent; never report merged until GitHub confirms it.
 
@@ -225,11 +246,19 @@ Reconcile ledgers, label projections, holds, claims, delivery obligations, stale
 
 Never stale-close unreviewed PRs, confirmed/approved issues, `keep-open` items or items waiting on maintainers. Maintainer-designated drafts are exempt when drafts are enabled. Factory comments and CI do not reset author clocks. The five-day silence policy cannot override an earlier delivery deadline. All closure messages explain the reason, retained issue and return path.
 
+**[R]** Editing the ledger notifies no one. When the author owes an action (new findings, a nudge, a deadline), Warden posts a new comment or review. A nudge lists what is still owed, the date the item will close and how to ask for an exemption.
+
+**[R]** Every Warden comment says how to reach a human maintainer. The repository links one short pinned explanation of how Warden works, its clocks and how to appeal, so contributors are not surprised by automated state.
+
+**[R]** GitHub disables scheduled workflows after 60 days without repository activity. Sweep records each successful run; `warden status` shows the last one, and a missed schedule beyond a configured interval raises an alert rather than silently stopping clocks.
+
 ### Retro - local AI, manually invoked
 
 Review maintainer decisions, corrections, escapes and repeated failure patterns over the review window. Prefer design prevention, then static rules, behavioral checks, then prose. Propose justified improvements as a PR with examples, expected effects and validation.
 
 Maintain the decision corpus; propose narrowly scoped standing-authority expansions only with outcome evidence. Human approval is required before authority expands. Weekly retrospection is an operating cadence, not a hidden scheduled AI daemon. "No justified rule change" is valid; never invent a weekly rule quota.
+
+**[R]** Tag each escaped defect and accepted finding by origin (spec, design, code or bad fix) and track how often factory fixes introduce new defects. Retro inputs include reverted factory PRs, escaped defects, findings maintainers overrode, timeouts and abstentions. Retro may also report proposed changes to Warden's own prompts, defaults or configuration in its scan report; it never edits Warden's package or its own authority.
 
 ## 6. Drafts and backlog adoption
 
@@ -250,7 +279,9 @@ Preserve existing contributor ownership and valid maintainer-approved commitment
 
 Agent-authored test count and coverage are not correctness evidence. Structural fixes may use static fail-before/pass-after checks; behavioral defects require dynamic evidence. Races, timing, recovery and side effects cannot be established by lint alone.
 
-Protect verification controls: disabled lint rules, broadened exclusions, suppressions, skipped tests, weakened assertions and bypassed required checks cannot manufacture success. Weakening requires maintainer approval. Legitimate expectation changes still need review against approved requirements.
+Protect verification controls: disabled lint rules, broadened exclusions, suppressions, skipped tests, weakened assertions and bypassed required checks cannot manufacture success. Weakening requires maintainer approval. Legitimate expectation changes still need review against approved requirements. **[R]** New inline suppression or ignore comments, and code comments that justify a workaround instead of fixing it, count as weakening.
+
+**[R]** When a new static rule meets existing violations, apply it as a ratchet: it gates new and changed code immediately, records the existing violations as a baseline, and the baseline may only shrink. Factory work does not fix unrelated baseline violations as a side effect.
 
 The trusted executor captures command, inputs, exit status, output and artifacts independently of the model. Compare trusted baseline and candidate results. Do not fix unrelated baseline defects or describe them as passing. Auto-merge blocks without meaningful evidence unless an explicit scoped maintainer exception applies; required GitHub checks never bypass.
 
@@ -296,6 +327,14 @@ Use explicit priority and age-based fairness, not model-selected queue order: au
 
 Enforce finite item, model-turn, wall-time, context/resource and operation-retry budgets. Pilot values must be published with the tested hardware/model matrix before live activation. Distinguish retries from rework cycles and task completion.
 
+**[R]** Set budgets per task from measured runs on the tested model and hardware, not one shared constant or an assumed context threshold. A session that hits a budget ends with a distinct `timed-out` or `budget-exhausted` outcome, recorded and reported separately from pass, fail and abstain, and it never yields a partial result as success.
+
+**[R]** A local model service that is down, unloaded or out of resources is not an item failure. The scan stops, releases its leases and reports the outage; no item's retry or rework allowance is consumed.
+
+**[R]** Run at most one scan per instance at a time, enforced by a local lock. Keep the host awake during a scan where the OS allows it. Leases carry an expiry, so work held by a scan that crashed or a host that slept is reclaimed as interrupted, not counted as failed.
+
+**[R]** A comment, push or decision that arrives after a scan's snapshot is not injected into the running session. Before posting, the writer's re-read detects it; an effect it could change is deferred to the next scan, which sees the new input.
+
 ### Stop and failure containment
 
 Check global and instance stop controls before every task and external effect. Unknown control state does not authorize effects. On stop, block new effects, gracefully cancel active model/verification work, preserve recoverable state and require explicit resume. Status and recovery remain usable.
@@ -330,11 +369,13 @@ Pin effective defaults to the supported schema/package behavior; JSON Schema `de
 
 Provide a dry-run upgrade diff and compatibility/migration notes. No structurally compatible upgrade may silently expand authority, disable checks or change clocks through defaults. Policy-changing upgrades need approval.
 
+**[R]** The CLI and the installed Actions workflows each record their Warden version and ledger schema version. An incompatible pair blocks effects with an explanation and the upgrade step, rather than writing ledgers either side cannot read.
+
 Required CLI operations (command names form the proposed MVP interface):
 
 | Command | Contract |
 |---|---|
-| `warden setup` | Validate prerequisites and existing config; create only approved missing starter configuration/labels; explain App/isolation/model setup |
+| `warden setup` | Validate prerequisites and existing config; create only approved missing starter configuration/labels; explain App/isolation/model setup. **[R]** Detect competing automation (an existing stale workflow running other clocks, other AI reviewers) and report the conflict; never disable it without the operator |
 | `warden config validate` | Validate both files and effective constraints; report actionable errors |
 | `warden run [--task <name>] [--dry-run]` | One bounded manual scan or selected task; all repository effects still use the serialized writer |
 | `warden adopt --dry-run [--out <file>]` / `warden adopt --selection <file> --confirm` | **PROPOSED (2026-11-18, awaiting owner review; implemented offline in P2).** Dry-run lists existing open items without Warden state (read-only) and writes an inventory file with a digest. `--selection` names the items to adopt, is bound to the current inventory digest, and needs `--confirm`; each existing draft needs an explicit `keep` or `close`. Only selected items are submitted through the writer; each receives a published adoption notice, keeps its existing owner, and starts new clocks at that notice. The inventory and the receipt are inputs/records, never a second item ledger. Never part of `setup` or `run` |
@@ -362,6 +403,10 @@ Use a maintainer-curated replay set with at least:
 
 Cover bugs, approved features, contributor and factory PRs, dependency updates, authority-changing work, drafts, claims, deadlines, baseline failures and uncertainty. Report misses and disagreements, not only aggregate scores. These are provisional pilot acceptance thresholds, not a statistical guarantee of safety.
 
+**[R]** Include adversarial cases: prompt-injection text in issues, PRs and comments, and tempting fixtures that invite weakening a test, broadening scope or skipping a check. Each must produce no unauthorized effect.
+
+**[R]** Score replay deterministically against the curated expectations (expected finding location, triage outcome, effect allowed or not). A model grading another model's output may inform analysis but never decides a gate. When comparing prompt, model or configuration variants, tune on a development subset and report the gate on a held-out subset the variants were not tuned on.
+
 The maintainer explicitly enables live actions after reviewing evidence. Do not turn elapsed shadow days or benchmark completion into implicit approval.
 
 ### Required functional/recovery evidence
@@ -384,6 +429,8 @@ The maintainer explicitly enables live actions after reviewing evidence. Do not 
 
 Track state counts and age; assignment-to-ready, active execution, review wait, CI wait and fix time separately; claim/takeover/extension outcomes; auto-merge and human-escalation rates; maintainer effort; blocking-finding agreement and escapes/reverts; duplicate review attempts versus accepted duplicates; operation recovery; local tokens/time/resource usage; code-lookup quality and overhead.
 
+**[R]** Also track maintainer decisions per completed item, reverted factory PRs, escaped defects found after merge, timeout and abstention rates, time to first response for contributors, and distinct returning contributors. Track defect origin and the bad-fix rate. Lines of code and cost per defect are not targets.
+
 ## 12. Implementation prerequisites and proof gates
 
 The owner confirmed the shared product understanding on November 17, 2026. The PRD review is complete and ready for MVP implementation planning. The following technical choices and proofs must be resolved or demonstrated before claiming a live-ready MVP:
@@ -398,3 +445,20 @@ The owner confirmed the shared product understanding on November 17, 2026. The P
 | Activation | Curated benchmark evidence and explicit maintainer live authorization |
 
 These are explicit readiness gates, not permission to pretend unsupported capabilities exist. This document and the ADRs remain editable design drafts; product-review confirmation does not freeze them or authorize live activation. No software implementation or provider benchmark is claimed by this documentation work.
+
+### Open owner decisions from the research reconciliation
+
+**[R]** These research points need an owner ruling, not an edit. Nothing below changes current behavior until decided.
+
+| Question | Research basis | Current PRD position |
+|---|---|---|
+| Should nit findings keep blocking merge by default, or only be reported? | [Horthy](../research/TALK-HORTHY-12-RULES.md) candidate 3: review cost stays constant; the P7 clean run had 13 extra findings, verified real but mostly nits | Nits block by default (§3, ADR 0008) |
+| What does Warden do when no maintainer has decided anything for N days? | [Ronacher](../research/TALK-RONACHER-WORKSHOP.md) incorporation 4: show days since the last maintainer decision, pause new Implement past a threshold, silence never approves | Silence never approves; no absence threshold or Implement pause |
+| Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
+| Measure structural erosion on factory-authored PRs (verbosity, duplication, complexity trend) before widening Implement authority? | [Horthy](../research/TALK-HORTHY-12-RULES.md) candidate 2; SlopCodeBench reports erosion rising with iteration | P7 measures review and triage only |
+| Should a later review round raise new findings on code that was already reviewed and has not changed? | [ARCHITECTURE](../research/ARCHITECTURE.md) (new findings only inside the effective delta); a late finding restarts the 48-hour fix window and counts toward the three-round gate | Delta review plus "assess affected surrounding behavior" (§5 Review); no rule on late findings |
+| Skip model review while required CI is red or the PR has conflicts, posting only "fix CI first"? | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md), [BOOK](../research/BOOK-SE-BEST-PRACTICES.md) | Only "review clean, CI pending" is defined (§4) |
+| Tier review depth by path and size (skip, light, full), and add a final verifier pass that drops findings it cannot confirm in the code? | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) | Risk is used for merge authorization only (§3) |
+| When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
+| Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |
+| Maintainer-only GitHub commands per PR, such as forcing a full review or dismissing one finding until its code changes, authorized by who wrote them | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) | GitHub-native decision path, holds and `keep-open` exist (§5, §8); no finding dismissal |
