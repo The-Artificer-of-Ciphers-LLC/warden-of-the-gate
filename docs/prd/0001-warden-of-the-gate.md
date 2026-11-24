@@ -5,7 +5,7 @@
 - **Owner:** @trek-e
 - **Supporting decisions:** [ADR index](../../README.md); all ADRs remain editable working drafts.
 - **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md), [pitfalls](../research/PITFALLS.md), [summary](../research/SUMMARY.md) and the `TALK-*` notes in [research](../research/).
-- **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Open owner decisions](#open-owner-decisions-from-the-research-reconciliation) lists research points that need a ruling rather than an edit.
+- **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Owner decisions](#owner-decisions-from-the-research-reconciliation) lists the research points that needed a ruling: those decided on 2026-11-24, and those still open.
 - **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
 
 ## TL;DR
@@ -222,6 +222,14 @@ Review candidate changes against relevant base context, approved requirements, r
 - **[R]** A diff that GitHub will not return in full, or that exceeds the configured reviewable size, is reported as too large to review reliably and routed to the author or maintainer with a request to split. It is never partially reviewed and passed.
 - **[R]** Review also reports spec gaps and conflicts: an approved criterion the change cannot satisfy as written, or behavior the spec does not determine. These route to `needs-decision`, not to the author.
 
+**Decided 2026-11-24 (@trek-e).** A finding is a finding, no matter when it is found: a later review round may raise a finding on code that was already reviewed and has not changed.
+
+**Decided 2026-11-24 (@trek-e).** Red CI does not skip review. Review finds what is failing in CI and how to fix it. On factory PRs Rework applies the fix; on contributor PRs, which Warden never edits, the cause and proposed fix go to the author.
+
+**Decided 2026-11-24 (@trek-e).** Review depth and the handling of uncertain findings are user-configurable. The maintainer pre-selects an option such as maintainer go/no-go, dropping findings below a configured confidence level, or another supported option. Dropped findings stay recorded in the ledger.
+
+**Decided 2026-11-24 (@trek-e).** Maintainers can post commands on a PR to force a full review or to dismiss one finding; a dismissed finding stays dismissed until its code changes. A command is authorized by its author's numeric ID as a configured maintainer, never by its text.
+
 Review never edits code. Route factory findings to Rework, contributor findings to the author, and genuine decisions to the maintainer. Record the completed review identity only after validation. If all gates pass, submit the merge intent; never report merged until GitHub confirms it.
 
 ### Rework - local AI, factory branches only
@@ -314,6 +322,8 @@ Discord is the first quick-approval channel using outbound Gateway connectivity;
 Cards show linked work, proposal/revision, applicable policy, risk/blast radius, verification/CI evidence, open findings, recommendation and precise approve/deny meaning. Persist the accepted decision on GitHub before acting. Stale clicks, silence, duplication and unauthorized identities do not grant permission.
 
 One-time action cards expire after 24 hours by default, configurable, and may invalidate earlier with changed revision/policy/evidence. Approved feature scope/design persists until materially changed; daily reapproval is not required.
+
+**Decided 2026-11-24 (@trek-e).** If an item is set for maintainer review, it waits for the maintainer review, however long that takes. Maintainer absence never turns silence into approval.
 
 Retain a GitHub-native decision path when Discord/helper/local AI is unavailable. Only approved non-sensitive summaries go to Discord, not source code or private transcripts. A recorded approval does not start an AI scan or override GitHub-required approvals.
 
@@ -446,19 +456,26 @@ The owner confirmed the shared product understanding on November 17, 2026. The P
 
 These are explicit readiness gates, not permission to pretend unsupported capabilities exist. This document and the ADRs remain editable design drafts; product-review confirmation does not freeze them or authorize live activation. No software implementation or provider benchmark is claimed by this documentation work.
 
-### Open owner decisions from the research reconciliation
+### Owner decisions from the research reconciliation
 
-**[R]** These research points need an owner ruling, not an edit. Nothing below changes current behavior until decided.
+**[R]** These research points needed an owner ruling rather than an edit.
+
+Decided by @trek-e on 2026-11-24:
+
+| Question | Ruling | Where applied |
+|---|---|---|
+| Should nit findings keep blocking merge by default? | Yes | §3, unchanged; ADR 0008 |
+| What happens when no maintainer has decided anything for N days? | If an item is set for maintainer review, it waits for the maintainer review | §8 |
+| May a later review round raise findings on code that was already reviewed and has not changed? | Yes: a finding is a finding, no matter when it happens | §5 Review |
+| Skip model review while required CI is red? | No: the review finds what is failing in CI and fixes it | §5 Review |
+| How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
+| Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
+
+Still open. Nothing below changes current behavior until decided:
 
 | Question | Research basis | Current PRD position |
 |---|---|---|
-| Should nit findings keep blocking merge by default, or only be reported? | [Horthy](../research/TALK-HORTHY-12-RULES.md) candidate 3: review cost stays constant; the P7 clean run had 13 extra findings, verified real but mostly nits | Nits block by default (§3, ADR 0008) |
-| What does Warden do when no maintainer has decided anything for N days? | [Ronacher](../research/TALK-RONACHER-WORKSHOP.md) incorporation 4: show days since the last maintainer decision, pause new Implement past a threshold, silence never approves | Silence never approves; no absence threshold or Implement pause |
 | Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
 | Measure structural erosion on factory-authored PRs (verbosity, duplication, complexity trend) before widening Implement authority? | [Horthy](../research/TALK-HORTHY-12-RULES.md) candidate 2; SlopCodeBench reports erosion rising with iteration | P7 measures review and triage only |
-| Should a later review round raise new findings on code that was already reviewed and has not changed? | [ARCHITECTURE](../research/ARCHITECTURE.md) (new findings only inside the effective delta); a late finding restarts the 48-hour fix window and counts toward the three-round gate | Delta review plus "assess affected surrounding behavior" (§5 Review); no rule on late findings |
-| Skip model review while required CI is red or the PR has conflicts, posting only "fix CI first"? | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md), [BOOK](../research/BOOK-SE-BEST-PRACTICES.md) | Only "review clean, CI pending" is defined (§4) |
-| Tier review depth by path and size (skip, light, full), and add a final verifier pass that drops findings it cannot confirm in the code? | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) | Risk is used for merge authorization only (§3) |
 | When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
 | Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |
-| Maintainer-only GitHub commands per PR, such as forcing a full review or dismissing one finding until its code changes, authorized by who wrote them | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) | GitHub-native decision path, holds and `keep-open` exist (§5, §8); no finding dismissal |
