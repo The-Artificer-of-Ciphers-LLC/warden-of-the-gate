@@ -4,6 +4,7 @@
 - **Asked by:** @trek-e ("software factory designs that use AI models... there seems to be a lot of smoke and mirrors about this, compare to what we have so far with the warden and identify any pitfalls or missed items")
 - **Method:** a multi-agent web research run (6 search angles, 29 sources fetched, 144 claims extracted, 25 checked by three independent verifiers each, 24 confirmed, 1 refuted), then a comparison by hand against the PRD on `main` (d93fb62), the ADRs and the `packages/warden` source.
 - **Confidence:** MEDIUM. Most empirical results are 2026 preprints or mining-challenge papers built on one dataset (AIDev, popular repositories, data to August 2025), so they are not independent samples and may not carry over to a single-maintainer project. Security results use small trial counts. Vendor figures are self-reported.
+- **Local runtime (owner update, 2026-11-24):** the local Mac model server is now mlxserve, replacing the earlier LM Studio setup, which "was not working well"; mlxserve "has access to higher models and is better managing memory". Nothing in this note depends on which local server is used. The ADRs, PRD and code have not been updated for the change yet.
 - **Status:** research only. Nothing here changes the PRD or ADRs; the [owner questions](#owner-questions) at the end need a ruling first.
 
 ## 1. Where the smoke is
