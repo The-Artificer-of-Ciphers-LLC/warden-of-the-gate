@@ -56,6 +56,7 @@ All eight tasks are required: **Intake, Triage, Claim, Implement, Review, Rework
 | Distribution | Warden Docker image and broader Linux deployment; Kubernetes/Helm after that. Containers may still provide MVP worker isolation. |
 | Enterprise | Management REST API, enterprise RBAC, dashboards, organizational tenancy, cross-repository orchestration and aggregate oversight |
 | Policy/storage | General executable DSL, general migration engine, mandatory graph database, model training on the decision corpus |
+| Retro sampling | **[R]** Once auto-merge has live data, Retro may show the maintainer a small sample of auto-merged work to look at after the fact ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 2). Owner ruling 2026-11-24: "hold for now". Not a requirement |
 
 The executable may remain `warden`, but the npm package must use an organization-owned scope: unscoped `warden` is an unrelated package. Confirm scope ownership and availability before publishing.
 
@@ -276,6 +277,8 @@ Maintain the decision corpus; propose narrowly scoped standing-authority expansi
 
 **[R]** Tag each escaped defect and accepted finding by origin (spec, design, code or bad fix) and track how often factory fixes introduce new defects. Retro inputs include reverted factory PRs, escaped defects, findings maintainers overrode, timeouts and abstentions. Retro may also report proposed changes to Warden's own prompts, defaults or configuration in its scan report; it never edits Warden's package or its own authority.
 
+**Decided 2026-11-24 (@trek-e).** Measure structural erosion on factory-authored PRs (verbosity, duplication, complexity trend) before widening Implement authority. Retro also looks at the factory's merged changes over the window together, not only one PR at a time: whether they stay coherent with each other and with the approved design, or drift through duplicated helpers, diverging patterns or growth in touched modules ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1). Retro still only proposes.
+
 ## 6. Drafts and backlog adoption
 
 Draft PRs are disallowed by default, explicitly configurable. Close newly opened drafts and PRs converted to draft while disabled, with explanation and a ready-for-review return path. Never silently mark unfinished work ready. Closing a draft alone does not revoke a valid delivery commitment. Enabled drafts still cannot merge.
@@ -447,7 +450,7 @@ The maintainer explicitly enables live actions after reviewing evidence. Do not 
 
 Track state counts and age; assignment-to-ready, active execution, review wait, CI wait and fix time separately; claim/takeover/extension outcomes; auto-merge and human-escalation rates; maintainer effort; blocking-finding agreement and escapes/reverts; duplicate review attempts versus accepted duplicates; operation recovery; local tokens/time/resource usage; code-lookup quality and overhead.
 
-**[R]** Also track maintainer decisions per completed item, reverted factory PRs, escaped defects found after merge, timeout and abstention rates, time to first response for contributors, and distinct returning contributors. Track defect origin and the bad-fix rate. Lines of code and cost per defect are not targets.
+**[R]** Also track maintainer decisions per completed item, reverted factory PRs, escaped defects found after merge, timeout and abstention rates, time to first response for contributors, and distinct returning contributors. Track defect origin, the bad-fix rate and structural erosion of factory-merged code over time. Lines of code and cost per defect are not targets.
 
 ## 12. Implementation prerequisites and proof gates
 
@@ -478,12 +481,12 @@ Decided by @trek-e on 2026-11-24:
 | Skip model review while required CI is red? | No: the review finds what is failing in CI and fixes it. On contributor PRs: "Let it push fixes" | TL;DR, §5 Review and Rework, §11 |
 | How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
 | Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
+| Measure structural erosion on factory-authored PRs before widening Implement authority? | Yes, widened so Retro also checks whether factory merges stay coherent together over time ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1) | §5 Retro, §11 |
 
 Still open. Nothing below changes current behavior until decided:
 
 | Question | Research basis | Current PRD position |
 |---|---|---|
 | Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
-| Measure structural erosion on factory-authored PRs (verbosity, duplication, complexity trend) before widening Implement authority? | [Horthy](../research/TALK-HORTHY-12-RULES.md) candidate 2; SlopCodeBench reports erosion rising with iteration | P7 measures review and triage only |
 | When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
 | Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |
