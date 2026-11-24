@@ -269,6 +269,14 @@ Keynote on forward/back pressure and an anti-slop manifesto, read in full 2026-1
 - **Worth a small look (owner decisions):** whether nits block by default (13 of 18 clean-dev findings were real extras, mostly nits); one sentence making model-drafted text untrusted context for later sessions.
 - **Not adopted:** his benchmark figures as thresholds, HTML cards, feature-flag tooling, any PRD edit for the manifesto.
 
+### External check: Dill, "How to scale intent, quality, and artistry with AI" (Stripe, Sep 2026)
+
+Design-leadership keynote on "zombie UI" (generic AI output nobody owned), read in full 2026-11-24. Full analysis, claim mapping, verification table and proposed (not applied) PRD/ADR updates: [TALK-DILL-ZOMBIE-UI.md](TALK-DILL-ZOMBIE-UI.md). It is about product and brand design, so every Warden mapping is an analogy; its Stripe examples are self-reported.
+
+- **Strengthened:** encode standards into the means of production rather than loose docs (task contracts, prefetched inputs, static-first ladder); rules are necessary, not sufficient; done is not good; one quality bar whether or not AI made the work; Warden's deliberate pre-build filter (approved scope, one open implementation PR).
+- **Worth a small look (owner decisions):** a weaker second source for the open erosion question on PR #42, widened to coherence across factory merges in Retro; later, a maintainer sample of auto-merged work once auto-merge has live data.
+- **Not adopted:** anything on brand, taste or artistry; thresholds from the talk's anecdotes. The Christopher Alexander quote was not found on Wikiquote.
+
 ## Implications for Roadmap
 
 The six phases match the owner's six v1 rollout stages.
@@ -403,6 +411,7 @@ The six phases match the owner's six v1 rollout stages.
 - **Talk, read in full 2026-11-19 (HIGH for what it claims; scale/speed numbers self-reported):** Fabian Hedin, "What it takes to set intelligence free", Lovable — https://www.youtube.com/watch?v=pZWPq_ZAmM4 (transcript archived at sources/hedin-lovable-transcript.md; event/date unconfirmed); analysis in TALK-LOVABLE.md.
 - **Talk, read in full 2026-11-22 (HIGH for what it claims; his usage data self-reported and unverified):** Armin Ronacher, "Build the Workshop Before the Software Factory", Earendil, AI Engineer — https://www.youtube.com/watch?v=JNexz3Tbiu8 (transcript archived at sources/ronacher-workshop-before-factory-transcript.md); first-party checks: https://blog.cloudflare.com/code-mode/, https://github.com/earendil-works/pi, https://earendil.com/posts/pi-1-0/, https://lucumr.pocoo.org/2026/5/24/pi-oss/; analysis in TALK-RONACHER-WORKSHOP.md.
 - **Talk, read in full 2026-11-23 (HIGH for what it claims; numbers unverified):** Dex Horthy, "12 Rules for a Software Factory That Doesn't Ship Slop", Factory, AI Engineer — https://www.youtube.com/watch?v=-NFMsM2y0Vk (transcript archived at sources/horthy-12-rules-software-factory-transcript.md); first-party checks: https://arxiv.org/abs/2603.24755, https://scbench.ai, https://github.com/dmmulroy/anti-slop, https://gist.github.com/dexhorthy/4cc96f01be5b1208519e75dad250a948, https://pages.faros.ai/hubfs/AI_Engineering_Report_2026_The_Acceleration_Whiplash_Faros.pdf; analysis in TALK-HORTHY-12-RULES.md.
+- **Talk, read in full 2026-11-24 (HIGH for what it claims; LOW as evidence, design anecdotes):** Katie Dill, "How to scale intent, quality, and artistry with AI", Stripe, Lenny & Friends Summit 2026 — https://www.youtube.com/watch?v=GLvFTMtw4Jk (transcript archived at sources/dill-zombie-ui-transcript.md); checks: https://en.wikiquote.org/wiki/Christopher_Alexander, https://en.wikipedia.org/wiki/Gutenberg_Bible, https://nabeelqu.substack.com/p/what-makes-art-great; analysis in TALK-DILL-ZOMBIE-UI.md.
 - **Primary (HIGH):**
   - Local CLI help and `auth status` for Claude Code 2.1.322.
   - `man launchd.plist`.
