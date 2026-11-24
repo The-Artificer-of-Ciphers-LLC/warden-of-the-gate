@@ -12,7 +12,7 @@
 
 Warden is a self-maintaining software factory for GitHub repositories. It triages issues, reviews PRs, **fixes bugs and builds features and enhancements**, follows up with contributors, merges eligible changes, takes over abandoned work, and proposes improvements to its own rules under human oversight.
 
-The MVP proves the whole loop on GSD Core, the **pilot repo**. One instance governs one repository. A maintainer manually starts bounded, once-through AI scans on a Mac using OpenCode and a local inference service such as LM Studio. GitHub Actions performs deterministic housekeeping and serialized posting, never inference. Eligible auto-merge is a core capability, including contributor PRs; Warden never writes to contributor branches. Operational settings live in `.github/warden.yml`; declarative standing authority lives in `.github/ORDERS.yaml`.
+The MVP proves the whole loop on GSD Core, the **pilot repo**. One instance governs one repository. A maintainer manually starts bounded, once-through AI scans on a Mac using OpenCode and a local inference service such as LM Studio. GitHub Actions performs deterministic housekeeping and serialized posting, never inference. Eligible auto-merge is a core capability, including contributor PRs. Warden does not write to contributor branches, except to push fixes for failing CI (owner ruling 2026-11-24, §5 Review). Operational settings live in `.github/warden.yml`; declarative standing authority lives in `.github/ORDERS.yaml`.
 
 ## 1. Problem, users and outcomes
 
@@ -224,7 +224,15 @@ Review candidate changes against relevant base context, approved requirements, r
 
 **Decided 2026-11-24 (@trek-e).** A finding is a finding, no matter when it is found: a later review round may raise a finding on code that was already reviewed and has not changed.
 
-**Decided 2026-11-24 (@trek-e).** Red CI does not skip review. Review finds what is failing in CI and how to fix it. On factory PRs Rework applies the fix; on contributor PRs, which Warden never edits, the cause and proposed fix go to the author.
+**Decided 2026-11-24 (@trek-e).** Red CI does not skip review. Review finds what is failing in CI and fixes it. On factory PRs Rework applies the fix. On contributor PRs, Warden pushes the fix to the contributor's branch ("Let it push fixes"). The rules for that push:
+
+- It fixes only the CI failure Review diagnosed. Other findings still go to the author, and the push never widens scope.
+- The fix is built in the isolated factory workspace from the PR head, which is treated as untrusted, and verified with trusted commands before pushing.
+- It adds commits on top of the reviewed head, authored by the App. It never force-pushes, rebases or amends. If the head moved since review, nothing is pushed and the PR is re-evaluated.
+- A comment on the PR says what was pushed and why. The new head returns to Review; the push cannot mark itself reviewed or merge.
+- These pushes count against the factory rework limit for that PR, persisted like other cycles. They are not author activity: they do not reset author clocks, satisfy the author's delivery or count as contributor fix rounds.
+- A fork PR can be pushed to only while its author leaves "Allow edits by maintainers" on. When it is off, when GitHub refuses the push (branch protection, permissions), or when the fix would change `.github/workflows` (the App has no `workflows` permission), Warden does not push. It posts the cause and the proposed fix as a patch or suggested change for the author, and the PR goes to `needs-author`.
+- Capability tests must prove the App can push to a fork PR head that allows maintainer edits, and is refused when it does not, before this is enabled live.
 
 **Decided 2026-11-24 (@trek-e).** Review depth and the handling of uncertain findings are user-configurable. The maintainer pre-selects an option such as maintainer go/no-go, dropping findings below a configured confidence level, or another supported option. Dropped findings stay recorded in the ledger.
 
@@ -234,7 +242,7 @@ Review never edits code. Route factory findings to Rework, contributor findings 
 
 ### Rework - local AI, factory branches only
 
-Address named current findings without unrelated scope expansion. Contributor branches are never edited. Run relevant verification and return the new head to Review; Rework cannot mark itself reviewed.
+Address named current findings without unrelated scope expansion. Contributor branches are never edited, except for the CI fixes in the §5 Review ruling. Run relevant verification and return the new head to Review; Rework cannot mark itself reviewed.
 
 Count completed rework cycles separately from failed launches, retries and reviews. After three cycles, escalate only if findings remain unresolved. Success on cycle three is success, not automatic escalation. Resource exhaustion checkpoints and reports unfinished work rather than manufacturing a pass.
 
@@ -422,7 +430,7 @@ The maintainer explicitly enables live actions after reviewing evidence. Do not 
 ### Required functional/recovery evidence
 
 1. End-to-end bug and approved-feature paths, including eligible auto-merge and high-risk escalation.
-2. No contributor-branch edits; takeover preserves issue and attribution while replacing unsuitable approaches.
+2. No contributor-branch edits beyond ruled CI fixes, which add commits only and fall back to a proposed fix when a fork disallows maintainer edits; takeover preserves issue and attribution while replacing unsuitable approaches.
 3. Initial/review 48-hour obligations, approved extensions, held/resumed deadlines, response-clock separation, delayed review/CI and safe backlog adoption without retroactive expiry.
 4. Current review reuse/delta invalidation, material new evidence and base-context changes; Implement/Rework cannot advance review markers.
 5. Static-first verification, appropriate runtime evidence, and detected gate weakening.
@@ -467,7 +475,7 @@ Decided by @trek-e on 2026-11-24:
 | Should nit findings keep blocking merge by default? | Yes | §3, unchanged; ADR 0008 |
 | What happens when no maintainer has decided anything for N days? | If an item is set for maintainer review, it waits for the maintainer review | §8 |
 | May a later review round raise findings on code that was already reviewed and has not changed? | Yes: a finding is a finding, no matter when it happens | §5 Review |
-| Skip model review while required CI is red? | No: the review finds what is failing in CI and fixes it | §5 Review |
+| Skip model review while required CI is red? | No: the review finds what is failing in CI and fixes it. On contributor PRs: "Let it push fixes" | TL;DR, §5 Review and Rework, §11 |
 | How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
 | Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
 
