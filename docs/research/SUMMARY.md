@@ -277,6 +277,14 @@ Design-leadership keynote on "zombie UI" (generic AI output nobody owned), read 
 - **Worth a small look (owner decisions):** a weaker second source for the open erosion question on PR #42, widened to coherence across factory merges in Retro; later, a maintainer sample of auto-merged work once auto-merge has live data.
 - **Not adopted:** anything on brand, taste or artistry; thresholds from the talk's anecdotes. The Christopher Alexander quote was not found on Wikiquote.
 
+### External check: AI software factories, claims versus evidence (research run, Nov 2026)
+
+Multi-source research on agent PR pipelines, AI review and "dark factories", with claims checked by three verifiers each, then compared with the PRD and source on 2026-11-24. Full analysis and proposed (not applied) changes: [FACTORY-CLAIMS-VS-EVIDENCE.md](FACTORY-CLAIMS-VS-EVIDENCE.md). Most evidence is 2026 preprints on one dataset; vendor throughput figures are self-reported and unnormalized.
+
+- **Strengthened:** merge rate is a poor success measure (reverts and follow-up fixes matter); bounded retry loops; evidence from a trusted executor rather than green CI; the Rule of Two split between a tokenless model session and the credentialed writer.
+- **Worth a look (owner decisions):** agent instruction files (`AGENTS.md`, `CLAUDE.md`, `.opencode/`) are not mandatory human-gate paths in `config/policy.ts`; the CI-fix push needs a planted-instruction-file test; adversarial replay should cover every pool member that can decide a contributor merge (corrected after owner review: the pool is not only small local models); the confidence-drop option conflicts with §3 unless calibrated; reproducer and fix come from one session; late findings on unchanged code; re-running the replay gate on model or harness changes.
+- **Not adopted:** vendor figures as targets; any PRD edit before the owner rules.
+
 ### Model connections: provider-neutral endpoints, MVP on mlx-serve (Nov 2026)
 
 Researched 2026-11-24 at the owner's request after mlx-serve (mlxserve.com) replaced LM Studio on the maintainer's Mac. Full analysis, per-server support matrix, mlx-serve gap table, proposed file-by-file changes and owner decisions: [MODEL-CONNECTIONS.md](MODEL-CONNECTIONS.md). Nothing in the PRD, ADRs or code is changed.
