@@ -152,3 +152,14 @@ test('a material policy change invalidates the accepted review with a recorded r
   const c = await r.scan(runner, { policyDigest: 'policy-bbbbbbbb' });
   assert.equal(c.kind, 'reused'); assert.equal(c.baseAdvanced, true); assert.match(c.notice, /compatibility assessment is pending, not a full re-review/); assert.equal(runner.calls, 2);
 });
+
+test('repo context: a read-only snapshot is materialized under ./repo, the session gets read+list only, and a failed snapshot degrades to the plain packet', async (t) => {
+  const r = rig(); t.after(r.cleanup); const seen: SessionRequest[] = []; let snap = '';
+  const runner = new FakeRunner(GOOD, (req) => { seen.push(req); snap = readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'); return done(CLEAN); });
+  const o = await r.scan(runner, { context: async (dest) => { const { mkdirSync, writeFileSync } = await import('node:fs'); mkdirSync(dest, { recursive: true }); writeFileSync(join(dest, 'a.txt'), 'x'); } });
+  assert.equal(o.kind, 'accepted'); assert.deepEqual(seen[0].tools.allow, ['read', 'list']); assert.equal(seen[0].repoContext, true); assert.match(snap, /under \.\/repo/);
+  assert.equal(readFileSync(join(seen[0].packetDir, 'repo', 'a.txt'), 'utf8'), 'x');
+  const r2 = rig(); t.after(r2.cleanup); const seen2: SessionRequest[] = [];
+  const o2 = await r2.scan(new FakeRunner(GOOD, (req) => { seen2.push(req); return done(CLEAN); }), { context: () => { throw new Error('no such commit'); } });
+  assert.equal(o2.kind, 'accepted'); assert.deepEqual(seen2[0].tools.allow, ['read']); assert.equal(seen2[0].repoContext, false);
+});

@@ -252,6 +252,48 @@ Infrastructure talk on long-running agents, read in full 2026-11-19. Full analys
 - **Worth adopting small:** an append-only, replayable per-item event log (prompt rendered from the log) with stateless workers, for crash recovery, shadow-mode audit and per-model compaction; maintainer comments queued as events at safe points.
 - **Not adopted:** VM checkpoint/fork, parallel forked agents, unbounded 10-hour runs, and the premise that users need not read the code.
 
+### External check: Ronacher, "Build the Workshop Before the Software Factory" (Earendil, Nov 2026)
+
+Opinion talk on human attention, durable agents and code-mode plus classifier workflows, read in full 2026-11-22. Full analysis, claim mapping and verification table: [TALK-RONACHER-WORKSHOP.md](TALK-RONACHER-WORKSHOP.md). All figures (run length, prompts per day, project counts) are the speaker's own unverified data.
+
+- **Strengthened:** short decision artifacts before human review (cards); completion is weak evidence, so evidence gates stay (Warden's own replay: 89% accepted vs 80% false findings); external-system throttling.
+- **Worth a small look:** an evidence-based wall cap (measured 10 to 63 minute cases vs a 1800 s default); a "not verified" line on cards; telling triage not to trust diagnoses inside an issue (first-party Earendil essay); a decision on behaviour when the owner stops attending.
+- **Not adopted:** hosted flex-scheduling and sandbox suspension, a second classifier model picked by the agent, code mode with write effects. Each conflicts with the loopback-only provider, the owner's model rule, or "AI proposes, scripts dispose". Cloudflare origin of code mode and Earendil's Pi were checked at first-party pages; the tar post he mentions and the captioned model names could not be identified.
+
+
+### External check: Horthy, "12 Rules for a Software Factory That Doesn't Ship Slop" (Factory, Nov 2026)
+
+Keynote on forward/back pressure and an anti-slop manifesto, read in full 2026-11-23. Full analysis, claim mapping, verification table and proposed (not applied) PRD/ADR updates: [TALK-HORTHY-12-RULES.md](TALK-HORTHY-12-RULES.md). Most figures (SlopCodeBench 15%/16.3%, "30% of PRs merging without review", 40,000 installs, 100ish rules) could not be traced to a primary source and are the speaker's unverified claims.
+
+- **Strengthened:** human-gated, evidence-gated design; lint and static checks as back pressure (already in the PRD ladder); the review-cost asymmetry as a reason to watch reviewer output volume.
+- **Worth a small look (owner decisions):** whether nits block by default (13 of 18 clean-dev findings were real extras, mostly nits); one sentence making model-drafted text untrusted context for later sessions.
+- **Not adopted:** his benchmark figures as thresholds, HTML cards, feature-flag tooling, any PRD edit for the manifesto.
+
+### External check: Dill, "How to scale intent, quality, and artistry with AI" (Stripe, Sep 2026)
+
+Design-leadership keynote on "zombie UI" (generic AI output nobody owned), read in full 2026-11-24. Full analysis, claim mapping, verification table and proposed (not applied) PRD/ADR updates: [TALK-DILL-ZOMBIE-UI.md](TALK-DILL-ZOMBIE-UI.md). It is about product and brand design, so every Warden mapping is an analogy; its Stripe examples are self-reported.
+
+- **Strengthened:** encode standards into the means of production rather than loose docs (task contracts, prefetched inputs, static-first ladder); rules are necessary, not sufficient; done is not good; one quality bar whether or not AI made the work; Warden's deliberate pre-build filter (approved scope, one open implementation PR).
+- **Worth a small look (owner decisions):** a weaker second source for the open erosion question on PR #42, widened to coherence across factory merges in Retro; later, a maintainer sample of auto-merged work once auto-merge has live data.
+- **Not adopted:** anything on brand, taste or artistry; thresholds from the talk's anecdotes. The Christopher Alexander quote was not found on Wikiquote.
+
+### External check: AI software factories, claims versus evidence (research run, Nov 2026)
+
+Multi-source research on agent PR pipelines, AI review and "dark factories", with claims checked by three verifiers each, then compared with the PRD and source on 2026-11-24. Full analysis and proposed (not applied) changes: [FACTORY-CLAIMS-VS-EVIDENCE.md](FACTORY-CLAIMS-VS-EVIDENCE.md). Most evidence is 2026 preprints on one dataset; vendor throughput figures are self-reported and unnormalized.
+
+- **Strengthened:** merge rate is a poor success measure (reverts and follow-up fixes matter); bounded retry loops; evidence from a trusted executor rather than green CI; the Rule of Two split between a tokenless model session and the credentialed writer.
+- **Worth a look (owner decisions):** agent instruction files (`AGENTS.md`, `CLAUDE.md`, `.opencode/`) are not mandatory human-gate paths in `config/policy.ts`; the CI-fix push needs a planted-instruction-file test; adversarial replay should cover every pool member that can decide a contributor merge (corrected after owner review: the pool is not only small local models); the confidence-drop option conflicts with §3 unless calibrated; reproducer and fix come from one session; late findings on unchanged code; re-running the replay gate on model or harness changes.
+- **Not adopted:** vendor figures as targets; any PRD edit before the owner rules.
+
+### Model connections: provider-neutral endpoints, MVP on mlx-serve (Nov 2026)
+
+Researched 2026-11-24 at the owner's request after mlx-serve (mlxserve.com) replaced LM Studio on the maintainer's Mac. Full analysis, per-server support matrix, mlx-serve gap table, proposed file-by-file changes and owner decisions: [MODEL-CONNECTIONS.md](MODEL-CONNECTIONS.md). Nothing in the PRD, ADRs or code is changed.
+
+- **Confirmed:** the owner's claim holds. Ollama (0.14.0+), LM Studio (0.4.1+), llama.cpp, vLLM, SGLang, self-hosted NIM and mlx-serve all serve both OpenAI-compatible chat completions and Anthropic `/v1/messages`; `mlx_lm.server` and NVIDIA's hosted API document only the OpenAI side. Every Anthropic layer is a translated subset, so Messages, tools and structured output must be probed per endpoint.
+- **Breaks today on mlx-serve:** the default port (11234, not 1235), the LM Studio-only `/api/v0` context lookup (it silently falls back to 131072 and turns the window guard off), and the idea that a loopback URL means inference stayed on the Mac (mlx-serve `@peer`/`@provider` models, like LM Link and Ollama cloud, proxy off-box behind localhost).
+- **Owner rulings (2026-11-24):** endpoints design approved; follow the official OpenAI and Anthropic specs as written rather than each server's extras, so the context window becomes a required endpoint value (the OpenAI spec defines none; Anthropic's Models API has `max_input_tokens`) and preflight becomes a spec-conformance check.
+- **Proposed (owner decisions):** a `runtime.endpoints` registry (API style, base URL, key env var, exact model id, limits, capabilities, tier) rendered into OpenCode; "approved endpoints only" with named tiers in place of "local-only"; verdict provenance naming the tier and model; a fuller preflight probe; a new ADR that partly supersedes 0004 and 0007.
+
 ## Implications for Roadmap
 
 The six phases match the owner's six v1 rollout stages.
@@ -384,6 +426,10 @@ The six phases match the owner's six v1 rollout stages.
 - **Talk, read in full 2026-11-18 (HIGH for what it claims; LOW as outcome evidence: self-reported single-user demo):** Matt Pocock, "Watch me ship a 21,000-line feature with mattpocock/skills" — https://www.youtube.com/watch?v=jVBlkOF8sHk; skill sources read via the GitHub API from https://github.com/mattpocock/skills (`retro`, `pr`, `triage`, `implement-spec`, `in-progress/software-factory`); analysis in TALK-POCOCK-WALKTHROUGH.md (transcript deliberately not archived).
 - **Talk, read in full 2026-11-14 (HIGH for what it claims; motivating stats are his citations of "public research", not independently verified):** Rajath Mahendrappa Kotyal, "Your Spec Has Bugs. Catch Them Before Your Agent Codes.", AWS — https://www.youtube.com/watch?v=0EnLxIbAvYk (uploaded 2026-11-11; reading edition: https://ai.engineer/talks/0EnLxIbAvYk-your-spec-has-bugs-catch-them-before; transcript archived at sources/kotyal-spec-transcript.md); analysis in TALK-SPEC-BUGS.md.
 - **Talk, read in full 2026-11-19 (HIGH for what it claims; scale/speed numbers self-reported):** Fabian Hedin, "What it takes to set intelligence free", Lovable — https://www.youtube.com/watch?v=pZWPq_ZAmM4 (transcript archived at sources/hedin-lovable-transcript.md; event/date unconfirmed); analysis in TALK-LOVABLE.md.
+- **Talk, read in full 2026-11-22 (HIGH for what it claims; his usage data self-reported and unverified):** Armin Ronacher, "Build the Workshop Before the Software Factory", Earendil, AI Engineer — https://www.youtube.com/watch?v=JNexz3Tbiu8 (transcript archived at sources/ronacher-workshop-before-factory-transcript.md); first-party checks: https://blog.cloudflare.com/code-mode/, https://github.com/earendil-works/pi, https://earendil.com/posts/pi-1-0/, https://lucumr.pocoo.org/2026/5/24/pi-oss/; analysis in TALK-RONACHER-WORKSHOP.md.
+- **Talk, read in full 2026-11-23 (HIGH for what it claims; numbers unverified):** Dex Horthy, "12 Rules for a Software Factory That Doesn't Ship Slop", Factory, AI Engineer — https://www.youtube.com/watch?v=-NFMsM2y0Vk (transcript archived at sources/horthy-12-rules-software-factory-transcript.md); first-party checks: https://arxiv.org/abs/2603.24755, https://scbench.ai, https://github.com/dmmulroy/anti-slop, https://gist.github.com/dexhorthy/4cc96f01be5b1208519e75dad250a948, https://pages.faros.ai/hubfs/AI_Engineering_Report_2026_The_Acceleration_Whiplash_Faros.pdf; analysis in TALK-HORTHY-12-RULES.md.
+- **Talk, read in full 2026-11-24 (HIGH for what it claims; LOW as evidence, design anecdotes):** Katie Dill, "How to scale intent, quality, and artistry with AI", Stripe, Lenny & Friends Summit 2026 — https://www.youtube.com/watch?v=GLvFTMtw4Jk (transcript archived at sources/dill-zombie-ui-transcript.md); checks: https://en.wikiquote.org/wiki/Christopher_Alexander, https://en.wikipedia.org/wiki/Gutenberg_Bible, https://nabeelqu.substack.com/p/what-makes-art-great; analysis in TALK-DILL-ZOMBIE-UI.md.
+- **Docs, read 2026-11-24 (HIGH for what each project documents; untested against Warden):** the OpenAI OpenAPI spec (openai/openai-openapi 2.3.0), Open Responses, the Anthropic API reference and Claude Code gateway protocol; model-server docs and changelogs for mlx-serve (github.com/ddalcu/mlx-serve, mlxserve.com), Ollama, LM Studio, llama.cpp, vLLM, SGLang, NVIDIA NIM and hosted API, mlx-lm and LiteLLM; OpenCode and pi provider docs; Claude Code LLM gateway docs; Objective-See LuLu, Apple Developer Forums on `sandbox-exec`, NVIDIA confidential computing. Links inline in [MODEL-CONNECTIONS.md](MODEL-CONNECTIONS.md).
 - **Primary (HIGH):**
   - Local CLI help and `auth status` for Claude Code 2.1.322.
   - `man launchd.plist`.

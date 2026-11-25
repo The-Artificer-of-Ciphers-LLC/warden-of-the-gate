@@ -24,7 +24,8 @@ The P7 holdout after tuning found 0 of 8 expected defects across 14 PR reviews. 
 - `typescript` 6.0.3 moves from devDependencies to dependencies (24.3 MB unpacked, per npm).
 - Live `run --task review` gets context only with `--lookup-clone` for a clone the operator can fetch. A private pilot needs Contents read for the fetch, which is outside the approved App ceiling: an owner decision, not needed today.
 - Prompts grow by up to 16,000 characters; session time must be re-measured with the budgets work.
-- Not built: model-side read/search tools (belongs in the graph comparison, measured against this baseline), decision retrieval, SDK checks, and running the repository's lint (the verification executor's job).
+- Coexists with the separate read-only base snapshot added on main in parallel (`replay --context-repo PATH --bases FILE`, commit 89eab84), which gives the session read and list tools over the base commit. The two are independent: the pack is inlined whenever a lookup clone is given, and the tools are allowed only when a snapshot is written. Which to keep is for the measurement to decide.
+- Not built here: model-side search tools (belongs in the graph comparison, measured against this baseline), decision retrieval, SDK checks, and running the repository's lint (the verification executor's job).
 
 ## Evidence
 

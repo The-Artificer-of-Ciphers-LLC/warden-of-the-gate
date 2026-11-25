@@ -54,3 +54,30 @@ test('a triage expectation may list several acceptable kinds and outcomes; an em
   assert.equal(validateSet({ name: 'x', curatedBy: 'm', cases: [{ id: 't1', kind: 'triage', title: 't', body: 'b', expect: { kind: ['bug', 'question'], outcome: ['needs-info'] } }] }), null);
   assert.match(String(validateSet({ name: 'x', curatedBy: 'm', cases: [{ id: 't1', kind: 'triage', title: 't', body: 'b', expect: { kind: [], outcome: 'needs-info' } }] })), /needs expect\.kind/);
 });
+
+test('replay enforces the wall-time budget with a REAL clock (the fake world clock is frozen and must not disable the cap)', async () => {
+  const runner = { name: 'slow', pinnedVersion: '0', async preflight() { return { ok: true, resolvedModel: 'local-default', isolation: 'seatbelt', failures: [] }; },
+    async run(_req: unknown, signal: AbortSignal, mon: { observe(d: object): string | null }) { while (!signal.aborted) { mon.observe({}); await new Promise((r) => setTimeout(r, 20)); } return { outcome: 'interrupted' as const, usage: { toolCalls: 0, modelTurns: 0, wallMs: 0 } }; } };
+  const set = { name: 's', curatedBy: 'x', synthetic: true, cases: [{ id: 'pr-1', kind: 'review' as const, title: 't', files: [{ path: 'a.ts', status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b' }], expect: { clean: true as const } }] };
+  const t0 = Date.now();
+  const rep = await runReplay(set, { runner: runner as never, localModels: ['local-default'], budgets: { maxToolCalls: 5, maxModelTurns: 5, wallTimeMs: 150 } });
+  assert.ok(Date.now() - t0 < 5000, 'the session was cut off by the budget instead of running forever');
+  assert.equal(rep.results[0].outcome, 'rejected'); assert.match(rep.results[0].reason ?? '', /wall-time budget/);
+});
+
+test('a finding outside mustFind that evidence showed to be real is counted as a real extra, not a false positive; an unverified extra stays one', async () => {
+  const base = set(); const pr = base.cases[0]; assert.equal(pr.kind, 'review');
+  const noisy = new Model((r) => r.task === 'review' ? { verdict: 'changes needed', findings: [{ id: 'f1', severity: 'major', path: 'src/sum.js', line: 3, rationale: 'x', correction: 'y' }, { id: 'f2', severity: 'minor', path: 'src/sum.js', line: 99, rationale: 'x', correction: 'y' }, { id: 'f3', severity: 'minor', path: 'src/sum.js', line: 98, rationale: 'x', correction: 'y' }] } : smart(r));
+  const withVerdict: ReplaySet = { ...base, cases: [{ ...pr, expect: { ...pr.expect, verifiedReal: [{ path: 'src/sum.js', lineMin: 99, lineMax: 99 }] } } as never] };
+  const rep = await runReplay(withVerdict, o(noisy)); const r0 = rep.results[0];
+  assert.equal(r0.findings, 3); assert.equal(r0.realExtras, 1); assert.equal(r0.falsePositives, 1); assert.ok(Math.abs((rep.metrics.falsePositiveRate ?? 0) - 1 / 3) < 1e-9);
+  const without = await runReplay({ ...base, cases: [pr] }, o(noisy)); assert.equal(without.results[0].falsePositives, 2); assert.equal(without.results[0].realExtras, undefined);
+});
+
+test('each replay case gets its own packet directory: one case never sees files left by the previous case', async () => {
+  const seen: string[] = [];
+  const spy = new Model((r) => { seen.push(r.packetDir); return r.task === 'review' ? { verdict: 'no findings', findings: [] } : { kind: 'question', outcome: 'needs-info', summary: 's', questions: ['q1?', 'q2?'] }; });
+  const s = set(); const prs = s.cases.filter((c) => c.kind === 'review');
+  await runReplay({ ...s, cases: prs }, o(spy));
+  assert.equal(new Set(seen).size, prs.length); assert.ok(prs.length >= 2);
+});
