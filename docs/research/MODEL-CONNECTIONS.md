@@ -4,7 +4,7 @@
 **Researched:** 2026-11-24.
 **Confidence:** HIGH for what each server's own docs say (primary docs, changelogs and READMEs). MEDIUM where a feature is documented but untested against Warden (mlx-serve's exact `/v1/models` JSON, LM Studio's Anthropic coverage beyond the basics, how OpenCode 2.2.7 resolves the package string). LOW or unknown where flagged inline. Nothing was installed or run against a live server; every "works with Warden" claim needs a live probe on the owner's Mac.
 
-> **Status: research + recommendation. Nothing is decided.** Per the standing rule, the PRD and ADRs are formal documents and are not changed here. This note lists exactly what would change (files and lines at `main` d93fb62) and the decisions the owner needs to make. Code is unchanged.
+> **Status: research + recommendation. One owner ruling recorded (endpoints, below); everything else is undecided.** Per the standing rule, the PRD and ADRs are formal documents and are not changed here. This note lists exactly what would change (files and lines at `main` d93fb62) and the decisions the owner needs to make. Code is unchanged.
 
 ## Owner direction (2026-11-24, verbatim)
 
@@ -14,6 +14,10 @@
 - "Open ai endpoints and Anthropic messages api. Far as I know ollama and other like lm studio support those as well"
 
 So this note never treats Warden as local-only: its model pool spans local models, the owner's large remote Nemotron and Gemma based inference service, and a frontier model when needed.
+
+## Owner rulings
+
+- 2026-11-24, on the endpoints proposal: "Ok on endoijnts" [sic]. Read as approving the endpoint design: a per-environment `runtime.endpoints` registry (API style, base URL, key env var, exact model id, limits, capabilities, tier) and "approved endpoints only" in place of "local-only". The other seven decisions in the table below stay open. The PRD and ADR edits that follow from this ruling are not made in this note.
 
 ---
 
