@@ -14,6 +14,7 @@ import { NotReadyRunner } from '../runner/agent-runner.ts';
 import type { AgentRunner } from '../runner/agent-runner.ts';
 import { OpenCodeRunner } from '../runner/opencode.ts';
 import { fileKV, planReview, runReview } from '../review/slice.ts';
+import { lookupProvider } from '../lookup/provider.ts';
 import { eligible, scanReviews } from '../scan/review-scan.ts';
 import { planTriage, runTriage } from '../triage/slice.ts';
 import { planImplement, runImplement } from '../implement/slice.ts';
@@ -171,7 +172,10 @@ export async function run(c: Ctx): Promise<Result> {
       // P3 first checkpoint: ONE read-only shadow review of ONE pull request. Local only: nothing is posted, merged or written to the contributor's branch.
       const maxAttempts = 3;   // the prototype's budget of 3 is a guess to settle with live evidence
       const kvFor = (n: number) => { const k = fileKV(st); return { read: () => k.read(n), write: (_i: number, rec: Parameters<typeof k.write>[1]) => k.write(n, rec) }; };
-      const rcfg = { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets') };
+      // `--lookup-clone DIR`: a local clone the operator keeps fetched (Warden fetches nothing); reviews then get the repository context pack for the PR head.
+      const lookupClone = str(c.flags, 'lookup-clone'); if (lookupClone && !existsSync(lookupClone)) return { code: 2, data: { task, outcome: 'refused' }, text: `run --task review: --lookup-clone ${lookupClone} does not exist` };
+      const lookupCfg = lookupClone ? { context: lookupProvider(lookupClone, { root: st.path('review', 'packets') }), maxPromptChars: 60_000 } : {};
+      const rcfg = { ...lookupCfg, maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets') };
       const caps = { maxItems: cfg.runtime.budgets.maxItems, starveAfterHours: 168, maxFactoryImplementationPrs: cfg.runtime.budgets.maxFactoryImplementationPrs, openFactoryImplementationPrs: 0 };
       if (!str(c.flags, 'item')) {
         // Bounded scan: finite items and wall time, serial, then exit. Nothing is scheduled, polled or waited on.
@@ -188,7 +192,7 @@ export async function run(c: Ctx): Promise<Result> {
       // Live local AI is explicit opt-in (`--runner opencode`): the pinned OpenCode adapter on a loopback-only LM Studio model. Default stays the honest not-ready refusal.
       const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: str(c.flags, 'lmstudio-url') }) : new NotReadyRunner();
       const o = await runReview({ store, item, runner, kv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest,
-        cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets') } });
+        cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets'), ...lookupCfg } });
       const code = o.kind === 'accepted' || o.kind === 'reused' || o.kind === 'checks-only' ? 0 : o.kind === 'rejected' ? 1 : 4;
       return { code, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task review #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }

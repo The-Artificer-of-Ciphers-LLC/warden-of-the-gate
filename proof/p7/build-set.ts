@@ -20,7 +20,10 @@ for (const c of issues.cases as Array<{ number: number; expect: unknown }>) {
 }
 for (const c of prs.cases as Array<{ number: number; kind: string; title: string; path?: string; lineMin?: number; lineMax?: number }>) {
   if (drop.has(`pr-${c.number}`)) continue; const files = gh(['api', `repos/${prs.repo}/pulls/${c.number}/files?per_page=100`]) as Array<{ filename: string; status: string; patch?: string }>;
-  cases.push({ id: `pr-${c.number}`, kind: 'review', title: c.title, files: files.filter((f) => f.patch).map((f) => ({ path: f.filename, status: f.status, patch: f.patch! })),
+  // Head and base commits let `warden replay --lookup-clone DIR` build repository context; fetch the heads into that clone with
+  // `git fetch origin '+refs/pull/*/head:refs/remotes/origin/pr/*'` (references only; nothing from the clone is committed here).
+  const pr = gh(['api', `repos/${prs.repo}/pulls/${c.number}`]) as { head: { sha: string }; base: { sha: string } };
+  cases.push({ id: `pr-${c.number}`, kind: 'review', title: c.title, head: pr.head.sha, base: pr.base.sha, files: files.filter((f) => f.patch).map((f) => ({ path: f.filename, status: f.status, patch: f.patch! })),
     expect: c.kind === 'clean' ? { clean: true } : { mustFind: [{ path: c.path!, lineMin: c.lineMin!, lineMax: c.lineMax! }] } });
 }
 mkdirSync(dirname(resolve(out)), { recursive: true, mode: 0o700 });
