@@ -1,6 +1,6 @@
-# Contract review is the human gate; boundaries always get a human; the reviewer is not the writer's twin
+# Contract review is the human gate; boundary changes come to the maintainer as a proposed design; reviewer independence
 
-- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here changes behavior until accepted.
+- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here changes behavior until accepted, except the boundary ruling below.
 - **Date:** 2026-11-25
 - **Decided by:** pending @trek-e
 - **Research:** [Review the tests, not the diff](../research/TESTS-OVER-CODE-REVIEW.md)
@@ -17,9 +17,18 @@ A second model reading the diff is one useful layer, but not an independent one.
 
 - **The contract is what a human approves.** For approved features and enhancements, the approval Triage already requires covers the acceptance criteria **and** the frozen acceptance tests from the test session (ADR 0014). A decision card for implementation work shows, in order: the spec or issue, the acceptance criteria, the frozen test diff, the executor's fail-on-base result, then risk, findings and evidence. The implementation diff is linked, not inlined, unless the change is a boundary change.
 - **A focused test-diff scan replaces open-ended diff reading.** The card and Review both check the test diff against one list: deleted or weakened assertions, widened tolerances or timeouts, new retries, regenerated snapshots, `.skip`/`.only`/`todo`, changed test-runner, coverage or mutation configuration, tests moved out of the test globs, and tests that assert on the implementation's own output rather than an independent expectation. Each hit is a finding with a location, not a vague concern.
-- **Boundary changes floor at a maintainer decision.** A change is a boundary change when it touches a configured boundary class. Defaults, configurable in `.github/ORDERS.yaml` as paths and in `.github/warden.yml` as detectors: exported or public interfaces and API contracts; database schemas and migrations; authentication, authorization, secrets and security-sensitive paths; a new dependency or a major-version dependency change; shared components named by the repository; test, verification and CI infrastructure. A boundary change gets a maintainer decision even when every other gate passes; the card inlines the implementation diff for the boundary files. The existing one-way door floor in `implement/slice.ts` (schema, migration) is one detector of this class. How far this overlaps the open reversibility question is for the owner.
+- **Boundary changes floor at a maintainer decision.** A change is a boundary change when it touches a configured boundary class. Defaults, configurable in `.github/ORDERS.yaml` as paths and in `.github/warden.yml` as detectors: exported or public interfaces and API contracts; database schemas and migrations; authentication, authorization, secrets and security-sensitive paths; a new dependency or a major-version dependency change; shared components named by the repository; test, verification and CI infrastructure. A boundary change gets a maintainer decision even when every other gate passes, in the form the owner ruled below. The existing one-way door floor in `implement/slice.ts` (schema, migration) is one detector of this class. How far this overlaps the open reversibility question is for the owner.
 - **Everything else rests on the loop, not on human diff reading.** For eligible non-boundary work, human review of the implementation diff stays optional. AI review of the diff remains a layer (it finds what the loop cannot), alongside frozen tests, test-quality evidence (ADR 0016) and the static-first gates. This does not change the merge gate: blocker findings always stop a merge, and other severities follow ADR 0008.
-- **Reviewer independence.** Review prefers a model from a different family than the one that wrote the change (the Implement or Rework session, or the contributor's declared tool where known), when the approved pool has one. The verdict records the writer's and reviewer's families and model ids. Same-family review is allowed when no other family is available and is reported as such; it never blocks work by itself. A fresh session is required in all cases, as today.
+- **Reviewer independence.** A fresh session is required in all cases, as today. The verdict records the writer's model id and family (the Implement or Rework session, or the contributor's declared tool where known) and the reviewer's. Whether Review should prefer a different family is not decided (see Owner rulings); the MVP may review with a fresh context of the same model, reported as such.
+
+## Owner rulings (2026-11-25, @trek-e)
+
+- **Boundary changes come as a proposed design:** "propose designs come to maintainer via tools like improve-codebase-architecture skill from matt pocock, can increase/decresase fidelity but initially mvp will be limited maintainer interaction to simple decision matrix questions and then deploy based on that."
+  - When planned work will cross a boundary class, Warden brings the proposed design before building it; Warden then builds and deploys based on the maintainer's answers. A boundary change found only in finished work, such as a contributor PR, gets the same kind of card about the change it makes.
+  - `improve-codebase-architecture` is a model for the tool, not a dependency. It surveys the code (weighted toward recently changed areas and existing ADRs), writes candidate cards with the files, problem, proposed solution, benefits, a before and after diagram and a strength rating, ends with a top recommendation, and changes no code. As published it is invoked by a person and then interviews them about the chosen candidate; Warden runs unattended, so it uses the survey and card shape and replaces the interview with the questions below.
+  - Fidelity is a setting. The MVP level is a decision matrix: a few options side by side with their trade-offs and Warden's recommendation, each question answerable with one pick. Higher levels add the full design write-up and diagrams.
+  - Still open: which classes count (the default list above stands as proposed) and how they relate to the reversibility question.
+- **Reviewer model:** "i don't know yet, maybe a new context and sam model, or, we build statistics and see which mdoel is better at reviewing code as a longer term goal." The MVP may use a fresh context of the same model. Recording model ids on every verdict makes per-model review statistics possible (PRD §11); choosing reviewer models from them is a longer-term goal.
 
 ## Consequences
 
@@ -27,7 +36,8 @@ A second model reading the diff is one useful layer, but not an independent one.
 - The boundary floor will raise the human-decision rate on some work that auto-merges today. The measure in PRD §11 (maintainer decisions per completed item) keeps that visible.
 - Contributor PRs get the same card shape: the linked issue or spec, the contributor's test diff with the scan results, then the rest.
 - The cost the article admits is real: review was also how people learned the codebase. For a solo maintainer that is mostly the maintainer's own understanding; Retro's coherence check and the held Retro sampling idea are the places to revisit it, not a requirement here.
-- Model-family recording depends on the endpoint registry and verdict provenance still open in [MODEL-CONNECTIONS](../research/MODEL-CONNECTIONS.md).
+- Model-family recording, and so the review statistics, depends on the endpoint registry and verdict provenance still open in [MODEL-CONNECTIONS](../research/MODEL-CONNECTIONS.md).
+- Boundary design cards are a new card kind and a new Warden job (the design survey), with its own budget.
 
 ## Related
 

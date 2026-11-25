@@ -1,6 +1,6 @@
 # Frozen acceptance tests: written first in their own session, untouchable during the fix
 
-- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here changes behavior until accepted.
+- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here changes behavior until accepted, except the two owner rulings below.
 - **Date:** 2026-11-25
 - **Decided by:** pending @trek-e
 - **Research:** [Review the tests, not the diff](../research/TESTS-OVER-CODE-REVIEW.md); [FACTORY-CLAIMS-VS-EVIDENCE](../research/FACTORY-CLAIMS-VS-EVIDENCE.md) §3.5
@@ -24,7 +24,12 @@ Agents also cheat when they can. ImpossibleBench found Claude models cheated mos
 - **A wrong test is not fixed by the fixer.** The fix session's result schema has an explicit `test-dispute` exit (on ImpossibleBench, an allowed "flag it" exit cut GPT-5's cheating from 54% to 9%). If the fix session reports that a frozen test contradicts the spec, Implement stops with `test-dispute`, records the session's stated reason as untrusted text, and returns the item to the test session once with that reason, or to `needs-decision` if the spec itself is ambiguous. The attempt counts.
 - **Rework keeps the freeze.** Rework sees the same frozen set. A review finding that a frozen test is itself wrong routes to a new test session and a new freeze, recorded with the finding that caused it; it never travels inside a fix commit.
 - **Factory PRs separate the two.** A factory PR's description lists the frozen tests (paths, digests) separately from the implementation, so a reader of the contract (ADR 0015) can find them first.
-- **Contributor PRs.** Warden cannot control how a contributor wrote their change. Their PRs keep the existing rules: changes to existing test expectations need review against approved requirements, and weakening is detected (PRD §7). Proposed narrowing of the 2026-11-24 CI-fix ruling, for the owner to decide: a CI fix that Warden pushes to a contributor branch may not change any test file or test-runner configuration; if the only fix is a test change, Warden posts the cause and a patch instead and the PR goes to `needs-author`.
+- **Contributor PRs.** Warden cannot control how a contributor wrote their change. Their PRs keep the existing rules: changes to existing test expectations need review against approved requirements, and weakening is detected (PRD §7). Warden pushes nothing to a contributor's branch (owner ruling 2026-11-25, ADR 0008), so no Warden commit can change a contributor's tests.
+
+## Owner rulings (2026-11-25, @trek-e)
+
+- **Bug reproducers under standing authority:** "For now, yes, will need to test." The frozen reproducer plus the weakening and mutation checks are enough; no maintainer looks at the reproducer before the fix session by default, and a standing order may require a look. The ruling is provisional: pilot and replay testing must measure how often a reproducer later proved wrong or too weak (PRD §11). Features still include the acceptance tests in the approval.
+- **Fixes on contributor branches:** moot. Warden is review only on contributor PRs (ADR 0008), which replaces the proposed narrowing that stood here.
 
 ## Consequences
 
@@ -38,6 +43,6 @@ Agents also cheat when they can. ImpossibleBench found Claude models cheated mos
 ## Related
 
 - [ADR 0006](0006-agentrunner-adapter-seam.md): harness permissions are not trusted; the deterministic core validates
-- [ADR 0008](0008-tiered-autonomy-and-merge-gates.md): CI-fix pushes to contributor branches
+- [ADR 0008](0008-tiered-autonomy-and-merge-gates.md): review only on contributor PRs
 - [ADR 0015](0015-contract-review-human-gate.md): the frozen tests are the contract a human reviews
 - [ADR 0016](0016-verification-loop-and-test-quality-evidence.md): the verification loop is safe only because these tests are frozen

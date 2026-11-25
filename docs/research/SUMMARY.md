@@ -303,6 +303,7 @@ Article supplied by the owner on 2026-11-25; every cited claim traced to its pri
 - **Already in Warden:** trusted executor evidence, fail-before/pass-after, weakening detection, static-first ladder, approved feature criteria, the App never approving its own PR.
 - **Proposed (owner decisions):** separate test and fix sessions with OS-enforced frozen tests (ADR 0014); the human gate reviews the contract and test diff, boundary changes always get a maintainer, the reviewer prefers another model family (ADR 0015); an orchestrator-owned verify-and-continue loop, mutation findings on changed lines, optional holdouts and a longer quiet-escape list (ADR 0016).
 - **Not adopted:** Claude Code-specific settings (Warden is harness-agnostic), StrongDM's no-human-review rule and LLM-scored scenarios, the article's figures as thresholds, and any ruling on `AGENTS.md`/`CLAUDE.md` as protected paths (still open from PR #44).
+- **Owner rulings (2026-11-25):** bug reproducers need no maintainer look for now, to be tested; boundary changes come to the maintainer as a proposed design, MVP as decision-matrix questions; Warden is review only on contributor PRs (replaces the 2026-11-24 push-fixes ruling); a surviving mutant on a changed line fails the check; hidden acceptance checks are a pilot until they show real catches; the reviewer model is undecided, with per-model review statistics as a longer-term goal.
 
 ## Implications for Roadmap
 

@@ -48,7 +48,7 @@
     {"id": "UX-review", "title": "Operator can invoke Review and inspect precise accepted/current versus stale findings without branch edits", "source": "PRD 5 Review,10; ADR 0008", "user_facing": true},
     {"id": "FACTORY-implement", "title": "Factory-owned bug/approved-feature implementation with scope recheck, cap, evidence and Merge Danger", "source": "PRD 5 Implement; ADR 0005,0008,0009", "user_facing": false},
     {"id": "FACTORY-takeover", "title": "Trusted-base takeover evaluates abandoned work as data, preserves issue and credits sound contributions", "source": "PRD 5 Implement; ADR 0002,0009", "user_facing": false},
-    {"id": "FACTORY-rework", "title": "Factory corrections, plus CI-fix commits on contributor PRs, with persistent three-cycle/no-progress/retry accounting and timely contributor-round escalation", "source": "PRD 5 Claim/Rework; ADR 0002,0008", "user_facing": false},
+    {"id": "FACTORY-rework", "title": "Factory corrections (contributor PRs are review only), with persistent three-cycle/no-progress/retry accounting and timely contributor-round escalation", "source": "PRD 5 Claim/Rework; ADR 0002,0008", "user_facing": false},
     {"id": "FACTORY-merge", "title": "Eligible contributor/factory auto-merge checks all current platform/evidence/authority/approval gates and reconciles actual outcome", "source": "PRD 3,4,5 Review; ADR 0008,0012", "user_facing": false},
     {"id": "FACTORY-risk", "title": "Independent risk/severity gates, high-risk/authority changes, verified dependency origin and legitimate approval independence", "source": "PRD 3; ADR 0008,0010", "user_facing": false},
     {"id": "FACTORY-containment", "title": "Critical-escape scope pause, evidence/alerting and current-state-aware targeted remediation with reviewed resume", "source": "PRD 9", "user_facing": false},
@@ -143,7 +143,7 @@
       "accepts": [
         "User can run warden run --task implement and warden run --task rework on factory workspaces; bug and approved-feature paths produce independently verified PRs with Merge Danger and no premature review marker.",
         "Factory ownership/cap and approved scope are rechecked; credited trusted-base takeover never edits or blindly executes contributor branches.",
-        "CI-fix pushes to contributor PRs add commits on the reviewed head only, never force-push, and fall back to a posted patch when maintainer edits are off, the push is refused or workflow files are touched; they count against the factory rework limit, not author activity.",
+        "Contributor PRs are review only: failing checks are reported to the author, nothing is pushed to a contributor branch, and a waiting workflow run is at most approved for the reviewed head after a capability proof.",
         "Three factory cycles, no-progress completion, separate retry exhaustion and three timely contributor fix rounds persist across cold starts/replacement PRs; third-cycle success completes and unresolved timely work escalates without automatic closure.",
         "Both contributor and factory PRs can merge only with current authorized scope, severity/risk gates, independent evidence, required genuine reviews/checks, expected head and refreshed base/policy/approval/hold/stop context.",
         "Verified automation-origin dependency/CVE fixes remain within authority; high-risk/uncertain/breaking/migration and self-authority changes escalate; an App cannot approve its own PR as an independent identity.",

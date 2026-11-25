@@ -5,7 +5,7 @@
 - **Document:** Itai Spector, "Stop Reviewing AI's Code. Review Its Tests (Here's How to Write Ones It Can't Cheat)", Medium, November 2026 (17-page PDF supplied by the owner).
 - **Method:** three parallel research tracks traced every cited claim to its primary source (human review evidence; AI self-review and test gaming; the hands-on test-locking techniques against current Claude Code, OpenCode, fast-check, Stryker and Vitest docs). Then a comparison by hand against the PRD, the ADRs and `packages/warden` on `main` (ea3c3e5).
 - **Confidence:** MEDIUM. The direction of every finding holds. Most numbers come from 2025-2026 preprints, single-company studies or vendor posts, and three of the article's figures or attributions are wrong (§1).
-- **What this PR changes:** a new research note, **PROPOSED** PRD text marked **[T]**, and three **proposed** ADRs ([0014](../adr/0014-frozen-acceptance-tests.md), [0015](../adr/0015-contract-review-human-gate.md), [0016](../adr/0016-verification-loop-and-test-quality-evidence.md)). Nothing marked [T] changes behavior until the owner accepts it. The [owner questions](#5-owner-questions) are the decisions it needs.
+- **What this PR changes:** a new research note, **PROPOSED** PRD text marked **[T]**, and three **proposed** ADRs ([0014](../adr/0014-frozen-acceptance-tests.md), [0015](../adr/0015-contract-review-human-gate.md), [0016](../adr/0016-verification-loop-and-test-quality-evidence.md)). Nothing marked [T] changes behavior until the owner accepts it. The [owner questions](#5-owner-questions) are the decisions it needs; the owner answered all six on 2026-11-25 (§5).
 
 ## The method in one paragraph
 
@@ -76,7 +76,7 @@ Two extra sources sharpen the article's central argument:
 7. **Reviewer independence.** Review may run on the same model family that wrote the change, which the correlated-error evidence says shares blind spots. The pool has distinct families (Nemotron, Gemma, frontier escalation). → ADR 0015.
 8. **Quiet-escape list is incomplete:** no check for `.only`, widened tolerances or timeouts, regenerated snapshots, or test-runner config changes (include/exclude, retries). → PRD §7.
 9. **PR evidence is half shown.** The factory PR body already lists each executor check with its exit code and an output hash (`implement/slice.ts`), which is better than a model summary. It does not show the command line or a bounded tail of the output, which is what Willison and the article ask a reader to see. → PRD §5 Implement.
-10. **CI-fix pushes to contributor branches can touch tests.** Nothing in the 2026-11-24 ruling stops a CI fix from "fixing" a failing test by changing it. → proposed narrowing, owner question.
+10. **CI-fix pushes to contributor branches can touch tests.** Nothing in the 2026-11-24 ruling stops a CI fix from "fixing" a failing test by changing it. → resolved 2026-11-25: the owner made Warden review only on contributor PRs, so it pushes nothing there.
 
 ### Not adopted
 
@@ -89,22 +89,24 @@ Two extra sources sharpen the article's central argument:
 ## 4. What the PR proposes
 
 - **ADR 0014, frozen acceptance tests.** Implement splits into a test session (from the issue or approved spec only, no fix) and a fix session. The executor proves the new tests fail on base, records a digest of the frozen test set, the OS profile denies writes to it in the fix session, and the executor rejects any candidate whose frozen files changed. A wrong test is never silently rewritten: it goes back to the test session with a recorded reason, or to `needs-decision`. Rework keeps the same freeze.
-- **ADR 0015, contract review is the human gate.** Where a human is in the loop, the card puts the spec and the acceptance-test diff first and the implementation diff behind it. A short, focused test-diff scan list replaces open-ended diff reading. Boundary changes (configurable: public interfaces, schemas and migrations, auth and security-sensitive paths, major dependencies, test and verification infrastructure) get a maintainer decision regardless of other eligibility. Review prefers a different model family from the writer when the pool allows and records both.
-- **ADR 0016, verification loop and test-quality evidence.** A bounded, orchestrator-owned verify-and-continue loop inside Implement and Rework, safe only because tests are frozen. Test-quality evidence: mutation score on changed code (ratcheted, finding by default), property-based tests encouraged for pure logic, optional maintainer-held holdout checks run only by the executor, and an expanded quiet-escape list.
+- **ADR 0015, contract review is the human gate.** Where a human is in the loop, the card puts the spec and the acceptance-test diff first and the implementation diff behind it. A short, focused test-diff scan list replaces open-ended diff reading. Boundary changes (configurable: public interfaces, schemas and migrations, auth and security-sensitive paths, major dependencies, test and verification infrastructure) get a maintainer decision regardless of other eligibility. Review records the writer's and reviewer's models; whether to prefer a different family is still undecided (ruling 6).
+- **ADR 0016, verification loop and test-quality evidence.** A bounded, orchestrator-owned verify-and-continue loop inside Implement and Rework, safe only because tests are frozen. Test-quality evidence: mutation testing on changed code (after the 2026-11-25 ruling, any surviving mutant on a changed line fails the check), property-based tests encouraged for pure logic, hidden acceptance checks run only by the executor (a pilot after the ruling), and an expanded quiet-escape list.
 - **PRD [T] text** in §3, §5 (Triage, Implement, Review, Rework), §7, §8, §10, §11 and the owner-decision table; README ADR index (also adds the missing ADR 0013 row); SUMMARY entry.
 
-The implementation plan and coverage trace are not changed; they follow once the owner rules.
+After the 2026-11-25 rulings, the implementation plan and coverage trace drop the contributor-branch pushes (ruling 3). Their other [T] changes follow when the ADRs are accepted.
 
-## 5. Owner questions
+## 5. Owner questions and rulings
 
-None of these changes behavior until decided. Each is also in the PRD's open table.
+The owner answered on 2026-11-25. Rulings are quoted as written; where they are applied is in the PRD's decided table.
 
-1. **Bug reproducers under standing authority:** is the frozen test plus the mutation and weakening checks enough, or must a maintainer glance at the reproducer before the fix runs? (ADR 0014; proposed: no human by default, a standing-order option to require one; features always include the acceptance tests in the approval.)
-2. **Boundary floor:** should boundary changes always need a maintainer, even when everything else makes them auto-merge eligible, and which classes? (ADR 0015; overlaps open question 3 on reversibility.)
-3. **CI-fix pushes and tests:** may a CI fix pushed to a contributor branch change a test file, or must it fall back to the posted patch? (Proposed: fall back.)
-4. **Mutation score:** finding only during the pilot, or a merge gate, and at what threshold? (ADR 0016; proposed: finding on surviving mutants in changed lines, gate only after pilot data.)
-5. **Holdout checks:** allow maintainer-held acceptance checks for approved features, kept out of the repository and out of every prompt? (ADR 0016; this answers FACTORY-CLAIMS question 5 if accepted.)
-6. **Reviewer family:** prefer a reviewer from a different model family than the writer, and record both on the verdict? (ADR 0015; ties to the verdict-provenance decision in [MODEL-CONNECTIONS](MODEL-CONNECTIONS.md).)
+1. **Bug reproducers under standing authority:** is the frozen test plus the mutation and weakening checks enough, or must a maintainer glance at the reproducer before the fix runs? **Ruling:** "For now, yes, will need to test." Enough for now, no look by default; pilot and replay testing must check it (ADR 0014).
+2. **Boundary floor:** should boundary changes always need a maintainer, and which classes? **Ruling:** "propose designs come to maintainer via tools like improve-codebase-architecture skill from matt pocock, can increase/decresase fidelity but initially mvp will be limited maintainer interaction to simple decision matrix questions and then deploy based on that." The classes are still open (ADR 0015).
+3. **CI-fix pushes and tests:** may a fix pushed to a contributor branch change a test file? **Ruling:** "We are a review agent for contributor, it is up to the contributor to address. at most we would approve/not approve CI runs, if CI runs are restricted to maintainer approval by the repo", confirmed "Yes, review only". This replaces the 2026-11-24 "Let it push fixes" (ADR 0008).
+4. **Mutation score:** finding only, or a merge gate? **Ruling:** "if a planted bug survives then it needs to be identified and failed as a check. bugs that aren't detected are just as bad as ones that are." (ADR 0016.)
+5. **Holdout checks:** allow hidden acceptance checks, kept out of the repository and every prompt? **Ruling:** "if that acutally works shure, if it's made up why would a model with no context know what happened in another context." A pilot, written from the spec by a separate session, promoted to a gate only on confirmed catches (ADR 0016).
+6. **Reviewer family:** prefer a reviewer from a different model family than the writer? **Ruling:** not decided: "i don't know yet, maybe a new context and sam model, or, we build statistics and see which mdoel is better at reviewing code as a longer term goal." The MVP may use a fresh context of the same model; verdicts record model ids for the statistics (ADR 0015).
+
+New questions the rulings raise: which boundary classes count; which workflow runs Warden may approve; how an equivalent mutant is cleared; and what holdout evidence promotes the pilot.
 
 ## Sources
 
