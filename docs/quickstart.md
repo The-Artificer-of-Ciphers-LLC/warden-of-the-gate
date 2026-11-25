@@ -11,7 +11,7 @@ Legend: **[verified]** means exercised in this repository by an automated test o
 | Node | `>= 22.18` **[verified]** |
 | Mac for model work | macOS with Seatbelt (`sandbox-exec`); tested on macOS 27 only. Model-backed tasks refuse to start without a verified boundary **[verified]** |
 | OpenCode | pinned `2.2.7`; any other version is refused **[verified]** |
-| Local model | served on loopback by LM Studio (default `http://127.0.0.1:1235/v1`); a non-loopback provider, or a resolved model that is not a configured local one, is refused. There is no hosted fallback **[verified]** |
+| Local model | served on loopback by a local OpenAI-compatible server, mlx-serve (default `http://127.0.0.1:11234/v1`; `--model-url` overrides); a non-loopback provider, or a resolved model that is not a configured local one, is refused. There is no hosted fallback **[verified]** |
 | GitHub | a repository you own; a GitHub App with `issues: write`, `metadata: read` and `actions: read` installed only on it **[owner]** |
 
 ## 1. Install the candidate (unpublished)
