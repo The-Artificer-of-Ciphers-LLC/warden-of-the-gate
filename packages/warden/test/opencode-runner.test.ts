@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { OpenCodeRunner, classifyBaseURL, extractJson, parseVersion } from '../src/runner/opencode.ts';
 
 test('classifyBaseURL accepts only loopback literals and rejects lookalike hosts and userinfo tricks', () => {
-  assert.equal(classifyBaseURL('http://127.0.0.1:1235/v1').local, true);
-  assert.equal(classifyBaseURL('http://localhost:1235/v1').local, true);
-  for (const bad of ['https://api.openai.com/v1', 'http://127.0.0.1.evil.example/v1', 'http://user:pw@127.0.0.1:1235/v1', 'file:///etc/passwd', 'not a url', 'http://192.168.1.5:1235/v1']) assert.equal(classifyBaseURL(bad).local, false, bad);
+  assert.equal(classifyBaseURL('http://127.0.0.1:11234/v1').local, true);
+  assert.equal(classifyBaseURL('http://localhost:11234/v1').local, true);
+  for (const bad of ['https://api.openai.com/v1', 'http://127.0.0.1.evil.example/v1', 'http://user:pw@127.0.0.1:11234/v1', 'file:///etc/passwd', 'not a url', 'http://192.168.1.5:11234/v1']) assert.equal(classifyBaseURL(bad).local, false, bad);
 });
 
 test('extractJson handles fenced and bare JSON and reports garbage instead of guessing', () => {
@@ -31,10 +31,20 @@ test('the loaded context window is read from the endpoint (read-only GET), not g
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r())); const port = (srv.address() as { port: number }).port;
   try {
     const a = new OpenCodeRunner({ modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1` }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
-    await a.learnContext(); assert.equal(a.o.contextLimit, 262144); assert.equal(hits, 1); assert.equal(path, '/api/v0/models/m1');
+    await a.learnContext(); assert.equal(a.o.contextLimit, 262144); assert.equal(hits, 2, 'the OpenAI-style listing had no entry, so the LM Studio route was tried'); assert.equal(path, '/api/v0/models/m1');
     const b = new OpenCodeRunner({ modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1`, contextLimit: 8192 }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
-    await b.learnContext(); assert.equal(b.o.contextLimit, 8192); assert.equal(hits, 1, 'an explicit window is never overridden or queried');
+    await b.learnContext(); assert.equal(b.o.contextLimit, 8192); assert.equal(hits, 2, 'an explicit window is never overridden or queried');
   } finally { srv.close(); }
   const c = new OpenCodeRunner({ modelId: 'm1', baseURL: 'http://127.0.0.1:1/v1' }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
   await c.learnContext(); assert.equal(c.o.contextLimit, 131072);
+});
+
+test('the loaded context window is read from an OpenAI-style /v1/models entry (mlx-serve reports context_length), with no second request', async () => {
+  const { createServer } = await import('node:http'); const paths: string[] = [];
+  const srv = createServer((req, res) => { paths.push(String(req.url)); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ object: 'list', data: [{ id: 'other', context_length: 4096 }, { id: 'ddalcu/m1', context_length: 262144, max_model_len: 262144 }] })); });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r())); const port = (srv.address() as { port: number }).port;
+  try {
+    const a = new OpenCodeRunner({ modelId: 'ddalcu/m1', baseURL: `http://127.0.0.1:${port}/v1` }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number }; ctxKnown: boolean };
+    await a.learnContext(); assert.equal(a.o.contextLimit, 262144); assert.deepEqual(paths, ['/v1/models']); assert.equal(a.ctxKnown, true);
+  } finally { srv.close(); }
 });

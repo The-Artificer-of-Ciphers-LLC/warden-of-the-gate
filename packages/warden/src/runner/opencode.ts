@@ -48,25 +48,34 @@ export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
   private o: Required<Omit<OpenCodeOptions, 'pinned' | 'autoCompact' | 'windowGuard'>> & { pinned: string; autoCompact?: boolean; windowGuard: number };
   constructor(o: OpenCodeOptions) {
-    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:1235/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 131072, /* fallback only: the real loaded window is read from the endpoint before each session (see learnContext) */
+    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:11234/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 131072, /* fallback only: the real loaded window is read from the endpoint before each session (see learnContext) */
       outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ windowGuard: o.windowGuard ?? 0, maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
     this.pinnedVersion = this.o.pinned; this.ctxExplicit = o.contextLimit !== undefined;
   }
   private ctxExplicit = false; private ctxLearned = false; /** true once the window is known for certain (configured, or read from the endpoint); the window guard never runs on the 131072 fallback. */ private get ctxKnown() { return this.ctxExplicit || this.ctxLearned; }
-  /** Reads the window the model is actually LOADED with from LM Studio's read-only listing (a GET: nothing is loaded, unloaded or changed). A configured window that is
-   *  smaller than the real one makes OpenCode compact early and fail; a larger one overflows. Unreadable -> the configured fallback is kept. Loopback only (checked at start). */
+  /** Reads the window the model is actually LOADED with, from the local server's read-only listing (GETs: nothing is loaded, unloaded or changed). First the OpenAI-style
+   *  `/v1/models` entry for this model (mlx-serve reports `context_length`; some servers `loaded_context_length` or `max_model_len`), then LM Studio's `/api/v0/models/<id>`.
+   *  A configured window that is smaller than the real one makes OpenCode compact early and fail; a larger one overflows. Unreadable -> the configured fallback is kept
+   *  and the lookup is retried before the next session. Loopback only (checked at start). */
   private async learnContext(): Promise<void> {
     if (this.ctxExplicit || this.ctxLearned) return;
+    const ok = (n: number) => Number.isInteger(n) && n >= 4096;
     try {
-      const u = new URL(this.o.baseURL); const r = await fetch(`${u.origin}/api/v0/models/${encodeURIComponent(this.o.modelId)}`, { signal: AbortSignal.timeout(5000) });
+      const u = new URL(this.o.baseURL);
+      try {
+        const j = (await (await fetch(`${u.origin}/v1/models`, { signal: AbortSignal.timeout(5000) })).json()) as { data?: Array<Record<string, unknown>> };
+        const m = j.data?.find((x) => x.id === this.o.modelId); const n = Number(m?.loaded_context_length ?? m?.context_length ?? m?.max_model_len);
+        if (ok(n)) { this.o.contextLimit = n; this.ctxLearned = true; return; }
+      } catch { /* try the LM Studio route */ }
+      const r = await fetch(`${u.origin}/api/v0/models/${encodeURIComponent(this.o.modelId)}`, { signal: AbortSignal.timeout(5000) });
       const n = Number(((await r.json()) as { loaded_context_length?: number }).loaded_context_length);
-      if (Number.isInteger(n) && n >= 4096) { this.o.contextLimit = n; this.ctxLearned = true; }
+      if (ok(n)) { this.o.contextLimit = n; this.ctxLearned = true; }
     } catch { /* keep the fallback; the lookup is retried before the next session */ }
   }
 
   private config(): Record<string, unknown> {
     return { model: `lmstudio/${this.o.modelId}`,
-      providers: { lmstudio: { name: 'LM Studio (local)', package: '@ai-sdk/openai-compatible', settings: { baseURL: this.o.baseURL },
+      providers: { lmstudio: { name: 'Local model server', package: '@ai-sdk/openai-compatible', settings: { baseURL: this.o.baseURL },
         models: { [this.o.modelId]: { name: this.o.modelId, limit: { context: this.o.contextLimit, output: this.o.outputLimit } } } } },
       ...(this.o.autoCompact === false ? { compaction: { auto: false } } : {}),
       update: 'disable', share: 'disabled', policies: [{ action: 'provider.use', resource: 'opencode', effect: 'deny' }] };
