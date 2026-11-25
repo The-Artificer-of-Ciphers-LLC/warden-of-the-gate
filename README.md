@@ -39,6 +39,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 ## Research
 
 - [PRD best-practice checks](docs/research/PRD-BEST-PRACTICES.md): verified platform constraints, credentials, approvals, state, quality and agentic turnaround guidance.
+- [Decision-model router (Jev)](docs/research/DECISION-MODEL-ROUTER.md): whether a fast one-pass decision model fits as Warden's front end; router only, never a merge judge; basis for proposed [ADR 0019](docs/adr/0019-decision-model-router.md).
 - [Code-intelligence options](docs/research/CODE-INTELLIGENCE-OPTIONS.md): Omnigraph, GSD Atlas, SCIP, CodeGraphContext and alternatives; existing capabilities versus SDK-enforcement roadmap, plus a bounded evaluation proposal.
 - [Correction ladder](docs/research/FRAMEWORK-CORRECTIONS.md): design/static-first quality rationale; older rollout/autonomy recommendations are historical.
 
