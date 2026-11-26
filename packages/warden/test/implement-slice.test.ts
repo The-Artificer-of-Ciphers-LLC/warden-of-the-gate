@@ -53,7 +53,7 @@ async function setup(o: { orders?: Orders; ledger?: (l: Ledger) => void; over?: 
     async confirmClaim(item) { const led = await ledgerOf(r, item); return led.owner?.kind === 'factory'; } };
   let stopped = false;
   const cfg: ImplConfig = { repository: REPO, source: bare, baseSha, factoryLogins: ['warden-factory'], factoryAuthor: { name: 'warden-factory', email: 'f@x.io' }, model: 'local-default', harness: 'opencode 2.2.7', maxFactoryPrs: 1, maxAttempts: 3, maxLaunchRetries: 3,
-    budgets: { maxToolCalls: 20, maxModelTurns: 10, wallTimeMs: 60_000 }, localModels: ['local-default'], workRoot: join(root, 'work'), checks: [{ id: 'unit', kind: 'test', command: process.execPath, args: ['--test', 'test/'], timeoutMs: 60_000 }] };
+    budgets: { maxToolCalls: 20, maxModelTurns: 10, wallTimeMs: 60_000 }, localModels: ['local-default'], workRoot: join(root, 'work'), checks: [{ id: 'unit', kind: 'test', command: process.execPath, args: ['--test', 'test/sum.test.js'], timeoutMs: 60_000 }] };
   const run = (runner: AgentRunner, over: Partial<Parameters<typeof runImplement>[0]> = {}) => runImplement({ store: r.world.view('operator'), item: n, policy: r.policy, cfg, runner, kv, publisher, intents, stopped: () => stopped, ...over });
   return { r, n, bare, root, run, kv, rec: () => rec, published, setStopped: (v: boolean) => { stopped = v; }, cleanup: () => rmSync(root, { recursive: true, force: true }), cfg };
 }
