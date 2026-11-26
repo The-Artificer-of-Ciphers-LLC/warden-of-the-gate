@@ -1,6 +1,6 @@
 # Measured, not estimated: run-over-run scorecards and untrusted self-assessment
 
-- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here is decided.
+- **Status:** Proposed, awaiting owner review (2026-11-25). One rule is decided: a live rate outside its control limits also pauses auto-merge for that model (@trek-e, 2026-11-26). Everything else here is still Proposed.
 - **Date:** 2026-11-25
 - **Decided by:** pending @trek-e
 - **Research:** [Sumner, "How to Ship Millions of Lines of Agent-Written Code"](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md), candidate 4; [follow-up research on model scorecards](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect)
@@ -28,6 +28,7 @@ Warden already treats model self-reported success as untrusted (§5 Review). It 
 - **Scored per model, on every change.** The sets run on every model, harness, prompt or configuration change and on a schedule, separately for each model in the pool. Cases that decide auto-merge report pass^k over repeated trials.
 - **Intervals and paired comparison.** Every score carries a standard error and a 95% interval, clustered by repository or PR. A model swap, or PR #47 ruling 6's fresh-context same-model reviewer, is judged on paired differences over the same cases. Set sizes come from power analysis.
 - **Live rates on control charts.** From ledgers, per model and task contract: maintainer override rate, findings dismissed versus acted on, abstention rate, rework loops per item, and factory merges later reverted. Limits are p̄ ± 3√(p̄(1−p̄)/n) from a baseline window. A point outside the limits is a Retro finding that the model's behavior changed. Wide limits from small samples are shown as such.
+- **Out of limits pauses auto-merge (decided 2026-11-26, @trek-e).** When a model's live rate goes past its control limit, Retro flags it and auto-merge pauses for that model. Its other work continues, but its verdicts cannot make a PR eligible for auto-merge until the pause is lifted. What lifts the pause is still open (question 5).
 - **Graders are calibrated, transcripts are read.** A model-graded score is checked against maintainer decisions before it counts and never decides a gate (PRD §11). Retro samples session transcripts each window, and flags a regression set that has sat at 100% so new cases are added.
 
 ## Consequences
@@ -43,7 +44,8 @@ Warden already treats model self-reported success as untrusted (§5 Review). It 
 1. Adopt the run-over-run scorecard for Retro and scan reports?
 2. Adopt the rule that a cited rule must resolve to real ORDERS, config or spec text, with an unresolved citation counted as a finding?
 3. Adopt the model scorecard (replay regression and capability sets per model with intervals, and live rates on control charts)?
-4. When a live rate leaves its control limits, is that a Retro finding only, or does it also pause auto-merge for that model until its regression set passes again?
+4. ~~When a live rate leaves its control limits, is that a Retro finding only, or does it also pause auto-merge?~~ Decided 2026-11-26: both. Retro flags it and auto-merge pauses for that model.
+5. What lifts the pause? Proposed: the maintainer clears it, and only after the model's regression set passes again on replay. Waiting for the live rate to drift back inside its limits is not proposed, because with auto-merge paused the live sample is small and may not reflect auto-merge work. Alternatives: maintainer clearance alone, or a passing replay alone.
 
 ## Related
 
