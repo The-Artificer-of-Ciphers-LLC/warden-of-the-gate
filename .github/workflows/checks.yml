@@ -1,0 +1,87 @@
+# Pull request and main-branch checks for this repository's own code and docs.
+# This is NOT one of the Warden product workflows (those are the *.yml.example files under packages/warden/templates/workflows).
+#
+# Practice followed (GitHub "Security hardening for GitHub Actions" / secure-use reference):
+# - third-party actions pinned to a full-length commit SHA, with the release tag in a comment;
+# - the GITHUB_TOKEN is read-only for every job, and checkout does not persist it into .git/config;
+# - `pull_request`, never `pull_request_target`, so PR code never runs with write access or secrets.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per PR (a newer push cancels the older run); every push to main gets its own complete run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: packages/warden
+
+jobs:
+  linux:
+    name: Linux (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22.18.0 is the `engines` minimum in package.json; 24 is what the example Warden workflows run on.
+        node: ['22.18.0', '24']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: packages/warden/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      # Every test file except the two that run repository code inside the macOS Seatbelt boundary. Those two need
+      # /usr/bin/sandbox-exec on a tested macOS major (src/runner/seatbelt.ts TESTED_MACOS_MAJOR) and run in the macOS job below.
+      # They are left out here by name, not skipped: the macOS job runs the complete suite, so nothing is hidden.
+      - name: Tests (all files except the Seatbelt ones)
+        run: node --test --test-reporter=spec $(find test -name '*.test.ts' ! -name implement-slice.test.ts ! -name verify-executor.test.ts | sort)
+      # Packs the release candidate, installs it into an empty project and drives the installed executable (needs the npm registry for ajv and yaml).
+      - run: npm run verify-install
+
+  macos:
+    name: macOS 27 (full test suite, Seatbelt)
+    # GitHub's macOS 27 image (Apple Silicon). Seatbelt containment is only accepted on the macOS majors in TESTED_MACOS_MAJOR.
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: packages/warden/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  links:
+    name: Markdown links (local files)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Offline: checks links between files in this repository only. External URLs are not fetched, so the check cannot flake on other sites.
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --offline --no-progress --exclude-path node_modules './**/*.md'
+          fail: true
