@@ -66,7 +66,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24'
+          # Node 26, the version the Seatbelt work was developed on (see nodeRoots in src/runner/seatbelt.ts). On Node 24 eight of these
+          # tests fail: their fixtures run `node --test test/`, and Node 22 treats that directory argument as a module path (Node 24 fails the same tests). That gap with
+          # `engines` (>=22.18) is an open question for the maintainer, recorded on the PR, not something this workflow hides.
+          node-version: '26'
           cache: npm
           cache-dependency-path: packages/warden/package-lock.json
       - run: npm ci
