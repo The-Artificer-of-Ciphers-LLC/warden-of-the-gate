@@ -1,8 +1,8 @@
 # Evidence from tests that predate the change, and differential checks
 
-- **Status:** Partly decided. The older-test rule (provenance, card and gate) was decided on 2026-11-26. A refinement of the feature clause (where new feature tests go) and the differential checks remain Proposed, awaiting owner review.
+- **Status:** Mostly decided. The older-test rule (provenance, card and gate) and opt-in differential checks were decided on 2026-11-26. A refinement of the feature clause (where new feature tests go) remains Proposed, awaiting owner review.
 - **Date:** 2026-11-25
-- **Decided by:** @trek-e for the older-test rule (2026-11-26); pending for differential checks
+- **Decided by:** @trek-e for the older-test rule and differential checks (2026-11-26); pending for where new feature tests go
 - **Research:** [Sumner, "How to Ship Millions of Lines of Agent-Written Code"](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md), candidates 1 and 2; [follow-up research on feature tests](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#1-tests-for-new-features-without-test-sprawl)
 
 ## Context
@@ -36,9 +36,9 @@ This ADR is adjacent to proposals in open PR #47: frozen acceptance tests (ADR 0
 - **Review reports sprawl.** A new test file, harness or fixture set for code that already has a test home is a Review finding, unless the change adds a new unit.
 - **Redundancy is measured.** Where mutation checks run (PR #47, ADR 0016), the card lists added tests that killed no mutant the pre-existing suite missed.
 
-### Differential checks (proposed)
+### Differential checks (decided 2026-11-26, @trek-e)
 
-- **Optional differential checks.** For an item whose approved scope says it should not change behavior (refactor, performance work, dependency update, port), a repository may enable `verification.differential`. Warden runs the trusted base and the candidate on the same inputs in the isolated workspace and compares outputs. Any difference is a finding. Inputs come from the repository's own fixtures or recorded cases, or from generators when enabled.
+- **Optional differential checks, off by default.** For an item whose approved scope says it should not change behavior (refactor, performance work, dependency update, port), a repository may enable `verification.differential`. Warden runs the trusted base and the candidate on the same inputs in the isolated workspace and compares outputs. Any difference is a finding. Inputs come from the repository's own fixtures or recorded cases, or from generators when enabled.
 - **Checks must prove they can fail.** Generated inputs and fuzzers count as evidence only if, in the same run, they catch a planted defect in a throwaway copy. A generator that catches nothing planted is reported as ineffective, not as passing. This is the same idea as ADR 0016's mutation testing, applied to inputs.
 - **Unsupported is never a pass.** A language or project shape the differential runner does not support is reported as `differential: unsupported` on the card. It neither passes nor blocks by itself.
 
@@ -55,7 +55,7 @@ This ADR is adjacent to proposals in open PR #47: frozen acceptance tests (ADR 0
 ## Open questions for the owner
 
 1. ~~Show provenance on the card only, or also gate on it?~~ Decided 2026-11-26 (see Decision).
-2. Adopt `verification.differential` as opt-in, off by default?
+2. ~~Adopt `verification.differential` as opt-in, off by default?~~ Decided 2026-11-26: yes.
 3. Adopt the proposed refinement on where new feature tests go (new cases in the existing suite, no edits to existing cases, new test files only for new units, sprawl as a Review finding)? Is an added test that kills no new mutant a finding, or shown on the card only?
 
 ## Related

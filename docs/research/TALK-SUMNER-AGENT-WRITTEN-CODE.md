@@ -109,13 +109,13 @@ Checked 2026-11-25 from public pages.
 
 ## Candidate incorporations (ranked)
 
-All are applied in this PR as **[S]** text or as ADRs. Candidates 1 and 3 were decided on 2026-11-26; the rest are Proposed.
+All are applied in this PR as **[S]** text or as ADRs. Candidates 1, 2, 3 and 5 were decided on 2026-11-26. Candidate 4 is Proposed, except that a model past its scorecard limit loses auto-merge (decided).
 
 1. **Rank evidence by whether the test predates the change** (ADR 0017, PRD §7 [S]; **decided 2026-11-26**, with the gate in owner question 1). The executor records, per test that ran, whether its file and content are byte-identical on the trusted base. The card shows pre-existing evidence first. A change to a pre-existing test's expectation removes that test from the evidence for the change and still needs approval against requirements (§7). Basis: claims 8, 13, 29.
-2. **Optional differential checks, and generators must prove they catch something** (ADR 0017, PRD §7 [S]). For work declared behavior-preserving, run base and candidate on the same inputs and report any difference as a finding. Generated inputs or fuzzers count as evidence only if they catch a planted defect. Unsupported languages are reported as unsupported, never as a pass. Basis: claims 16, 17, 30.
+2. **Optional differential checks, and generators must prove they catch something** (ADR 0017, PRD §7 [S]; **decided 2026-11-26**, opt-in, off by default). For work declared behavior-preserving, run base and candidate on the same inputs and report any difference as a finding. Generated inputs or fuzzers count as evidence only if they catch a planted defect. Unsupported languages are reported as unsupported, never as a pass. Basis: claims 16, 17, 30.
 3. **Review looks for special-casing** (PRD §5 Review [S], §11 replay case; **decided 2026-11-26**). Code that branches on a literal identifier, property name, file name or test input in order to pass is a finding. Basis: claim 21.
 4. **Re-measure run over run, and treat the model's self-assessment as a claim** (ADR 0018, PRD §5 Retro [S], §5 Implement [S]). Retro and each scan report show a previous-versus-current scorecard of §11 metrics. Effort and impact estimates, "not worth it" and "infeasible" abstentions are recorded as untrusted claims. A rule a session cites to skip or narrow work must resolve to a real ORDERS entry, config key or approved spec text, or it is a finding. Basis: claims 25, 26, 28, 32, 34.
-5. **No planning Markdown by default** (PRD §5 Implement [S]). Factory PRs add no planning or design documents unless the issue asks; adding them is scope expansion. Basis: claim 22.
+5. **No planning Markdown by default** (PRD §5 Implement [S]; **decided 2026-11-26**). Factory PRs add no planning or design documents unless the issue asks; adding them is scope expansion. Basis: claim 22.
 
 ---
 
@@ -146,17 +146,17 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 
 1. **Evidence ranking (ADR 0017):** decided 2026-11-26. Always show which tests existed before the change. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks.
    - **Proposed refinement (2026-11-26), awaiting ruling:** new feature behavior goes in as new test cases inside the existing test file for the unit it extends; existing cases are not edited; a new test file only for a new unit. See [Follow-up research](#1-tests-for-new-features-without-test-sprawl).
-2. **Differential checks (ADR 0017):** adopt as opt-in per repository for behavior-preserving work, off by default? A reported difference is a finding under the 2026-11-24 rule; confirm.
+2. **Differential checks (ADR 0017):** decided 2026-11-26 ("Yes to both"). Opt-in per repository for behavior-preserving work, off by default; a reported difference is a finding under the 2026-11-24 rule.
 3. **Special-casing check (PRD §5 Review):** decided 2026-11-26 ("Yes, check for those"). Review reports gamed tests, meaning code that special-cases test inputs to pass, and replay includes such a case.
 4. **Measured, not estimated (ADR 0018):** adopt the run-over-run scorecard in Retro and the rule that a cited rule must resolve to real ORDERS, config or spec text?
-5. **No planning Markdown (PRD §5 Implement):** factory PRs add no planning or design docs unless the issue asks?
+5. **No planning Markdown (PRD §5 Implement):** decided 2026-11-26 ("Yes to both"). Factory PRs add no planning or design docs unless the issue asks.
 6. **Model scorecard (ADR 0018):** adopt replay regression and capability sets scored per model with confidence intervals, plus live rates on control charts? Decided 2026-11-26: a live rate outside its limits is a Retro finding and also pauses auto-merge for that model. Still open: what lifts the pause (proposed: maintainer clearance after the regression set passes again on replay). See [Follow-up research](#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect).
 
 ## Open threads
 
 - Find the AOT PR to check its size and the test-suite list.
 - Read Bun's release notes when the AOT compiler leaves experimental status, for any published memory and startup figures.
-- If differential checks are adopted, decide the input source per language (recorded fixtures, existing test inputs, or generated inputs) during build planning.
+- Differential checks are adopted (2026-11-26); decide the input source per language (recorded fixtures, existing test inputs, or generated inputs) during build planning.
 
 ---
 
