@@ -35,7 +35,7 @@ test('with an owner-approved ceiling the publish credential is exactly contents+
     assert.match(String(url), /\/access_tokens$/); body = JSON.parse(String(init!.body));
     return Response.json({ token: 'test-publish-credential', expires_at: new Date(Date.now() + 3600_000).toISOString(), permissions: PUBLISH, repositories: [{ full_name: 'acme/widgets' }] }, { status: 201 });
   });
-  const be = openBackend({ flags: { home: e.home, backend: 'github', 'operator-auth': undefined }, cwd: e.dir, env: { GITHUB_TOKEN: 'must-not-use' }, now: Date.now }, loadWarden(e.repo).value!);
+  const be = openBackend({ flags: { home: e.home, backend: 'github' }, cwd: e.dir, env: { GITHUB_TOKEN: 'must-not-use' }, now: Date.now }, loadWarden(e.repo).value!);
   const pb = be.publish!()!; assert.equal(pb.store.actor(), 'test-app[bot]');
   assert.equal(await pb.token(), 'test-publish-credential');
   assert.deepEqual(body, { repositories: ['widgets'], permissions: PUBLISH });
