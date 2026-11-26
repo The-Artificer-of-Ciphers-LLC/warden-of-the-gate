@@ -42,6 +42,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 - [Decision-model router (Jev)](docs/research/DECISION-MODEL-ROUTER.md): whether a fast one-pass decision model fits as Warden's front end; router only, never a merge judge; basis for proposed [ADR 0019](docs/adr/0019-decision-model-router.md).
 - [Code-intelligence options](docs/research/CODE-INTELLIGENCE-OPTIONS.md): Omnigraph, GSD Atlas, SCIP, CodeGraphContext and alternatives; existing capabilities versus SDK-enforcement roadmap, plus a bounded evaluation proposal.
 - [Correction ladder](docs/research/FRAMEWORK-CORRECTIONS.md): design/static-first quality rationale; older rollout/autonomy recommendations are historical.
+- [Pi creators live stream](docs/research/TALK-PI-CREATORS-LIVE.md): how Pi's maintainers decide what to read and trust; basis for proposed [ADR 0020](docs/adr/0020-review-attention-and-maintainer-understanding.md) (attention classes), [ADR 0021](docs/adr/0021-cross-family-review-panel.md) (cross-family review panel) and [ADR 0022](docs/adr/0022-new-model-starts-paused.md) (new models start paused).
 
 The owner confirmed the shared MVP product understanding on November 17, 2026; the PRD review is complete and ready for implementation planning. Its final section names the remaining technical choices and capability proofs. No implementation, local-model benchmark or live activation is claimed by this documentation.
 

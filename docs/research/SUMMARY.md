@@ -261,6 +261,15 @@ Opinion talk on human attention, durable agents and code-mode plus classifier wo
 - **Not adopted:** hosted flex-scheduling and sandbox suspension, a second classifier model picked by the agent, code mode with write effects. Each conflicts with the loopback-only provider, the owner's model rule, or "AI proposes, scripts dispose". Cloudflare origin of code mode and Earendil's Pi were checked at first-party pages; the tar post he mentions and the captioned model names could not be identified.
 
 
+### External check: Pocock with Ronacher and Zechner, "Writing code that doesn't suck with the creators of Pi" (live stream, Nov 2026)
+
+Unscripted conversation with Pi's maintainers, read in full 2026-11-26. Full analysis, claim mapping and verification table: [TALK-PI-CREATORS-LIVE.md](TALK-PI-CREATORS-LIVE.md). Nearly every claim is the speakers' own practice; each is marked speaker only or checked.
+
+- **Strengthened:** executor evidence (reproduced, failing test, passing fix) as the basis for trust; agent-written checks are not evidence; features need an approved contract; stop controls and closure caps so doing nothing never makes things worse; pacing factory output to human review (Yegge's AI Engineer CODE talk, checked).
+- **Proposed:** attention classes so the maintainer keeps reading the code they choose, with a read-after digest ([ADR 0020](../adr/0020-review-attention-and-maintainer-understanding.md)); an opt-in cross-family review panel with bounded rounds, supported by PoLL (Verga et al. 2024) and correlated-error research (Kim et al. 2025) ([ADR 0021](../adr/0021-cross-family-review-panel.md)); a model new to the pool starts with auto-merge paused ([ADR 0022](../adr/0022-new-model-starts-paused.md)); stored facts carry when they were measured; a Review finding for complexity beyond the request.
+- **Evidence mixed:** the claim that models add defensive code everywhere. One study finds higher complexity; two find AI code shorter and lacking defensive checks. Verbosity and unused constructs are better supported. Warden measures rather than assumes.
+- **Not adopted:** exploring ten design variants (speaker's method only).
+
 ### External check: Horthy, "12 Rules for a Software Factory That Doesn't Ship Slop" (Factory, Nov 2026)
 
 Keynote on forward/back pressure and an anti-slop manifesto, read in full 2026-11-23. Full analysis, claim mapping, verification table and proposed (not applied) PRD/ADR updates: [TALK-HORTHY-12-RULES.md](TALK-HORTHY-12-RULES.md). Most figures (SlopCodeBench 15%/16.3%, "30% of PRs merging without review", 40,000 installs, 100ish rules) could not be traced to a primary source and are the speaker's unverified claims.

@@ -7,6 +7,7 @@
 - **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md), [pitfalls](../research/PITFALLS.md), [summary](../research/SUMMARY.md) and the `TALK-*` notes in [research](../research/).
 - **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Owner decisions](#owner-decisions-from-the-research-reconciliation) lists the research points that needed a ruling: those decided on 2026-11-24, and those still open.
 - **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
+- **Pi creators talk (2026-11-26):** text marked **[P]** comes from [the Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md). It is **PROPOSED, awaiting owner review**. See [ADR 0020](../adr/0020-review-attention-and-maintainer-understanding.md), [ADR 0021](../adr/0021-cross-family-review-panel.md) and [ADR 0022](../adr/0022-new-model-starts-paused.md). Its open questions are in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
 
 ## TL;DR
 
@@ -241,6 +242,10 @@ Review candidate changes against relevant base context, approved requirements, r
 
 Review never edits code. Route factory findings to Rework, contributor findings to the author, and genuine decisions to the maintainer. Record the completed review identity only after validation. If all gates pass, submit the merge intent; never report merged until GitHub confirms it.
 
+**[P]** Review flags complexity beyond what the issue or approved spec asked for: speculative generality, duplicate safeguards, extra layers or unused code (Google's reviewer guide: "Reviewers should be especially vigilant about over-engineering"). Validation at a trust boundary is never in this class. The finding names what to remove or asks for the reason. Its severity is an owner question, because nits block merge.
+
+**[P]** A repository may configure a review panel: two or more reviewer models from different families, each in a fresh session on the same inputs. Findings merge by fingerprint and record which reviewers raised them. Agreement may serve as the confidence measure for the owner's "drop below confidence" option; it never approves a merge. Review runs once per reviewed head and configuration, and is never re-run on an unchanged head to reach a clean result; a maintainer command can still force a full review (ADR 0021).
+
 ### Rework - local AI, factory branches only
 
 Address named current findings without unrelated scope expansion. Contributor branches are never edited, except for the CI fixes in the §5 Review ruling. Run relevant verification and return the new head to Review; Rework cannot mark itself reviewed.
@@ -338,6 +343,8 @@ One-time action cards expire after 24 hours by default, configurable, and may in
 
 Retain a GitHub-native decision path when Discord/helper/local AI is unavailable. Only approved non-sensitive summaries go to Discord, not source code or private transcripts. A recorded approval does not start an AI scan or override GitHub-required approvals.
 
+**[P]** The maintainer may name attention classes in `.github/ORDERS.yaml`: paths they read before merge (`read-before`, which floors at a maintainer decision with the full diff inline), paths they read after merge (`read-after`, listed in a periodic digest of merged changes without blocking auto-merge), and everything else (`evidence-only`, today's behavior). No paths are named by default. A boundary class always wins over an attention class. An unread digest changes nothing (ADR 0020).
+
 ## 9. Runtime, containment and recovery
 
 Preflight repository identity, supported harness/model, local provider resolution, configuration, policy, isolation, credential status and finite budgets. Reject malformed or unsupported effective configuration explicitly.
@@ -355,6 +362,10 @@ Enforce finite item, model-turn, wall-time, context/resource and operation-retry
 **[R]** Run at most one scan per instance at a time, enforced by a local lock. Keep the host awake during a scan where the OS allows it. Leases carry an expiry, so work held by a scan that crashed or a host that slept is reclaimed as interrupted, not counted as failed.
 
 **[R]** A comment, push or decision that arrives after a scan's snapshot is not injected into the running session. Before posting, the writer's re-read detects it; an effect it could change is deferred to the next scan, which sees the new input.
+
+**[P]** A quantitative fact that Warden stores for a later session (a record count, a size, a timing, a test count) carries when and from what it was measured. A later session re-measures it before a decision rests on it; a stored value alone is a claim, like other model output.
+
+**[P]** Preflight records each model's identity as the endpoint reports it: endpoint, model id and pinned version or weights digest. A model new to the pool, or one whose identity changed, starts with auto-merge paused for that model, as ADR 0018 pauses a model that drifts; the maintainer lifts it after the model's regression set passes on replay (ADR 0022).
 
 ### Stop and failure containment
 
@@ -490,3 +501,12 @@ Still open. Nothing below changes current behavior until decided:
 | Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
 | When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
 | Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |
+
+**[P]** Open from the [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md) (2026-11-26). Nothing below changes current behavior until decided:
+
+| Question | Research basis | Current PRD position |
+|---|---|---|
+| Offer attention classes (`read-before`, `read-after` digest, `evidence-only`), and at what digest cadence? | [ADR 0020](../adr/0020-review-attention-and-maintainer-understanding.md); Bacchelli and Bird, ICSE 2013 | Boundary classes only (ADR 0015, open PR #47); understanding cost deferred |
+| Offer a cross-family review panel as an opt-in mode, and may agreement count as the confidence measure for dropping findings? | [ADR 0021](../adr/0021-cross-family-review-panel.md); Verga et al. 2024; Kim et al. ICML 2025 | One fresh reviewer session; reviewer model undecided |
+| Should a model new to the pool, or whose version or weights changed, start with auto-merge paused until its replay passes and the maintainer clears it? Do one-off frontier escalations count before their replay? | [ADR 0022](../adr/0022-new-model-starts-paused.md); ADR 0018 (open PR #48) | Replay runs on every model change; no rule for a model not yet measured |
+| Severity of a "complexity beyond the request" finding: blocks like other findings, or advisory? | §5 Review [P]; Google eng-practices; mixed studies in the research note | No such finding class; Retro measures erosion |
