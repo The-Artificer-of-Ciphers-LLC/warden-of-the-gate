@@ -285,6 +285,15 @@ Multi-source research on agent PR pipelines, AI review and "dark factories", wit
 - **Worth a look (owner decisions):** agent instruction files (`AGENTS.md`, `CLAUDE.md`, `.opencode/`) are not mandatory human-gate paths in `config/policy.ts`; the CI-fix push needs a planted-instruction-file test; adversarial replay should cover every pool member that can decide a contributor merge (corrected after owner review: the pool is not only small local models); the confidence-drop option conflicts with §3 unless calibrated; reproducer and fix come from one session; late findings on unchanged code; re-running the replay gate on model or harness changes.
 - **Not adopted:** vendor figures as targets; any PRD edit before the owner rules.
 
+### Decision models (Jev) as a front-end router (Nov 2026)
+
+Researched 2026-11-25 at the owner's request. Full analysis, hosting routes and adoption steps: [DECISION-MODEL-ROUTER.md](DECISION-MODEL-ROUTER.md). Proposed (post-MVP) as [ADR 0019](../adr/0019-decision-model-router.md); the PRD and existing ADRs are not changed.
+
+- **Holds:** one-pass decision models match strong judges where the verdict can be read off the text and are fast and calibrated enough to route; a pre-set confidence threshold with escalation matched GPT-6 on preference judging at 41% of its fee.
+- **Limits that matter for review:** 13-28 points behind on code, math and logic; swayed by polished wrong answers and, for most models, by injected notes; cannot combine several records or notice a stale summary, and confidence does not flag it.
+- **Proposed (owner decisions):** a router for PR kind, review depth and tier, reviewer selection, reply intent for clocks and finding order, using standard Chat Completions logprobs; never approve, block, merge, skip review or drop findings.
+- **Not adopted:** hosted TypeSafe Jev or non-standard decision APIs; any use of a router score as merge authority.
+
 ### Model connections: provider-neutral endpoints, MVP on mlx-serve (Nov 2026)
 
 Researched 2026-11-24 at the owner's request after mlx-serve (mlxserve.com) replaced LM Studio on the maintainer's Mac. Full analysis, per-server support matrix, mlx-serve gap table, proposed file-by-file changes and owner decisions: [MODEL-CONNECTIONS.md](MODEL-CONNECTIONS.md). Nothing in the PRD, ADRs or code is changed.
