@@ -109,7 +109,7 @@ Checked 2026-11-25 from public pages.
 
 ## Candidate incorporations (ranked)
 
-All are applied in this PR as **[S]** text or as ADRs. Candidates 1, 2, 3 and 5 were decided on 2026-11-26. Candidate 4 is Proposed, except that a model past its scorecard limit loses auto-merge (decided).
+All are applied in this PR as **[S]** text or as ADRs. Candidates 1, 2, 3 and 5 were decided on 2026-11-26. Candidate 4 is partly decided (cited rules must resolve; the scorecard pause and how it lifts); its scorecard design is Proposed.
 
 1. **Rank evidence by whether the test predates the change** (ADR 0017, PRD §7 [S]; **decided 2026-11-26**, with the gate in owner question 1). The executor records, per test that ran, whether its file and content are byte-identical on the trusted base. The card shows pre-existing evidence first. A change to a pre-existing test's expectation removes that test from the evidence for the change and still needs approval against requirements (§7). Basis: claims 8, 13, 29.
 2. **Optional differential checks, and generators must prove they catch something** (ADR 0017, PRD §7 [S]; **decided 2026-11-26**, opt-in, off by default). For work declared behavior-preserving, run base and candidate on the same inputs and report any difference as a finding. Generated inputs or fuzzers count as evidence only if they catch a planted defect. Unsupported languages are reported as unsupported, never as a pass. Basis: claims 16, 17, 30.
@@ -145,12 +145,12 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 ## Owner questions (for @trek-e)
 
 1. **Evidence ranking (ADR 0017):** decided 2026-11-26. Always show which tests existed before the change. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks.
-   - **Proposed refinement (2026-11-26), awaiting ruling:** new feature behavior goes in as new test cases inside the existing test file for the unit it extends; existing cases are not edited; a new test file only for a new unit. See [Follow-up research](#1-tests-for-new-features-without-test-sprawl).
+   - **Refinement decided 2026-11-26** ("yes on 2 and 3"): new feature behavior goes in as new test cases inside the existing test file for the unit it extends; existing cases are not edited; a new test file only for a new unit. Still open: whether an added test that kills no new mutant is a finding. See [Follow-up research](#1-tests-for-new-features-without-test-sprawl).
 2. **Differential checks (ADR 0017):** decided 2026-11-26 ("Yes to both"). Opt-in per repository for behavior-preserving work, off by default; a reported difference is a finding under the 2026-11-24 rule.
 3. **Special-casing check (PRD §5 Review):** decided 2026-11-26 ("Yes, check for those"). Review reports gamed tests, meaning code that special-cases test inputs to pass, and replay includes such a case.
-4. **Measured, not estimated (ADR 0018):** adopt the run-over-run scorecard in Retro and the rule that a cited rule must resolve to real ORDERS, config or spec text?
+4. **Measured, not estimated (ADR 0018):** cited rules decided 2026-11-26 ("Yes, must match"). The plain run-over-run scorecard was rejected for one "intelligent with weights and medians"; that design is proposed in [Follow-up research](#3-a-weighted-robust-scorecard) and still open.
 5. **No planning Markdown (PRD §5 Implement):** decided 2026-11-26 ("Yes to both"). Factory PRs add no planning or design docs unless the issue asks.
-6. **Model scorecard (ADR 0018):** adopt replay regression and capability sets scored per model with confidence intervals, plus live rates on control charts? Decided 2026-11-26: a live rate outside its limits is a Retro finding and also pauses auto-merge for that model. Still open: what lifts the pause (proposed: maintainer clearance after the regression set passes again on replay). See [Follow-up research](#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect).
+6. **Model scorecard (ADR 0018):** adopt replay regression and capability sets scored per model with confidence intervals, plus live rates on control charts? Decided 2026-11-26: a live rate outside its limits is a Retro finding and also pauses auto-merge for that model. Decided 2026-11-26: only the maintainer lifts the pause, after the regression set passes again on replay. Still open: adopting the replay sets. See [Follow-up research](#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect).
 
 ## Open threads
 
@@ -233,7 +233,45 @@ All numbers come from the executor and ledgers, never from the model (ADR 0018).
 
 - Adopt this structure?
 - ~~When a live rate leaves its control limits, Retro finding only, or also pause auto-merge?~~ Decided 2026-11-26 (@trek-e): "Also pause auto-merge." Retro flags it and auto-merge pauses for that model.
-- What lifts the pause? Proposed: the maintainer clears it once the model's regression set passes again on replay. A live rate drifting back inside its limits is weak evidence while auto-merge is paused, since the sample shrinks.
+- ~~What lifts the pause?~~ Decided 2026-11-26 (@trek-e): the maintainer clears it once the model's regression set passes again on replay.
+
+### 3. A weighted, robust scorecard
+
+**The direction, in Tom's words (2026-11-26):** "Scorecard should be intelligent with weights and medians not just how'd it do compared to previous. Research best practices for that."
+
+**What the sources say.**
+
+- **NIST/SEMATECH e-Handbook §1.3.5.17, "Detection of Outliers".**
+  - Ordinary z-scores "can be misleading (particularly for small sample sizes)".
+  - Iglewicz and Hoaglin "recommend using the modified Z-score", M = 0.6745 (x − median) / MAD, where MAD is the median absolute deviation. They label |M| > 3.5 "as potential outliers".
+  - When outliers can't be ruled out as bad data, the handbook points to robust techniques "that will not be unduly affected by outliers".
+- **NIST/SEMATECH e-Handbook §6.3.2.4, "EWMA Control Charts".**
+  - The EWMA chart is a statistic that "gives less and less weight to data as they are further removed in time".
+  - It "can be made sensitive to a small or gradual drift", whereas a Shewhart chart "can only react when the last data point is outside a control limit".
+  - λ "is usually set between 0.2 and 0.3".
+  - Limits must come from data "truly representative of the process" while it was in control.
+- **NIST/SEMATECH e-Handbook §6.3.3.2, "Proportions Control Charts".** p-chart limits for rates are p̄ ± 3√(p̄(1−p̄)/n), estimated from preliminary samples (already used in section 2).
+- **Google SRE Workbook, ch. 5, "Alerting on SLOs".**
+  - Judge alerting by four properties: precision, recall, detection time and reset time.
+  - The recommended scheme is "Multiwindow, Multi-Burn-Rate Alerts": fire only when a long window and a short window (about 1/12 its length) both exceed the threshold. The short window checks the problem is still happening, which cuts false positives, and it stops the alert sooner once the problem ends.
+  - On low traffic: "if a system receives 10 requests per hour, then a single failed request results in an hourly error rate of 10%". The listed remedies are generating artificial traffic, combining services, and lowering the SLO or lengthening the window; the chapter says "we use some combination" of them.
+- **OECD/JRC, *Handbook on Constructing Composite Indicators* (2008).**
+  - It sets out ten steps, including normalisation ("to render them comparable"), weighting and aggregation, where "correlation and compensability issues ... need to [be] considered", and robustness analysis of "the choice of weights and the aggregation method".
+  - Composites "should be transparent and fit to be decomposed".
+  - Compensability means a weighted sum lets a deficit in one indicator be offset by a surplus in another.
+  - I read the handbook's front matter and step list verbatim. Its detailed chapters on weighting reached me only as a summary, so this note relies on the verbatim parts.
+- **Anthropic, "A statistical approach to model evaluations"** (section 2): standard errors, clustering and paired differences.
+
+**What this means for Warden.** The sources point to six rules:
+
+1. **Judge each metric before combining any.** Each §11 metric gets a direction, a weight and its own limit. Metrics that guard auto-merge must not be offset by good scores elsewhere (compensability), so a breach in any one of them is a breach. This is also why the decided pause is per metric.
+2. **Medians and MAD for baselines.** A rolling window of comparable runs sets each metric's median and MAD. The modified z-score flags an unusual run (|M| > 3.5) for review. One odd PR does not shift the baseline the way it would shift a mean.
+3. **Two kinds of change, two charts.** A p-chart on rates catches sudden shifts. An EWMA chart (λ 0.2 to 0.3) catches slow drift. A limit counts as breached only when a long and a short window both show it (SRE multiwindow), for fewer false alarms and a faster reset.
+4. **Say when there is too little data.** Below a minimum sample, show "insufficient data" instead of a verdict. Fill the gap with replay (artificial traffic), pooling across repositories for the same model, or a longer window.
+5. **Explicit weights, tested.** The maintainer sets weights in `.github/warden.yml` and they are shown. Retro checks whether the verdict changes under equal weights (the OECD robustness step). Proposed default: safety metrics (escaped defects, reverted merges, overrides) outweigh throughput.
+6. **The composite summarises; it never gates.** It is shown with its parts and next to the previous run, which stays visible as one column.
+
+**Still open for Tom.** Adopt this design? Should safety metrics outweigh throughput by default? Baseline length and the low-volume floor are left to build planning.
 
 ### Sources for the follow-up
 
@@ -243,4 +281,8 @@ All numbers come from the executor and ledgers, never from the model (ADR 0018).
 - Anthropic, "Demystifying evals for AI agents" — https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents (read 2026-11-26)
 - Anthropic, "A statistical approach to model evaluations" — https://www.anthropic.com/engineering/statistical-approach-to-model-evals (read 2026-11-26)
 - NIST/SEMATECH e-Handbook of Statistical Methods, §6.3.3.2 "Proportions Control Charts" — https://itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm (read 2026-11-26)
+- NIST/SEMATECH e-Handbook, §1.3.5.17 "Detection of Outliers" — https://itl.nist.gov/div898/handbook/eda/section3/eda35h.htm (read 2026-11-26)
+- NIST/SEMATECH e-Handbook, §6.3.2.4 "EWMA Control Charts" — https://itl.nist.gov/div898/handbook/pmc/section3/pmc324.htm (read 2026-11-26)
+- Thurgood et al., *The Site Reliability Workbook*, ch. 5 "Alerting on SLOs" — https://sre.google/workbook/alerting-on-slos/ (read 2026-11-26)
+- OECD/JRC, *Handbook on Constructing Composite Indicators: Methodology and User Guide* (2008) — https://knowledge-for-policy.ec.europa.eu/sites/default/files/jrc47008_handbook_final.pdf (front matter and step list read 2026-11-26; detailed chapters summarised only)
 - Frömmgen and Kharatyan, "Resolving code review comments with ML", Google Research, 2023-05-23 — https://research.google/blog/resolving-code-review-comments-with-ml/ (read 2026-11-26)
