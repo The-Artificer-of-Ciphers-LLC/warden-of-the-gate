@@ -285,6 +285,8 @@ Maintain the decision corpus; propose narrowly scoped standing-authority expansi
 
 **[S]** Retro and each scan report include a scorecard of the §11 metrics for this run beside the previous comparable run, with the change for each, taken from ledgers. Retro also lists abstentions whose stated reason was a model estimate (ADR 0018).
 
+**[S] Proposed 2026-11-26.** Retro also reports a model scorecard: replay regression and capability results per model, with confidence intervals, and live rates from ledgers (maintainer overrides, dismissed findings, abstentions, rework loops, reverted factory merges) against control limits from a baseline window. A rate outside its limits is a Retro finding that the model's behavior changed. Retro samples session transcripts each window (ADR 0018).
+
 ## 6. Drafts and backlog adoption
 
 Draft PRs are disallowed by default, explicitly configurable. Close newly opened drafts and PRs converted to draft while disabled, with explanation and a ready-for-review return path. Never silently mark unfinished work ready. Closing a draft alone does not revoke a valid delivery commitment. Enabled drafts still cannot merge.
@@ -311,6 +313,8 @@ Protect verification controls: disabled lint rules, broadened exclusions, suppre
 The trusted executor captures command, inputs, exit status, output and artifacts independently of the model. Compare trusted baseline and candidate results. Do not fix unrelated baseline defects or describe them as passing. Auto-merge blocks without meaningful evidence unless an explicit scoped maintainer exception applies; required GitHub checks never bypass.
 
 **[S] Decided 2026-11-26 (@trek-e).** The executor records for each test it runs whether it is byte-identical on the trusted base (pre-existing), modified, deleted or added. The card always shows which tests existed before the change and lists that evidence first. Auto-merge is blocked when the PR edits or deletes a pre-existing test, which the card always calls out, or when the PR is labelled a refactor or bug fix and no pre-existing test covers the changed code. New features are not required to have a pre-existing test, since none can exist; their new tests get extra review or independent checks. Pre-existing tests are independent evidence (Feathers' characterization tests); a test edited in the same PR is the red flag.
+
+**[S] Proposed refinement 2026-11-26, awaiting owner review.** New feature or bug-fix behavior on existing code is tested by new cases inside the test file or suite that already exercises that unit, reusing its fixtures, without editing existing cases. A new test file, harness or fixture set is created only for a new unit (function, module or class) with no test home; otherwise it is a Review finding. Where mutation checks run, the card lists added tests that killed no mutant the pre-existing suite missed (Software Engineering at Google ch. 12; Shi et al., FSE 2014; ADR 0017).
 
 **[S]** For behavior-preserving scope (refactor, performance, dependency update, port), a repository may enable differential checks: base and candidate run on the same inputs, and any difference is a finding. Generated inputs and fuzzers count only if they catch a planted defect in the same run; an unsupported language is reported as unsupported, never as a pass (ADR 0017).
 
@@ -440,6 +444,8 @@ Cover bugs, approved features, contributor and factory PRs, dependency updates, 
 
 **[S]** Replay also includes a change that special-cases a test input and passes every test (expected: a Review finding), a behavior-preserving change with one behavior difference (expected: a differential finding where enabled), and a session that cites a rule that does not exist (expected: an unresolved-citation finding).
 
+**[S] Proposed 2026-11-26.** The replay corpus is split into a regression set (expected near 100%) and a capability set, with cases that should and should not raise a finding. It runs on every model, harness, prompt or configuration change, separately for each model in the pool. Cases that decide auto-merge are scored over repeated trials (all trials must pass). Scores carry standard errors and 95% intervals, model comparisons use paired differences on the same cases, and set sizes come from power analysis (ADR 0018).
+
 The maintainer explicitly enables live actions after reviewing evidence. Do not turn elapsed shadow days or benchmark completion into implicit approval.
 
 ### Required functional/recovery evidence
@@ -494,7 +500,7 @@ Decided by @trek-e on 2026-11-24:
 | How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
 | Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
 | Measure structural erosion on factory-authored PRs before widening Implement authority? | Yes, widened so Retro also checks whether factory merges stay coherent together over time ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1) | §5 Retro, §11 |
-| **[S]** Show which tests existed before the change on the card only, or also gate auto-merge on them? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: always show them. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks | §7; ADR 0017 |
+| **[S]** Show which tests existed before the change on the card only, or also gate auto-merge on them? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: always show them. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks. A refinement on where those tests go is proposed and still open (below) | §7; ADR 0017 |
 
 Still open. Nothing below changes current behavior until decided:
 
@@ -506,4 +512,6 @@ Still open. Nothing below changes current behavior until decided:
 | **[S]** Add a Review check for special-casing and a matching replay case? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | No such Review item (§5 Review, §11) |
 | **[S]** Adopt the run-over-run scorecard, and require a cited rule to resolve to real ORDERS, config or spec text? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | Metrics tracked without comparison (§11); proposed in ADR 0018 |
 | **[S]** Factory PRs add no planning or design docs unless the issue asks? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | Not addressed (§5 Implement) |
+| **[S]** New feature tests: new cases in the existing suite for the unit, no edits to existing cases, new test files only for new units, sprawl a Review finding? | [Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#1-tests-for-new-features-without-test-sprawl) | New features need no pre-existing test (§7); placement not addressed |
+| **[S]** Adopt the model scorecard (per-model replay sets with intervals, live rates on control limits)? Does a rate outside its limits only raise a Retro finding, or also pause auto-merge for that model? | [Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect) | Replay scored deterministically (§11); no per-model scorecard or control limits |
 | Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |

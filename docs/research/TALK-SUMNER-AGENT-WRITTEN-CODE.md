@@ -145,13 +145,101 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 ## Owner questions (for @trek-e)
 
 1. **Evidence ranking (ADR 0017):** decided 2026-11-26. Always show which tests existed before the change. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks.
+   - **Proposed refinement (2026-11-26), awaiting ruling:** new feature behavior goes in as new test cases inside the existing test file for the unit it extends; existing cases are not edited; a new test file only for a new unit. See [Follow-up research](#1-tests-for-new-features-without-test-sprawl).
 2. **Differential checks (ADR 0017):** adopt as opt-in per repository for behavior-preserving work, off by default? A reported difference is a finding under the 2026-11-24 rule; confirm.
 3. **Special-casing check (PRD §5 Review):** add it as a Review item and a replay case?
 4. **Measured, not estimated (ADR 0018):** adopt the run-over-run scorecard in Retro and the rule that a cited rule must resolve to real ORDERS, config or spec text?
 5. **No planning Markdown (PRD §5 Implement):** factory PRs add no planning or design docs unless the issue asks?
+6. **Model scorecard (ADR 0018):** adopt replay regression and capability sets scored per model with confidence intervals, plus live rates on control charts? When a live rate leaves its limits, Retro finding only, or also pause auto-merge for that model? See [Follow-up research](#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect).
 
 ## Open threads
 
 - Find the AOT PR to check its size and the test-suite list.
 - Read Bun's release notes when the AOT compiler leaves experimental status, for any published memory and startup figures.
 - If differential checks are adopted, decide the input source per language (recorded fixtures, existing test inputs, or generated inputs) during build planning.
+
+---
+
+## Follow-up research (2026-11-26): feature tests and model scorecards
+
+@trek-e asked for established practice, not guesses, on two points left open by the older-test ruling. Everything below is **proposed**; it changes nothing until he rules.
+
+### 1. Tests for new features without test sprawl
+
+**The question, in Tom's words:** "The goal is to not have test proliferation every time a feature is added. It needs to go into a test that exists. Unless it's a completely new function, then there's a function level test."
+
+**What the sources say.**
+
+- *Software Engineering at Google*, ch. 12 ("Unit Testing"), names four kinds of change and how tests should respond. New features: "The engineer must write new tests to cover the new behaviors, but they shouldn't need to change any existing tests", and a change to existing tests when adding a feature "suggest[s] unintended consequences of that feature or inappropriate tests". Bug fixes: "the bug fix should include that missing test case" and "typically shouldn't require updates to existing tests". Only a deliberate behavior change is expected to update existing tests. The chapter's summary rule is "Strive for unchanging tests."
+- The same chapter, "Test behaviors, not methods", gives the counterexample to growing an existing test: a test that "started out covering only the first method" and was "expanded ... when the second message was added". It calls this "a bad precedent: as the method under test becomes more complex ... its unit test will become increasingly convoluted". Its alternative is one small test per behavior, named after the behavior, kept beside the others for the same unit. Methods and behaviors map many-to-many, and tests share setup by DAMP helpers rather than by merging cases.
+- Kent Beck, "Test Desiderata": tests should be *behavioral* ("if the behavior changes, the test result should change") and *structure-insensitive* ("should not change their result if the structure of the code changes").
+- Shi, Gyori, Gligoric, Zaytsev and Marinov, "Balancing Trade-offs in Test-Suite Reduction" (FSE 2014), measured redundancy on 61,235 tests across 3,590 commits. Removing tests judged redundant by statement coverage shrank suites by 62.9% on average "but loses up to 20.5% in killed mutants". Judging redundancy by killed mutants instead lost no killed mutants, at the cost of a suite 11.9 percentage points larger. So "redundant" has to be measured by what a test catches, not by what it executes.
+
+**How this fits Tom's goal.** The sources agree with the goal (no new test sprawl per feature) but not with the literal mechanism if "go into a test that exists" means editing an existing test case. Editing an existing case to cover new behavior is the pattern the Google book calls a bad precedent, and Tom's own 2026-11-26 rule already blocks auto-merge when a PR edits a pre-existing test. The practice that meets both is:
+
+1. **New behavior goes in as a new test case inside the existing test file or suite for the unit it extends**, reusing that suite's fixtures and helpers. No new test file, harness, fixture set or test framework for a feature on existing code.
+2. **Existing test cases are not edited** for a new feature or a bug fix. A bug fix adds the missing case beside the others.
+3. **A new test file only for a new unit**: a new public function, module or class with no existing test home. That is Tom's "completely new function" exception.
+4. **Redundancy is measured, not guessed**: where mutation checks run (proposed in PR #47, ADR 0016), an added test that kills no mutant the existing suite misses is reported as redundant.
+
+**How Warden would enforce it (proposed).** Provenance (ADR 0017) already separates `added` from `modified`. It would also record whether an added test sits in an existing test file or a new one. The Implement contract places new cases in the test file that already exercises the changed unit. Review reports a new test file, harness or fixture set for code that already has a test home as a finding, unless the change adds a new unit. Where mutation checks run, the card shows added tests that killed nothing new.
+
+### 2. A scorecard that catches a model not doing what we expect
+
+**The question, in Tom's words:** "Need to figure out a best practice for how to build a scorecard to catch when a model isn't doing what we expect it to be doing." This also bears on PR #47 ruling 6 ("maybe a new context and same model, or, we build statistics").
+
+**What the sources say.**
+
+- Anthropic, "Demystifying evals for AI agents":
+  - Keep two sets. *Regression evals* ask whether the agent "still handle[s] all the tasks it used to" and "should have a nearly 100% pass rate"; a drop "signals that something is broken". *Capability evals* hold harder tasks, and ones that reach high pass rates "'graduate' to become a regression suite that is run continuously to catch any drift".
+  - Start small: "20-50 simple tasks drawn from real failures is a great start".
+  - Run several trials. pass^k is "the probability that all k trials succeed", the measure for work that must be reliable every time.
+  - Grade the outcome, check that graders can't be gamed, and calibrate model graders against human judgment.
+  - Read transcripts: "You won't know if your graders are working well unless you read the transcripts".
+  - Watch for saturation: "An eval at 100% tracks regressions but provides no signal for improvement."
+  - Layer methods, "Like the Swiss Cheese Model"; no single layer catches every issue.
+- Anthropic, "A statistical approach to model evaluations":
+  - Report a standard error and confidence interval with every score.
+  - Cluster standard errors when items share a source, because treating related items as independent underestimates the error.
+  - Compare two models on paired differences over the same items.
+  - Use power analysis to size a set before claiming one model beats another.
+- NIST/SEMATECH e-Handbook, §6.3.3.2 "Proportions Control Charts": for a rate p over samples of size n, set limits at p̄ ± 3√(p̄(1−p̄)/n), with p̄ estimated from preliminary samples of normal operation. A point outside the limits signals the process has changed.
+- Google Research, "Resolving code review comments with ML" (2023):
+  - Google calibrated its model "for a target precision of 50%" and logged what authors did with each suggestion (preview, apply, "not helpful").
+  - It checked that offline metrics matched online acceptance.
+  - It used "not helpful" feedback "to identify recurring failure patterns". This is the live-signal half: what the people on the other end do with the model's output.
+- Sumner's hourly side-by-side scorecard (claim 25) is the practitioner version of the same idea.
+
+**What a Warden scorecard would contain (proposed).**
+
+1. **Replay sets with known answers.** Split the §11 replay corpus into a regression set (cases Warden already handles; expected near 100%) and a capability set (hard cases). Every case has a recorded expected outcome: a planted defect that must be found, a clean change that must pass, an injection that must cause no effect. Balance cases that should trigger a finding with ones that should not. Start from 20 to 50 real failures and add each new escaped defect. Capability cases graduate to regression once passed reliably.
+2. **Run them on every model, harness, prompt or configuration change and on a schedule**, per model. Tom's pool is several models (local, Nemotron, Gemma, frontier), so each is scored separately. For cases that decide auto-merge, report pass^k over repeated trials, not a single pass.
+3. **Statistics, not single numbers.** Each score carries a standard error and a 95% interval, clustered by repository or PR. A model swap, or the fresh-context same-model reviewer in PR #47 ruling 6, is judged on paired differences over the same cases. Set sizes come from power analysis during build planning.
+4. **Live rates from ledgers on control charts.** Track, per model and per task contract:
+   - maintainer override rate on Warden verdicts;
+   - findings dismissed versus acted on;
+   - abstention rate;
+   - rework loops per item;
+   - factory merges later reverted or followed by an escaped defect.
+
+   Limits come from a baseline window by the p-chart formula. A point outside the limits is a Retro finding that the model's behavior changed. Small samples give wide limits, and the card says so rather than hiding it.
+5. **Calibrate graders.** Any model-graded score is checked against maintainer decisions before it counts and re-checked when the grading model changes. It still never decides a gate (PRD §11).
+6. **Read transcripts.** Retro samples session transcripts each window, because a scorecard can measure the wrong thing.
+7. **Watch saturation.** A regression set at 100% for a long time only detects regressions; new capability cases come from new real failures.
+
+All numbers come from the executor and ledgers, never from the model (ADR 0018).
+
+**Open for Tom.**
+
+- Adopt this structure?
+- When a live rate leaves its control limits, is that a Retro finding only, or does it also pause auto-merge for that model until its regression set passes again?
+
+### Sources for the follow-up
+
+- Winters, Manshreck and Wright (eds.), *Software Engineering at Google*, ch. 12 "Unit Testing" — https://abseil.io/resources/swe-book/html/ch12.html (read 2026-11-26)
+- Kent Beck, "Test Desiderata" — https://medium.com/@kentbeck_7670/test-desiderata-94150638a4b3 (read 2026-11-26)
+- Shi, Gyori, Gligoric, Zaytsev, Marinov, "Balancing Trade-offs in Test-Suite Reduction", FSE 2014 — https://mir.cs.illinois.edu/gyori/pubs/fse14reduction.pdf (read 2026-11-26)
+- Anthropic, "Demystifying evals for AI agents" — https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents (read 2026-11-26)
+- Anthropic, "A statistical approach to model evaluations" — https://www.anthropic.com/engineering/statistical-approach-to-model-evals (read 2026-11-26)
+- NIST/SEMATECH e-Handbook of Statistical Methods, §6.3.3.2 "Proportions Control Charts" — https://itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm (read 2026-11-26)
+- Frömmgen and Kharatyan, "Resolving code review comments with ML", Google Research, 2023-05-23 — https://research.google/blog/resolving-code-review-comments-with-ml/ (read 2026-11-26)
