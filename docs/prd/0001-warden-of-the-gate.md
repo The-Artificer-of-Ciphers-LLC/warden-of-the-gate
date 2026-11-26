@@ -7,7 +7,7 @@
 - **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md), [pitfalls](../research/PITFALLS.md), [summary](../research/SUMMARY.md) and the `TALK-*` notes in [research](../research/).
 - **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Owner decisions](#owner-decisions-from-the-research-reconciliation) lists the research points that needed a ruling: those decided on 2026-11-24, and those still open.
 - **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
-- **Agent-written-code talk (2026-11-25):** text marked **[S]** comes from [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md). It is **PROPOSED, awaiting owner review**, with [ADR 0017](../adr/0017-preexisting-tests-and-differential-checks.md) and [ADR 0018](../adr/0018-measured-not-estimated.md). Its open questions are in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
+- **Agent-written-code talk (2026-11-25):** text marked **[S]** comes from [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md). It is **PROPOSED, awaiting owner review**, except the older-test rule in §7, which @trek-e decided on 2026-11-26. See [ADR 0017](../adr/0017-preexisting-tests-and-differential-checks.md) and [ADR 0018](../adr/0018-measured-not-estimated.md). Its open questions are in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
 
 ## TL;DR
 
@@ -310,7 +310,9 @@ Protect verification controls: disabled lint rules, broadened exclusions, suppre
 
 The trusted executor captures command, inputs, exit status, output and artifacts independently of the model. Compare trusted baseline and candidate results. Do not fix unrelated baseline defects or describe them as passing. Auto-merge blocks without meaningful evidence unless an explicit scoped maintainer exception applies; required GitHub checks never bypass.
 
-**[S]** The executor records for each test it runs whether it is byte-identical on the trusted base (pre-existing), modified or added, and the card lists pre-existing evidence first. A modified pre-existing test does not count as evidence for the change. For behavior-preserving scope (refactor, performance, dependency update, port), a repository may enable differential checks: base and candidate run on the same inputs, and any difference is a finding. Generated inputs and fuzzers count only if they catch a planted defect in the same run; an unsupported language is reported as unsupported, never as a pass (ADR 0017).
+**[S] Decided 2026-11-26 (@trek-e).** The executor records for each test it runs whether it is byte-identical on the trusted base (pre-existing), modified, deleted or added. The card always shows which tests existed before the change and lists that evidence first. Auto-merge is blocked when the PR edits or deletes a pre-existing test, which the card always calls out, or when the PR is labelled a refactor or bug fix and no pre-existing test covers the changed code. New features are not required to have a pre-existing test, since none can exist; their new tests get extra review or independent checks. Pre-existing tests are independent evidence (Feathers' characterization tests); a test edited in the same PR is the red flag.
+
+**[S]** For behavior-preserving scope (refactor, performance, dependency update, port), a repository may enable differential checks: base and candidate run on the same inputs, and any difference is a finding. Generated inputs and fuzzers count only if they catch a planted defect in the same run; an unsupported language is reported as unsupported, never as a pass (ADR 0017).
 
 ### Lookup, graph analysis and SDK enforcement
 
@@ -492,6 +494,7 @@ Decided by @trek-e on 2026-11-24:
 | How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
 | Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
 | Measure structural erosion on factory-authored PRs before widening Implement authority? | Yes, widened so Retro also checks whether factory merges stay coherent together over time ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1) | §5 Retro, §11 |
+| **[S]** Show which tests existed before the change on the card only, or also gate auto-merge on them? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: always show them. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks | §7; ADR 0017 |
 
 Still open. Nothing below changes current behavior until decided:
 
@@ -499,7 +502,6 @@ Still open. Nothing below changes current behavior until decided:
 |---|---|---|
 | Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
 | When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
-| **[S]** Show pre-existing versus added test evidence on the card only, or also require a pre-existing test exercising the changed behavior before auto-merge? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | No provenance recorded (§7); proposed in ADR 0017 |
 | **[S]** Adopt opt-in differential checks for behavior-preserving work, off by default? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | Baseline and candidate results compared, not behavior (§7); proposed in ADR 0017 |
 | **[S]** Add a Review check for special-casing and a matching replay case? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | No such Review item (§5 Review, §11) |
 | **[S]** Adopt the run-over-run scorecard, and require a cited rule to resolve to real ORDERS, config or spec text? | [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md) | Metrics tracked without comparison (§11); proposed in ADR 0018 |

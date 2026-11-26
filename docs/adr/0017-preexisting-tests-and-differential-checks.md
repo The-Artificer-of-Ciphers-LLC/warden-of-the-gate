@@ -1,8 +1,8 @@
 # Evidence from tests that predate the change, and differential checks
 
-- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here is decided.
+- **Status:** Partly decided. The older-test rule (provenance, card and gate) was decided on 2026-11-26. Differential checks remain Proposed, awaiting owner review.
 - **Date:** 2026-11-25
-- **Decided by:** pending @trek-e
+- **Decided by:** @trek-e for the older-test rule (2026-11-26); pending for differential checks
 - **Research:** [Sumner, "How to Ship Millions of Lines of Agent-Written Code"](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md), candidates 1 and 2
 
 ## Context
@@ -15,11 +15,19 @@ Warden compares baseline and candidate test *results*. It has no check that comp
 
 This ADR is adjacent to proposals in open PR #47: frozen acceptance tests (ADR 0014) and mutation and holdout checks (ADR 0016). It does not depend on either and does not change them.
 
-## Decision (proposed)
+## Decision
 
-- **Record provenance per test.** For every test the trusted executor runs on the candidate, record whether its file and test body are byte-identical on the trusted base (`preexisting`), changed (`modified`) or new (`added`). Provenance is computed by Warden from the two revisions, never reported by the model.
-- **Rank evidence by provenance.** The PR card and the review record list evidence from `preexisting` tests first. `added` tests are still shown and still required where the PRD requires them (fail-before/pass-after).
-- **A modified expectation leaves the evidence.** A `modified` pre-existing test does not count as evidence for the change. The modification is still reviewed against approved requirements, as PRD §7 already requires for expectation changes.
+### Older tests (decided 2026-11-26, @trek-e)
+
+- **Record provenance per test.** For every test on the trusted base or the candidate, record whether its file and test body are byte-identical on the trusted base (`preexisting`), changed (`modified`), removed (`deleted`) or new (`added`). Provenance is computed by Warden from the two revisions, never reported by the model.
+- **Always show it.** The PR card always shows which tests existed before the change, and lists their evidence first. `added` tests are still shown and still required where the PRD requires them (fail-before/pass-after).
+- **Editing or deleting an older test blocks auto-merge.** A `modified` or `deleted` pre-existing test is always called out clearly on the card and blocks auto-merge. It does not count as evidence for the change, and it is still reviewed against approved requirements, as PRD §7 requires for expectation changes.
+- **Refactors and bug fixes need older-test coverage.** When the PR is labelled a refactor or a bug fix and no pre-existing test covers the changed code, auto-merge is blocked.
+- **New features are exempt from that requirement.** No older test can exist for new behavior. Their new tests get extra review or independent checks instead (for example the frozen tests, mutation and holdout checks proposed in PR #47).
+- **Why.** Pre-existing tests are independent evidence of behavior, in the sense of Michael Feathers' characterization tests: they record what the code did before anyone touched it. Test edits in the same PR are the red flag, because they let the change set its own bar.
+
+### Differential checks (proposed)
+
 - **Optional differential checks.** For an item whose approved scope says it should not change behavior (refactor, performance work, dependency update, port), a repository may enable `verification.differential`. Warden runs the trusted base and the candidate on the same inputs in the isolated workspace and compares outputs. Any difference is a finding. Inputs come from the repository's own fixtures or recorded cases, or from generators when enabled.
 - **Checks must prove they can fail.** Generated inputs and fuzzers count as evidence only if, in the same run, they catch a planted defect in a throwaway copy. A generator that catches nothing planted is reported as ineffective, not as passing. This is the same idea as ADR 0016's mutation testing, applied to inputs.
 - **Unsupported is never a pass.** A language or project shape the differential runner does not support is reported as `differential: unsupported` on the card. It neither passes nor blocks by itself.
@@ -30,10 +38,12 @@ This ADR is adjacent to proposals in open PR #47: frozen acceptance tests (ADR 0
 - Differential runs roughly double verification time for the items that use them. They are opt-in and limited to behavior-preserving scope.
 - A finding from a differential difference follows the 2026-11-24 ruling that a finding is a finding; it can block merge.
 - The card gets one more line (provenance summary) and, when enabled, a differential result.
+- The coverage gate needs to know which tests exercise the changed code. Where Warden cannot tell, the code counts as not covered, consistent with PRD §7 (auto-merge blocks without meaningful evidence). How coverage is measured per language is for build planning.
+- The refactor and bug-fix gate depends on the item's label being right; a mislabelled feature that is really a refactor would skip it, so the gate rests on the item being classified correctly.
 
 ## Open questions for the owner
 
-1. Show provenance on the card only, or also require at least one `preexisting` test exercising the changed behavior before auto-merge?
+1. ~~Show provenance on the card only, or also gate on it?~~ Decided 2026-11-26 (see Decision).
 2. Adopt `verification.differential` as opt-in, off by default?
 
 ## Related
