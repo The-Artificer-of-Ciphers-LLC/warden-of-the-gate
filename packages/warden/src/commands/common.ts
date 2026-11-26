@@ -28,6 +28,12 @@ export function parseArgs(argv: string[]): Parsed {
 export interface Ctx { flags: Flags; env: NodeJS.ProcessEnv; cwd: string; now: () => number }
 export interface Result { code: number; data: Record<string, unknown>; text: string }
 export const str = (f: Flags, k: string): string | undefined => (typeof f[k] === 'string' ? (f[k] as string) : undefined);
+/** `--context-limit` and `--output-limit` for the model runner. A value that is not a number is passed on as NaN so the runner refuses it with a reason. */
+export const modelLimits = (f: Flags): { contextLimit?: number; outputLimit?: number } => {
+  const n = (k: string) => { const v = str(f, k); return v === undefined ? undefined : Number(v); };
+  const c = n('context-limit'); const o = n('output-limit');
+  return { ...(c !== undefined ? { contextLimit: c } : {}), ...(o !== undefined ? { outputLimit: o } : {}) };
+};
 
 export const SUBMIT_LOGIN = 'warden-submit'; export const WRITER_LOGIN = 'warden-writer';
 export const repoDir = (c: Ctx) => resolve(c.cwd, str(c.flags, 'repo-dir') ?? '.');

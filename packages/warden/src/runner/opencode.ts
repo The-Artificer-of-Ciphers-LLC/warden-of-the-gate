@@ -48,29 +48,20 @@ export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
   private o: Required<Omit<OpenCodeOptions, 'pinned' | 'autoCompact' | 'windowGuard'>> & { pinned: string; autoCompact?: boolean; windowGuard: number };
   constructor(o: OpenCodeOptions) {
-    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:11234/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 131072, /* fallback only: the real loaded window is read from the endpoint before each session (see learnContext) */
+    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:11234/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 0, /* no default: the window must be configured (--context-limit), and the run refuses without it (see windowProblem) */
       outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ windowGuard: o.windowGuard ?? 0, maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
-    this.pinnedVersion = this.o.pinned; this.ctxExplicit = o.contextLimit !== undefined;
+    this.pinnedVersion = this.o.pinned;
   }
-  private ctxExplicit = false; private ctxLearned = false; /** true once the window is known for certain (configured, or read from the endpoint); the window guard never runs on the 131072 fallback. */ private get ctxKnown() { return this.ctxExplicit || this.ctxLearned; }
-  /** Reads the window the model is actually LOADED with, from the local server's read-only listing (GETs: nothing is loaded, unloaded or changed). First the OpenAI-style
-   *  `/v1/models` entry for this model (mlx-serve reports `context_length`; some servers `loaded_context_length` or `max_model_len`), then LM Studio's `/api/v0/models/<id>`.
-   *  A configured window that is smaller than the real one makes OpenCode compact early and fail; a larger one overflows. Unreadable -> the configured fallback is kept
-   *  and the lookup is retried before the next session. Loopback only (checked at start). */
-  private async learnContext(): Promise<void> {
-    if (this.ctxExplicit || this.ctxLearned) return;
-    const ok = (n: number) => Number.isInteger(n) && n >= 4096;
-    try {
-      const u = new URL(this.o.baseURL);
-      try {
-        const j = (await (await fetch(`${u.origin}/v1/models`, { signal: AbortSignal.timeout(5000) })).json()) as { data?: Array<Record<string, unknown>> };
-        const m = j.data?.find((x) => x.id === this.o.modelId); const n = Number(m?.loaded_context_length ?? m?.context_length ?? m?.max_model_len);
-        if (ok(n)) { this.o.contextLimit = n; this.ctxLearned = true; return; }
-      } catch { /* try the LM Studio route */ }
-      const r = await fetch(`${u.origin}/api/v0/models/${encodeURIComponent(this.o.modelId)}`, { signal: AbortSignal.timeout(5000) });
-      const n = Number(((await r.json()) as { loaded_context_length?: number }).loaded_context_length);
-      if (ok(n)) { this.o.contextLimit = n; this.ctxLearned = true; }
-    } catch { /* keep the fallback; the lookup is retried before the next session */ }
+  /** The context window is never guessed and never read from server-specific fields: the OpenAI spec's `/v1/models` carries no window, so it is a required,
+   *  configured value (the owner's "follow the published specs" ruling; see docs/research/MODEL-CONNECTIONS.md). A window that is too large overflows; one that
+   *  is too small makes OpenCode compact early and fail. Without a confirmed window the run is refused, rather than handing OpenCode a guess. */
+  private windowProblem(): string | undefined {
+    const { contextLimit: c, outputLimit: out } = this.o;
+    if (c === 0) return 'context window not confirmed: pass --context-limit with the window the model is loaded with on the server (Warden no longer guesses one)';
+    if (!Number.isInteger(c) || c < 4096) return `context window ${String(c)} is not a whole number of at least 4096 tokens`;
+    if (!Number.isInteger(out) || out < 1) return `output limit ${String(out)} is not a positive whole number`;
+    if (out >= c) return `output limit ${out} must be smaller than the context window ${c}`;
+    return undefined;
   }
 
   private config(): Record<string, unknown> {
@@ -131,6 +122,7 @@ export class OpenCodeRunner implements AgentRunner {
     if (rep.harnessVersion && rep.harnessVersion !== this.o.pinned) failures.push(`opencode ${rep.harnessVersion} != pinned ${this.o.pinned}`);
     const st = await containmentSelfTest().catch((e) => ({ ok: false, observed: {}, failures: [String(e)] }));
     if (st.ok) rep.isolation = 'seatbelt'; else failures.push(`containment not verified: ${st.failures.join('; ')}`);
+    const w = this.windowProblem(); if (w) failures.push(w);
     const c = classifyBaseURL(this.o.baseURL);
     if (!c.local) failures.push(`provider endpoint is not loopback: ${c.reason}`);
     else {
@@ -161,8 +153,8 @@ export class OpenCodeRunner implements AgentRunner {
     let s: Server | undefined;
     try {
       const wsDir = realpathSync(req.workspace?.dir ?? req.packetDir); const writable = !!req.workspace?.writable;
-      await this.learnContext();
-      if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-ctx ${JSON.stringify({ contextLimit: this.o.contextLimit, outputLimit: this.o.outputLimit, windowGuard: this.o.windowGuard, explicit: this.ctxExplicit, learned: this.ctxLearned })}\n`);
+      const w = this.windowProblem(); if (w) return { outcome: 'failed', reason: w, usage: usage() };
+      if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-ctx ${JSON.stringify({ contextLimit: this.o.contextLimit, outputLimit: this.o.outputLimit, windowGuard: this.o.windowGuard })}\n`);
       s = await this.start(wsDir, signal, writable);
       const re = await this.resolve(s); if (!re.ok) return { outcome: 'failed', reason: `routing re-check failed at execution time: ${re.reasons.join('; ')}`, usage: usage() };
       const ses = await s.api('POST', '/api/session', { title: 'warden-review', model: { id: this.o.modelId, providerID: 'lmstudio' }, location: { directory: wsDir }, permissions: [DENY_ALL, ...req.tools.allow.map((a) => ({ action: a, resource: '*', effect: 'allow' as const }))] });
@@ -185,7 +177,7 @@ export class OpenCodeRunner implements AgentRunner {
           monitor.observe({ toolCalls: Math.max(0, tools - monitor.toolCalls), modelTurns: Math.max(0, asst.length - monitor.modelTurns) });
           // Window guard: with compaction off nothing trims the conversation, so once the last turn's prompt passes a share of the loaded window the session is told, once, to stop reading and answer.
           const lastIn = Math.max(0, ...asst.map((m) => Number(m.tokens?.input ?? 0)));
-          if (!nudged && this.o.windowGuard > 0 && this.ctxKnown && lastIn > this.o.windowGuard * this.o.contextLimit) { nudged = true; selfInterrupt = true; if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-guard ${JSON.stringify({ lastIn, threshold: this.o.windowGuard * this.o.contextLimit, contextLimit: this.o.contextLimit, wallMs: Date.now() - t0 })}\n`); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); }
+          if (!nudged && this.o.windowGuard > 0 && lastIn > this.o.windowGuard * this.o.contextLimit) { nudged = true; selfInterrupt = true; if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-guard ${JSON.stringify({ lastIn, threshold: this.o.windowGuard * this.o.contextLimit, contextLimit: this.o.contextLimit, wallMs: Date.now() - t0 })}\n`); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); }
           if (monitor.exceeded) { dbg(round, msgs); await s.api('POST', `/api/session/${sid}/interrupt`, {}).catch(() => undefined); return { outcome: 'budget-exceeded', reason: monitor.exceeded, usage: usage() }; }
           idle = msgs.find((m) => !seen.has(key(m)) && m.type === 'idle' && (m.time?.created ?? 0) >= created);
           if (!idle) await new Promise((res) => setTimeout(res, 400));

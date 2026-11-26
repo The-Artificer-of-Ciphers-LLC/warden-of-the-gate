@@ -36,7 +36,7 @@ const HELP = `warden ${CLI_VERSION}  (warden.yml schema v${WARDEN_SCHEMA_VERSION
   data status | export --scope S --out FILE [--confirm] | purge --scope S [--older-than-days N] [--include-decisions] [--confirm]
   upgrade --dry-run                         (report changes; nothing is applied)
   discord sync --channel ID [--dry-run]     (post/edit approval cards; notifications only, decisions stay on GitHub)
-  replay --set FILE [--runner opencode] [--validate-only]   (replay a curated set in a simulated repo; measures and reports, never activates)
+  replay --set FILE [--runner opencode --context-limit N] [--validate-only]   (replay a curated set in a simulated repo; measures and reports, never activates)
   approvals request|list|check --item N ...
   credentials configure --confirm --app-id N --installation-id N --app-login LOGIN [--key-path FILE] [--approve-control-read] [--replace]
   credentials status | ack-revocation --confirm
