@@ -4,6 +4,7 @@ All notable changes to `@taoc/warden`. This file is a release-candidate record: 
 
 ## Unreleased
 
+- The OpenCode runner no longer guesses the model's context window. `--context-limit N` is required with `--runner opencode` (on `run` and `replay`); preflight and each session refuse with a clear reason when it is missing, not a whole number of at least 4096, or not larger than `--output-limit` (default 32768). The silent 131072 fallback and the server-specific window lookups (`/v1/models` extras, LM Studio `/api/v0`) are removed, following the published-specs ruling in `docs/research/MODEL-CONNECTIONS.md`.
 - Retro task: deterministic evidence packet, validated proposals-only output, local-outbox report branch.
 - Review code lookup (ADR 0013): `run --task review --lookup-clone DIR` and `replay --lookup-clone DIR [--context-chars N]` give the reviewer a prefetched, cited repository context pack (precise TypeScript, inferred JavaScript, text tiers). `typescript` 6.0.3 is now a runtime dependency. Replay cases may carry `head`/`base` commits; replay results report context stats and per-case wall time.
 

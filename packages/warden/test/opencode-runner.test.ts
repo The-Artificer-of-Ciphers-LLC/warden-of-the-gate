@@ -25,26 +25,29 @@ test('parseVersion reads the real `opencode --version` output shape and rejects 
   assert.equal(parseVersion('opencode v2.2.7\n'), '2.2.7'); assert.equal(parseVersion('2.2.7'), '2.2.7'); assert.equal(parseVersion('no version'), undefined);
 });
 
-test('the loaded context window is read from the endpoint (read-only GET), not guessed; unreadable keeps the configured fallback', async () => {
-  const { createServer } = await import('node:http'); let hits = 0; let path = '';
-  const srv = createServer((req, res) => { hits++; path = String(req.url); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ id: 'm1', loaded_context_length: 262144 })); });
-  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r())); const port = (srv.address() as { port: number }).port;
-  try {
-    const a = new OpenCodeRunner({ modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1` }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
-    await a.learnContext(); assert.equal(a.o.contextLimit, 262144); assert.equal(hits, 2, 'the OpenAI-style listing had no entry, so the LM Studio route was tried'); assert.equal(path, '/api/v0/models/m1');
-    const b = new OpenCodeRunner({ modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1`, contextLimit: 8192 }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
-    await b.learnContext(); assert.equal(b.o.contextLimit, 8192); assert.equal(hits, 2, 'an explicit window is never overridden or queried');
-  } finally { srv.close(); }
-  const c = new OpenCodeRunner({ modelId: 'm1', baseURL: 'http://127.0.0.1:1/v1' }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number } };
-  await c.learnContext(); assert.equal(c.o.contextLimit, 131072);
+test('the context window is never guessed: preflight refuses without a confirmed window and names the flag', async () => {
+  const none = await new OpenCodeRunner({ bin: '/nonexistent/opencode', modelId: 'm' }).preflight();
+  assert.equal(none.ok, false); assert.ok(none.failures.some((f) => /context window not confirmed: pass --context-limit/.test(f)), none.failures.join('; '));
+  const bad = (o: { contextLimit?: number; outputLimit?: number }) => (new OpenCodeRunner({ modelId: 'm', ...o }) as unknown as { windowProblem(): string | undefined }).windowProblem();
+  assert.match(String(bad({ contextLimit: Number.NaN })), /not a whole number of at least 4096/);
+  assert.match(String(bad({ contextLimit: 2048 })), /not a whole number of at least 4096/);
+  assert.match(String(bad({ contextLimit: 32768, outputLimit: 32768 })), /must be smaller than the context window/);
+  assert.match(String(bad({ contextLimit: 65536, outputLimit: 0 })), /output limit 0 is not a positive whole number/);
+  assert.equal(bad({ contextLimit: 65536 }), undefined, 'a configured window with the default 32768 output limit is confirmed');
+  const ok = await new OpenCodeRunner({ bin: '/nonexistent/opencode', modelId: 'm', contextLimit: 65536 }).preflight();
+  assert.ok(!ok.failures.some((f) => /context window|output limit/.test(f)), 'a confirmed window raises no window failure');
 });
 
-test('the loaded context window is read from an OpenAI-style /v1/models entry (mlx-serve reports context_length), with no second request', async () => {
-  const { createServer } = await import('node:http'); const paths: string[] = [];
-  const srv = createServer((req, res) => { paths.push(String(req.url)); res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ object: 'list', data: [{ id: 'other', context_length: 4096 }, { id: 'ddalcu/m1', context_length: 262144, max_model_len: 262144 }] })); });
+test('a session without a confirmed window is refused before any model server is started or queried', async () => {
+  const { createServer } = await import('node:http'); let hits = 0;
+  const srv = createServer((_req, res) => { hits++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ object: 'list', data: [{ id: 'm1', context_length: 262144 }] })); });
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r())); const port = (srv.address() as { port: number }).port;
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'warden-oc-win-')); writeFileSync(path.join(dir, 'prompt.txt'), 'task');
   try {
-    const a = new OpenCodeRunner({ modelId: 'ddalcu/m1', baseURL: `http://127.0.0.1:${port}/v1` }) as unknown as { learnContext(): Promise<void>; o: { contextLimit: number }; ctxKnown: boolean };
-    await a.learnContext(); assert.equal(a.o.contextLimit, 262144); assert.deepEqual(paths, ['/v1/models']); assert.equal(a.ctxKnown, true);
-  } finally { srv.close(); }
+    const r = new OpenCodeRunner({ bin: '/nonexistent/opencode', modelId: 'm1', baseURL: `http://127.0.0.1:${port}/v1` });
+    const res = await r.run({ packetDir: dir, tools: { allow: [] } } as never, new AbortController().signal, { toolCalls: 0, modelTurns: 0, observe() {}, exceeded: undefined } as never);
+    assert.equal(res.outcome, 'failed'); assert.match(String(res.reason), /context window not confirmed/);
+    assert.equal(hits, 0, 'server-specific window fields are not read: the window is configuration, not discovery');
+  } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
 });
