@@ -9,7 +9,7 @@ import type { Check } from '../src/verify/executor.ts';
 /** The executor runs REAL commands inside the REAL Seatbelt boundary (macOS). Fixtures are tiny node:test projects. */
 const proj = (testBody: string) => { const d = mkdtempSync(join(tmpdir(), 'warden-ex-')); mkdirSync(join(d, 'test')); writeFileSync(join(d, 'sum.js'), 'exports.sumTo = (n) => { let t = 0; for (let i = 1; i < n; i++) t += i; return t; };\n'); writeFileSync(join(d, 'test/sum.test.js'), testBody); return d; };
 const BUG_TEST = "const { test } = require('node:test'); const assert = require('node:assert'); const { sumTo } = require('../sum.js'); test('sumTo(3) is 1+2', () => assert.strictEqual(sumTo(3), 3)); test('sumTo(4) is 1+2+3', () => assert.strictEqual(sumTo(4), 7));\n";
-const checks: Check[] = [{ id: 'unit', kind: 'test', command: process.execPath, args: ['--test', 'test/'], timeoutMs: 60_000 }];
+const checks: Check[] = [{ id: 'unit', kind: 'test', command: process.execPath, args: ['--test', 'test/sum.test.js'], timeoutMs: 60_000 }];
 
 test('the executor runs checks inside the boundary, records command/revision/status/digest, and cannot reach the home directory or the network', async (t) => {
   const d = proj(BUG_TEST); t.after(() => rmSync(d, { recursive: true, force: true }));

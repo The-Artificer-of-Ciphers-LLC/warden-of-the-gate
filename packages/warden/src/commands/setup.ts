@@ -14,8 +14,8 @@ type Check = { name: string; status: 'ok' | 'missing' | 'warn' | 'created' | 'ex
  *  never activates live AI. Each creation is a separate explicit flag. */
 export async function setup(c: Ctx): Promise<Result> {
   const checks: Check[] = []; const add = (name: string, status: Check['status'], detail: string) => checks.push({ name, status, detail });
-  const major = Number(process.versions.node.split('.')[0]); const minor = Number(process.versions.node.split('.')[1]);
-  add('node', major > 22 || (major === 22 && minor >= 18) ? 'ok' : 'missing', `node ${process.versions.node} (needs >=22.18)`);
+  const major = Number(process.versions.node.split('.')[0]);
+  add('node', major >= 26 ? 'ok' : 'missing', `node ${process.versions.node} (needs >=26)`);
   add('platform', process.platform === 'darwin' ? 'ok' : 'warn', `${process.platform}: the MVP supports a prepared Mac only`);
   add('isolation', existsSync('/usr/bin/sandbox-exec') ? 'ok' : 'warn', existsSync('/usr/bin/sandbox-exec') ? 'Seatbelt (sandbox-exec) available (P0 selected backend; deprecated CLI, no memory cap)' : 'no Seatbelt: tasks that run candidate code are blocked until a real boundary exists');
 
