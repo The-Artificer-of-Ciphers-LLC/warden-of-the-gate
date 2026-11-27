@@ -4,6 +4,7 @@ All notable changes to `@taoc/warden`. This file is a release-candidate record: 
 
 ## Unreleased
 
+- The default local model endpoint is now mlx-serve at `http://127.0.0.1:11234/v1` (OpenAI-compatible); `--model-url` overrides it and `--lmstudio-url` is kept as an alias. The 0.1.0-p4 entry below records LM Studio because that is what that candidate used.
 - Node >= 26 is now required (`engines`, `warden setup` and the example workflows). The Seatbelt work was built and proven on Node 26, and the repository checks now run on it.
 - The Seatbelt test fixtures run `node --test test/sum.test.js` instead of `node --test test/`. Node 22 and 24 load a directory argument as a module path and fail, so the fixtures passed only on Node 26; naming the file keeps the fail-before/pass-after setup (the base has no test file) and works on every Node version.
 - The OpenCode runner no longer guesses the model's context window. `--context-limit N` is required with `--runner opencode` (on `run` and `replay`); preflight and each session refuse with a clear reason when it is missing, not a whole number of at least 4096, or not larger than `--output-limit` (default 32768). The silent 131072 fallback and the server-specific window lookups (`/v1/models` extras, LM Studio `/api/v0`) are removed, following the published-specs ruling in `docs/research/MODEL-CONNECTIONS.md`.

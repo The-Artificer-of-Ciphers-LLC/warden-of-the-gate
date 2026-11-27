@@ -8,7 +8,7 @@ npm run verify-install                  # packs the candidate, installs it into 
 node dist/cli.js --help
 ```
 
-Requirements: Node >= 26. Any model-backed task also needs macOS (Seatbelt `sandbox-exec`, tested on macOS 27), the pinned OpenCode 2.2.7, and a local model served on loopback by LM Studio. There is no hosted fallback.
+Requirements: Node >= 26. Any model-backed task also needs macOS (Seatbelt `sandbox-exec`, tested on macOS 27), the pinned OpenCode 2.2.7, and a local OpenAI-compatible model server on loopback (mlx-serve at `http://127.0.0.1:11234/v1` by default; `--model-url` overrides), with `--context-limit` set to the window the model is loaded with. There is no hosted fallback.
 
 ## Commands
 

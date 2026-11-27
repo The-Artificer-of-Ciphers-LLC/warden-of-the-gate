@@ -39,6 +39,14 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 | [ADR 0014](docs/adr/0014-frozen-acceptance-tests.md) | Frozen acceptance tests, written first in their own session | Proposed |
 | [ADR 0015](docs/adr/0015-contract-review-human-gate.md) | Contract review as the human gate; boundary changes as proposed designs; reviewer independence | Proposed |
 | [ADR 0016](docs/adr/0016-verification-loop-and-test-quality-evidence.md) | Bounded verification loop and test-quality evidence | Proposed |
+| [ADR 0017](docs/adr/0017-preexisting-tests-and-differential-checks.md) | Evidence from tests that predate the change; opt-in differential checks | Decided (one detail Proposed) |
+| [ADR 0018](docs/adr/0018-measured-not-estimated.md) | Measured, not estimated: weighted robust scorecards, untrusted self-assessment | Partly decided |
+| [ADR 0019](docs/adr/0019-decision-model-router.md) | Decision-model router: routes work, never authorizes it | Proposed (post-MVP) |
+| [ADR 0020](docs/adr/0020-review-attention-and-maintainer-understanding.md) | Review attention classes: the maintainer chooses what they keep reading | Proposed |
+| [ADR 0021](docs/adr/0021-cross-family-review-panel.md) | Optional cross-family review panel, bounded rounds | Proposed |
+| [ADR 0022](docs/adr/0022-new-model-starts-paused.md) | A model new to the pool starts with auto-merge paused | Proposed |
+| [ADR 0023](docs/adr/0023-promise-checks.md) | Promise checks: per-repository, base against candidate | Proposed (adopted in principle) |
+| [ADR 0024](docs/adr/0024-behavior-effect-at-triage.md) | Record a change's intended behavior effect at Triage | Proposed (facet adopted) |
 
 ## Research
 
