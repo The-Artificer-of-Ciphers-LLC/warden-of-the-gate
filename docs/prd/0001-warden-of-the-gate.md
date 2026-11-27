@@ -8,6 +8,7 @@
 - **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Owner decisions](#owner-decisions-from-the-research-reconciliation) lists the research points that needed a ruling: those decided on 2026-11-24, and those still open.
 - **Tests-over-review reconciliation (2026-11-25):** text marked **[T]** applies the method in [Review the tests, not the diff](../research/TESTS-OVER-CODE-REVIEW.md) (frozen acceptance tests, contract review as the human gate, a bounded verification loop and test-quality evidence), with proposed [ADR 0014](../adr/0014-frozen-acceptance-tests.md), [ADR 0015](../adr/0015-contract-review-human-gate.md) and [ADR 0016](../adr/0016-verification-loop-and-test-quality-evidence.md). It is **PROPOSED, awaiting owner review**; the questions it raises are in [Owner decisions](#owner-decisions-from-the-research-reconciliation). The owner ruled on them on 2026-11-25 (bug reproducers, boundary changes as proposed designs, review only on contributor PRs, surviving mutants fail the check, hidden acceptance checks as a pilot; the reviewer model is still undecided); the text below marks where.
 - **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
+- **Agent-written-code talk (2026-11-25):** text marked **[S]** comes from [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md). It is **PROPOSED, awaiting owner review**, except what @trek-e decided on 2026-11-26: the older-test rule, where new feature tests go and opt-in differential checks in §7; no planning documents and cited rules that must resolve in §5 Implement; the special-casing check in §5 Review and its replay case in §11; and the scorecard pause and how it lifts in §5 Retro. See [ADR 0017](../adr/0017-preexisting-tests-and-differential-checks.md) and [ADR 0018](../adr/0018-measured-not-estimated.md). Its open questions are in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
 
 ## TL;DR
 
@@ -216,6 +217,12 @@ Use the strongest appropriate reproducer, implement the approved change, and run
 
 **[R]** Keep factory PRs within a configurable reviewable size. Work that would exceed it is split into approved, separately mergeable steps, or returned to `needs-decision` with a proposed split.
 
+**[S] Decided 2026-11-26 (@trek-e).** Factory PRs add no planning or design documents unless the issue asks for them; adding them is scope expansion.
+
+**[S] Decided 2026-11-26 (@trek-e).** A rule cited to skip or narrow work must resolve to real `.github/ORDERS.yaml`, `.github/warden.yml` or approved spec text; an unresolved citation is a finding (ADR 0018).
+
+**[S]** An estimate of effort, impact or feasibility is a model claim, not a reason to abstain on its own (ADR 0018).
+
 ### Review - local read-only AI and deterministic gates
 
 Review candidate changes against relevant base context, approved requirements, rules and prior decisions. Gather symbol/reference/impact evidence, inspect verification and detect control weakening. Findings name severity, precise location, rationale and required correction.
@@ -233,6 +240,7 @@ Review candidate changes against relevant base context, approved requirements, r
 - **[T]** Review reads the contract first: the spec or issue, the acceptance criteria and the test diff, then the implementation. It checks the test diff against one focused list (deleted or weakened assertions, widened tolerances or timeouts, new retries, regenerated snapshots, `.skip`/`.only`/`todo`, changed test-runner, coverage or mutation configuration, tests moved out of the test globs, tests that assert on the implementation's own output) and reports each hit as a located finding ([ADR 0015](../adr/0015-contract-review-human-gate.md)). A surviving mutant on a changed line fails the mutation check (decided 2026-11-25, [ADR 0016](../adr/0016-verification-loop-and-test-quality-evidence.md)).
 - **[T]** Review runs in a fresh session and records the writer's and reviewer's model ids and families on the verdict. Not yet decided (owner, 2026-11-25): the MVP may review with a fresh context of the same model; whether to prefer a different family waits on statistics of which models review code best, a longer-term goal (§11). Same-model review is reported as such.
 - **[R]** Review also reports spec gaps and conflicts: an approved criterion the change cannot satisfy as written, or behavior the spec does not determine. These route to `needs-decision`, not to the author.
+- **[S] Decided 2026-11-26 (@trek-e).** Review checks the implementation, not only its tests, for special-casing (gamed tests): code that branches on a literal identifier, property name, file name or test input so that a check passes (Sumner's example: any object reading a property named `archive` treated as using one API). This is a finding even when every test and benchmark passes.
 
 **Decided 2026-11-24 (@trek-e).** A finding is a finding, no matter when it is found: a later review round may raise a finding on code that was already reviewed and has not changed.
 
@@ -286,6 +294,12 @@ Maintain the decision corpus; propose narrowly scoped standing-authority expansi
 
 **Decided 2026-11-24 (@trek-e).** Measure structural erosion on factory-authored PRs (verbosity, duplication, complexity trend) before widening Implement authority. Retro also looks at the factory's merged changes over the window together, not only one PR at a time: whether they stay coherent with each other and with the approved design, or drift through duplicated helpers, diverging patterns or growth in touched modules ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1). Retro still only proposes.
 
+**[S] Proposed 2026-11-26, replacing a plain previous-run comparison at @trek-e's direction.** Retro and each scan report include a weighted, robust scorecard of the §11 metrics, taken from ledgers. Each metric is judged against the median and median absolute deviation of a rolling baseline of comparable runs, with p-chart and EWMA limits that must be breached in both a long and a short window. Weights are set in `.github/warden.yml` and shown. The weighted composite is a summary shown with its parts, never a gate, and a breach in one metric cannot be offset by others. Below a minimum sample the card says "insufficient data". The previous run is shown as one column. Retro also lists abstentions whose stated reason was a model estimate (ADR 0018).
+
+**[S] Proposed 2026-11-26.** Retro also reports a model scorecard: replay regression and capability results per model, with confidence intervals, and live rates from ledgers (maintainer overrides, dismissed findings, abstentions, rework loops, reverted factory merges) scored as above. A rate outside its limits is a Retro finding that the model's behavior changed. Retro samples session transcripts each window (ADR 0018).
+
+**[S] Decided 2026-11-26 (@trek-e).** When a model's live rate goes past its control limit, Retro flags it and auto-merge also pauses for that model; its verdicts cannot make a PR eligible for auto-merge until the pause is lifted. Only the maintainer lifts it, and only after the model's regression set passes again on replay.
+
 ## 6. Drafts and backlog adoption
 
 Draft PRs are disallowed by default, explicitly configurable. Close newly opened drafts and PRs converted to draft while disabled, with explanation and a ready-for-review return path. Never silently mark unfinished work ready. Closing a draft alone does not revoke a valid delivery commitment. Enabled drafts still cannot merge.
@@ -312,6 +326,12 @@ Protect verification controls: disabled lint rules, broadened exclusions, suppre
 **[R]** When a new static rule meets existing violations, apply it as a ratchet: it gates new and changed code immediately, records the existing violations as a baseline, and the baseline may only shrink. Factory work does not fix unrelated baseline violations as a side effect.
 
 The trusted executor captures command, inputs, exit status, output and artifacts independently of the model. Compare trusted baseline and candidate results. Do not fix unrelated baseline defects or describe them as passing. Auto-merge blocks without meaningful evidence unless an explicit scoped maintainer exception applies; required GitHub checks never bypass.
+
+**[S] Decided 2026-11-26 (@trek-e).** The executor records for each test it runs whether it is byte-identical on the trusted base (pre-existing), modified, deleted or added. The card always shows which tests existed before the change and lists that evidence first. Auto-merge is blocked when the PR edits or deletes a pre-existing test, which the card always calls out, or when the PR is labelled a refactor or bug fix and no pre-existing test covers the changed code. New features are not required to have a pre-existing test, since none can exist; their new tests get extra review or independent checks. Pre-existing tests are independent evidence (Feathers' characterization tests); a test edited in the same PR is the red flag.
+
+**[S] Decided 2026-11-26 (@trek-e).** New feature or bug-fix behavior on existing code is tested by new cases inside the test file or suite that already exercises that unit, reusing its fixtures, without editing existing cases. A new test file, harness or fixture set is created only for a new unit (function, module or class) with no test home; otherwise it is a Review finding. Proposed, still open: where mutation checks run, the card lists added tests that killed no mutant the pre-existing suite missed (Software Engineering at Google ch. 12; Shi et al., FSE 2014; ADR 0017).
+
+**[S] Decided 2026-11-26 (@trek-e).** For behavior-preserving scope (refactor, performance, dependency update, port), a repository may enable differential checks, which are off by default: base and candidate run on the same inputs, and any difference is a finding. Generated inputs and fuzzers count only if they catch a planted defect in the same run; an unsupported language is reported as unsupported, never as a pass (ADR 0017).
 
 ### Lookup, graph analysis and SDK enforcement
 
@@ -437,6 +457,10 @@ Cover bugs, approved features, contributor and factory PRs, dependency updates, 
 
 **[R]** Score replay deterministically against the curated expectations (expected finding location, triage outcome, effect allowed or not). A model grading another model's output may inform analysis but never decides a gate. When comparing prompt, model or configuration variants, tune on a development subset and report the gate on a held-out subset the variants were not tuned on.
 
+**[S]** Replay also includes a change that special-cases a test input and passes every test (expected: a Review finding; this case was decided 2026-11-26 with the Review check), a behavior-preserving change with one behavior difference (expected: a differential finding where enabled), and a session that cites a rule that does not exist (expected: an unresolved-citation finding).
+
+**[S] Proposed 2026-11-26.** The replay corpus is split into a regression set (expected near 100%) and a capability set, with cases that should and should not raise a finding. It runs on every model, harness, prompt or configuration change, separately for each model in the pool. Cases that decide auto-merge are scored over repeated trials (all trials must pass). Scores carry standard errors and 95% intervals, model comparisons use paired differences on the same cases, and set sizes come from power analysis (ADR 0018).
+
 The maintainer explicitly enables live actions after reviewing evidence. Do not turn elapsed shadow days or benchmark completion into implicit approval.
 
 ### Required functional/recovery evidence
@@ -492,6 +516,13 @@ Decided by @trek-e on 2026-11-24:
 | How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
 | Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
 | Measure structural erosion on factory-authored PRs before widening Implement authority? | Yes, widened so Retro also checks whether factory merges stay coherent together over time ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1) | §5 Retro, §11 |
+| **[S]** Show which tests existed before the change on the card only, or also gate auto-merge on them? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: always show them. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks. Those tests go in as new cases in the existing suite for the unit (decided 2026-11-26, below) | §7; ADR 0017 |
+| **[S]** Add a Review check for special-casing (gamed tests) and a matching replay case? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: yes. Code that branches on a literal identifier, property name, file name or test input so a check passes is a Review finding, and replay includes such a case | §5 Review, §11 |
+| **[S]** Adopt opt-in differential checks for behavior-preserving work, off by default? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: yes. A reported difference is a finding under the 2026-11-24 rule | §7; ADR 0017 |
+| **[S]** Factory PRs add no planning or design docs unless the issue asks? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: yes; adding them is scope expansion | §5 Implement |
+| **[S]** New feature tests: new cases in the existing suite for the unit, no edits to existing cases, new test files only for new units? ([Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#1-tests-for-new-features-without-test-sprawl)) | Decided 2026-11-26: yes. A new test file where one already exists is a Review finding | §7; ADR 0017 |
+| **[S]** Must a rule cited to skip or narrow work resolve to real ORDERS, config or spec text? ([Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md)) | Decided 2026-11-26: yes; an unresolved citation is a finding | §5 Implement; ADR 0018 |
+| **[S]** When a model's live rate passes its limit, Retro finding only or also pause auto-merge, and what lifts the pause? ([Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect)) | Decided 2026-11-26: both; only the maintainer lifts it, after the regression set passes again on replay | §5 Retro; ADR 0018 |
 
 Decided by @trek-e on 2026-11-25:
 
@@ -509,6 +540,9 @@ Still open. Nothing below changes current behavior until decided:
 |---|---|---|
 | Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
 | When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
+| **[S]** Adopt the weighted, robust scorecard (median and MAD baselines, p-chart and EWMA limits over long and short windows, explicit weights, composite never a gate)? Should safety metrics outweigh throughput by default? | [Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#3-a-weighted-robust-scorecard) | Metrics tracked without a baseline (§11); proposed in ADR 0018 |
+| **[S]** Adopt the model scorecard (per-model replay regression and capability sets with intervals)? | [Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect) | Replay scored deterministically (§11); no per-model scorecard |
+| **[S]** Is an added test that kills no new mutant a finding, or shown on the card only? | [Sumner follow-up](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#1-tests-for-new-features-without-test-sprawl) | Not addressed (§7) |
 | Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |
 | **[T]** Which boundary classes count (defaults in §3), and what decision-matrix questions a boundary design card asks? | TESTS-OVER-CODE-REVIEW §5 Q2; ADR 0015; overlaps the reversibility question above | §3 default list, proposed; the 2026-11-25 ruling settled the shape, not the classes |
 | **[T]** Which workflow runs may Warden approve where the repository requires approval? | 2026-11-25 ruling; GitHub's fork-run approval guidance | Proposed in §5 Review: only the reviewed head, never with workflow or human-gate path changes |
