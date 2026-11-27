@@ -10,6 +10,7 @@ import { newLedger } from '../state/model.ts';
 import type { Effect, Ledger, OpRec } from '../state/model.ts';
 import { reduce } from './reduce.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
+import { DEFAULT_MAX_OUTGOING_CHARS, OutgoingBlocked, checkOutgoingLabels, checkOutgoingText } from './outgoing.ts';
 import { expireApprovals, parseMaintainerCommand } from '../approvals/approvals.ts';
 import type { DecisionRecord } from '../approvals/approvals.ts';
 
@@ -21,6 +22,7 @@ export interface WriterConfig {
   leaseTtlMs: number; leaseWaitMs: number; fenceMarginMs: number; fenceCacheMs: number;
   maxIntentsPerRun: number; maxPasses: number; causalTimeoutMs: number; maxCreatesPerRun: number;
   ledgerKey?: string; assignable: (login: string) => boolean; holdMs?: number;
+  /** Outgoing comments longer than this are blocked (PRD section 3 [R]); default under GitHub's 65,536-character limit. */ maxOutgoingChars?: number;
 }
 export interface Processed { commentId: number; opid?: string; result: string; reason?: string }
 export interface DrainReport {
@@ -209,6 +211,8 @@ export class Writer {
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
         dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr, pull: pullObs, replaced });
       }
+      const unsafe = this.planProblem(dec.plan);                           // checked BEFORE the plan is recorded: an unsafe text must not be stored in the ledger either
+      if (unsafe) dec = { accept: false, reason: 'outgoing-blocked: ' + unsafe, plan: [] as Effect[] };
       const rec: OpRec = { status: 'applying', decision: dec.accept ? 'accept' : 'reject', reason: dec.reason, plan: dec.plan, step: 0, attempts: 0, epoch: this.lease.epoch, intentCommentId: c.id };
       dec.apply?.(l);
       l.ops[intent.opid] = rec; l.order.push(intent.opid);
@@ -272,6 +276,7 @@ export class Writer {
       await this.receipt(c, intent, rec.status, rec.reason, l, { state: l.state, owner: l.owner });
       return { commentId: c.id, opid: intent.opid, result: rec.status, reason: rec.reason };
     } catch (e) {
+      if (e instanceof OutgoingBlocked) { rec.status = 'rejected'; rec.reason = 'outgoing-blocked: ' + e.message; await this.commit(l, 'outgoing-blocked'); await this.receipt(c, intent, 'rejected', rec.reason, l, { state: l.state, owner: l.owner }); return { commentId: c.id, opid: intent.opid, result: 'rejected', reason: rec.reason }; }
       if (e instanceof StaleMerge) { rec.status = 'rejected'; rec.reason = 'stale-merge:' + e.message; await this.commit(l, 'stale-merge'); await this.receipt(c, intent, 'rejected', rec.reason, l, { state: l.state, owner: l.owner }); return { commentId: c.id, opid: intent.opid, result: 'rejected', reason: rec.reason }; }
       if (e instanceof Crash || e instanceof Fenced || e instanceof Stopped || e instanceof Anomaly || e instanceof BudgetExhausted) throw e;
       rec.attempts += 1;                                                     // persisted retry bound: a cold start cannot reset it
@@ -279,6 +284,22 @@ export class Writer {
       await this.commit(l, 'attempt');
       return { commentId: c.id, opid: intent.opid, result: 'retry', reason: String(e).slice(0, 100) };
     }
+  }
+
+  /** The first outgoing-message problem in a plan (comment text or label change), or null. */
+  private planProblem(plan: readonly Effect[]): string | null {
+    const r = this.outgoingRules();
+    for (const e of plan) {
+      const why = e.t === 'comment' ? checkOutgoingText(e.text, r) : e.t === 'label' ? checkOutgoingLabels([...(e.add ?? []), ...(e.remove ?? [])], r) : null;
+      if (why) return why;
+    }
+    return null;
+  }
+  /** The outgoing-message rules in force: mentions only of configured maintainers, labels only from the projection and control labels. */
+  private outgoingRules() {
+    const p = this.cfg.policy;
+    return { maxChars: this.cfg.maxOutgoingChars ?? DEFAULT_MAX_OUTGOING_CHARS, mentionable: new Set(p.maintainers.map((m) => m.toLowerCase())),
+      labels: new Set([...Object.values(p.labelStates), p.stopLabel, ...(p.sweep ? [p.sweep.keepOpenLabel] : [])]) };
   }
 
   /** Idempotent effects: native idempotence (assign/label) or a marker found before posting (comment). */
@@ -307,9 +328,11 @@ export class Writer {
       if (iss.state !== 'closed') await this.store.closeIssue(i.item);
       if ((await this.store.getIssue(i.item)).state !== 'closed') throw new Error('close not confirmed by GitHub');
     } else if (e.t === 'label') {
+      const lr = checkOutgoingLabels([...(e.add ?? []), ...(e.remove ?? [])], this.outgoingRules()); if (lr) throw new OutgoingBlocked(lr);
       for (const a of e.add ?? []) await this.store.addLabel(i.item, a);
       for (const r of e.remove ?? []) await this.store.removeLabel(i.item, r);
     } else {
+      const why = checkOutgoingText(e.text, this.outgoingRules()); if (why) throw new OutgoingBlocked(why);
       const tag = `<!-- ${EFFECT_MARK}:${i.opid}:${idx} -->`;
       const cs = await this.store.listComments(i.item);
       if (!cs.some((x) => x.body.includes(tag))) { await this.create(i.item, `${tag}\n${e.text}`); if (this.faults.take('effect-reply-lost:comment')) throw new NetworkError('reply lost after effect comment'); }
