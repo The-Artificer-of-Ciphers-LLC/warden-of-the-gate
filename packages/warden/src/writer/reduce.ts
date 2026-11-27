@@ -40,7 +40,8 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
       if (l.state === 'ready' && !l.owner) {
         const plan: Effect[] = [];
         if (cl.kind === 'contributor' && c.assignable(cl.id)) plan.push({ t: 'assign', login: cl.id });
-        plan.push(...project(c.policy, 'ready', 'claimed'), note(`Claim accepted: ${cl.kind} ${cl.id} now owns this item.`));
+        const refused = cl.kind === 'contributor' && !c.assignable(cl.id);
+        plan.push(...project(c.policy, 'ready', 'claimed'), note(`Claim accepted: ${cl.kind} ${cl.id} now owns this item.${refused ? ' GitHub does not let this repository assign them, so the claim is recorded here only and no GitHub assignment was made.' : ''}`));
         return { accept: true, plan, apply: (led) => {
           led.state = 'claimed'; led.owner = { kind: cl.kind, id: cl.id, opid: i.opid };
           // Contributor commitments start at the confirmed assignment decision (not at issue creation or an old comment). Factory claims carry none.

@@ -209,7 +209,10 @@ export class Writer {
         const replaced = intent.kind === 'carry-accounting' && typeof (intent.payload as { replaces?: unknown }).replaces === 'number' ? await this.loadLedgerReadOnly((intent.payload as { replaces: number }).replaces) : undefined;
         const pullObs = intent.kind === 'merge-request' ? await this.store.getPull(intent.item).catch(() => undefined) : undefined;
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
-        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable: this.cfg.assignable, observed, item: iss, linkedPr, pull: pullObs, replaced });
+        const claimant = intent.kind === 'claim' ? (intent.payload as { claimant?: { kind?: string; id?: string } }).claimant : undefined;
+        const claimantOk = claimant?.kind === 'contributor' && claimant.id && this.store.canAssign ? await this.store.canAssign(claimant.id) : undefined;   // GitHub's own answer, read at decision time; a failed lookup retries, it never guesses
+        const assignable = (login: string) => (claimantOk !== undefined && login === claimant!.id ? claimantOk : this.cfg.assignable(login));
+        dec = reduce(intent, l, { policy: pol, now: this.store.now(), sourceVerified, assignable, observed, item: iss, linkedPr, pull: pullObs, replaced });
       }
       const unsafe = this.planProblem(dec.plan);                           // checked BEFORE the plan is recorded: an unsafe text must not be stored in the ledger either
       if (unsafe) dec = { accept: false, reason: 'outgoing-blocked: ' + unsafe, plan: [] as Effect[] };
