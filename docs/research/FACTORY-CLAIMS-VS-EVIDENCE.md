@@ -41,7 +41,7 @@ Ranked by how much harm they could do.
 
 ### 3.1 Agent instruction files are not protected paths (code-level gap)
 
-`HUMAN_GATE_PATHS` in `src/config/policy.ts` covers workflows, `warden.yml`, `ORDERS.yaml`, CODEOWNERS and maintainer files. It does not cover `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.opencode/`, `.claude/`, `.cursor/rules` or similar files that coding harnesses load as instructions. A contributor PR that edits one of them is an ordinary change, so it can pass review and auto-merge. After that, every Implement session, which runs from the trusted base, loads the attacker's text as instructions. This is GitInject's strongest attack, moved one step later.
+`HUMAN_GATE_PATHS` in `src/config/policy.ts` covers workflows, `warden.yml`, `ORDERS.yaml`, CODEOWNERS and maintainer files. It does not cover `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.opencode/`, `.claude/`, `.cursor/rules` or similar files that coding harnesses load as instructions. A contributor PR that edits one of them is an ordinary change, so it can pass review and auto-merge. After that, every Implement session, which runs from the trusted base, loads the attacker's text as instructions. This is GitInject's strongest attack, moved one step later. **Owner ruling 2026-11-27:** these files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md` at any depth, `.opencode/`, `.claude/`, `.cursor/`) are now in `HUMAN_GATE_PATHS`.
 
 Proposed fix: add agent instruction and harness config paths to the mandatory human-gate list, and evaluate them from the trusted base only, as §3 already does for Warden's own config.
 
