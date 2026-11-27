@@ -150,8 +150,8 @@ Before the rest of P3, deliver the thinnest useful slice: a maintainer manually 
 - A bug has suitable fail-before/pass-after evidence; a feature is verified against approved acceptance criteria. Material scope/interface/migration/blast-radius changes return to a maintainer; ordinary details do not cause unnecessary design reapproval.
 - PR-opening intents include scope, approach, evidence, attribution and Merge Danger. Implement never claims review/merge completion or advances the review marker.
 - Takeover starts from trusted base, reads abandoned work as data, assesses/ports sound contributions with credit and completes the agreed solution without executing abandoned hooks or editing the contributor branch.
-- CI-fix pushes to contributor PRs (PRD §5 Review ruling, ADR 0008) add commits on top of the reviewed head only, never force-push, rebase or amend, and fall back to posting the cause and a patch when a fork disallows maintainer edits, GitHub refuses the push or the fix touches workflow files. They count against the factory rework limit, not as author activity.
-- `warden run --task rework` changes factory branches only, apart from those CI fixes, against current named findings, verifies and returns to Review. Persist three-cycle accounting across restarts/replacement PRs; no-progress completed attempts consume cycles. Failed launches have separate bounded persistent retries. Success on cycle three can merge; unresolved findings after cycle three escalate.
+- Contributor PRs are review only (PRD §5 Review ruling, revised 2026-11-25; ADR 0008): failing checks are reported to the author as findings, and Warden pushes nothing to a contributor's branch. Where the repository requires approval for workflow runs on a contributor's PR, Warden at most approves or does not approve the run, after a capability proof.
+- `warden run --task rework` changes factory branches only, against current named findings, verifies and returns to Review. Persist three-cycle accounting across restarts/replacement PRs; no-progress completed attempts consume cycles. Failed launches have separate bounded persistent retries. Success on cycle three can merge; unresolved findings after cycle three escalate.
 - Contributor fix rounds persist with claimed work and, after three timely rounds with findings remaining, stop for the maintainer without false abandonment. An explicit extra-round/takeover decision is enforceable through the P1 approval path.
 - Auto-merge supports both contributor and factory PRs, bugs and approved features. Blocker is always a gate; major/minor/nit default on and follow approved configuration. Risk is assessed independently of severity/model confidence.
 - High-risk/uncertain work, workflow/access/maintainer/standing-order/self-authority changes and `wontfix` require the maintainer. Verified automation-origin dependency/CVE fixes can auto-approve/merge only within authority; spoofed labels, breaking majors and migrations cannot bypass escalation.
@@ -214,7 +214,7 @@ The row numbers are the [PRD section 11 evidence requirements](0001-warden-of-th
 | PRD row | Evidence | Delivery owner |
 |---|---|---|
 | 1 | Bug/feature end to end, eligible merge, high-risk escalation | P4 |
-| 2 | Contributor branch protection (only CI-fix commits, no force-push, patch fallback when edits are off, the push is refused or workflows are touched) and credited takeover | P4 |
+| 2 | Contributor branch protection (no writes to contributor branches; at most an approved workflow run where the repository requires one) and credited takeover | P4 |
 | 3 | Initial/fix/response clocks, holds/extensions, delayed assessment/CI and adoption | P2 |
 | 4 | Review reuse, delta/base/material-evidence invalidation, marker ownership | P3 |
 | 5 | Static/runtime evidence, baseline separation and gate weakening | P3 |

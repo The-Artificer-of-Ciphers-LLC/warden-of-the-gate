@@ -1,6 +1,6 @@
 # Optional cross-family review panel, with bounded rounds
 
-- **Status:** Proposed, awaiting owner review (2026-11-26). Nothing here changes behavior until accepted. The MVP reviewer stays as decided in ADR 0015 (open PR #47): a fresh context, possibly the same model.
+- **Status:** Proposed, awaiting owner review (2026-11-26). Nothing here changes behavior until accepted. The MVP reviewer stays as decided in ADR 0015: a fresh context, possibly the same model.
 - **Date:** 2026-11-26
 - **Decided by:** pending @trek-e
 - **Research:** [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md), mapping rows 13-16
@@ -23,7 +23,7 @@ Warden already has the pieces a panel needs: finding fingerprints that deduplica
 
 ## Consequences
 
-- Review cost grows with the number of panel members. The scorecard (ADR 0018, open PR #48) already reports cost per verdict.
+- Review cost grows with the number of panel members. The scorecard (ADR 0018) already reports cost per verdict.
 - Overzealous reviewers produce more findings, and nits block merge by the owner's ruling. The posted-findings cap and ranking still apply; the ledger keeps all.
 - Needs the endpoint registry to know each model's family; that is still open in [MODEL-CONNECTIONS](../research/MODEL-CONNECTIONS.md).
 - No change to merge authority, review events or who decides.
@@ -36,6 +36,6 @@ Warden already has the pieces a panel needs: finding fingerprints that deduplica
 
 ## Related
 
-- ADR 0015 (open PR #47): reviewer independence, model families on verdicts
-- ADR 0018 (open PR #48): per-model scorecard and cost
+- ADR 0015: reviewer independence, model families on verdicts
+- ADR 0018: per-model scorecard and cost
 - [ADR 0008](0008-tiered-autonomy-and-merge-gates.md): severity and merge gates, unchanged

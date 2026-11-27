@@ -38,6 +38,6 @@ This is not the same as ADR 0015's boundary classes. A boundary class is about r
 
 ## Related
 
-- ADR 0015 (open PR #47): boundary classes and the deferred understanding cost
+- ADR 0015: boundary classes and the deferred understanding cost
 - [ADR 0010](0010-yaml-business-rules.md): standing orders hold the path sets
 - [ADR 0008](0008-tiered-autonomy-and-merge-gates.md): merge gates, unchanged

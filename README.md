@@ -35,6 +35,10 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 | [ADR 0010](docs/adr/0010-yaml-business-rules.md) | Declarative standing orders | Draft |
 | [ADR 0011](docs/adr/0011-credential-controller.md) | Bounded credential continuity | Draft |
 | [ADR 0012](docs/adr/0012-serialized-actions-state-writer.md) | Canonical ledgers and serialized Actions writer | Draft |
+| [ADR 0013](docs/adr/0013-code-lookup.md) | Reviewer code lookup: prefetched, compiler-backed context pack | Draft |
+| [ADR 0014](docs/adr/0014-frozen-acceptance-tests.md) | Frozen acceptance tests, written first in their own session | Proposed |
+| [ADR 0015](docs/adr/0015-contract-review-human-gate.md) | Contract review as the human gate; boundary changes as proposed designs; reviewer independence | Proposed |
+| [ADR 0016](docs/adr/0016-verification-loop-and-test-quality-evidence.md) | Bounded verification loop and test-quality evidence | Proposed |
 
 ## Research
 
@@ -42,6 +46,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 - [Decision-model router (Jev)](docs/research/DECISION-MODEL-ROUTER.md): whether a fast one-pass decision model fits as Warden's front end; router only, never a merge judge; basis for proposed [ADR 0019](docs/adr/0019-decision-model-router.md).
 - [Code-intelligence options](docs/research/CODE-INTELLIGENCE-OPTIONS.md): Omnigraph, GSD Atlas, SCIP, CodeGraphContext and alternatives; existing capabilities versus SDK-enforcement roadmap, plus a bounded evaluation proposal.
 - [Correction ladder](docs/research/FRAMEWORK-CORRECTIONS.md): design/static-first quality rationale; older rollout/autonomy recommendations are historical.
+- [Agent-written-code talk (Sumner)](docs/research/TALK-SUMNER-AGENT-WRITTEN-CODE.md): tests that predate the change, differential checks, special-casing and run-over-run measurement; basis for proposed [ADR 0017](docs/adr/0017-preexisting-tests-and-differential-checks.md) and [ADR 0018](docs/adr/0018-measured-not-estimated.md).
 - [Pi creators live stream](docs/research/TALK-PI-CREATORS-LIVE.md): how Pi's maintainers decide what to read and trust; basis for proposed [ADR 0020](docs/adr/0020-review-attention-and-maintainer-understanding.md) (attention classes), [ADR 0021](docs/adr/0021-cross-family-review-panel.md) (cross-family review panel) and [ADR 0022](docs/adr/0022-new-model-starts-paused.md) (new models start paused).
 
 The owner confirmed the shared MVP product understanding on November 17, 2026; the PRD review is complete and ready for implementation planning. Its final section names the remaining technical choices and capability proofs. No implementation, local-model benchmark or live activation is claimed by this documentation.
