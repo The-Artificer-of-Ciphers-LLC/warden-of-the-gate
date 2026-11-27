@@ -303,6 +303,17 @@ Researched 2026-11-24 at the owner's request after mlx-serve (mlxserve.com) repl
 - **Owner rulings (2026-11-24):** endpoints design approved; follow the official OpenAI and Anthropic specs as written rather than each server's extras, so the context window becomes a required endpoint value (the OpenAI spec defines none; Anthropic's Models API has `max_input_tokens`) and preflight becomes a spec-conformance check.
 - **Proposed (owner decisions):** a `runtime.endpoints` registry (API style, base URL, key env var, exact model id, limits, capabilities, tier) rendered into OpenCode; "approved endpoints only" with named tiers in place of "local-only"; verdict provenance naming the tier and model; a fuller preflight probe; a new ADR that partly supersedes 0004 and 0007.
 
+### External check: Spector, "Stop Reviewing AI's Code. Review Its Tests" (Medium, Nov 2026)
+
+Article supplied by the owner on 2026-11-25; every cited claim traced to its primary source in three research tracks, then held against the PRD, ADRs and source. Full analysis, claim table and owner questions: [TESTS-OVER-CODE-REVIEW.md](TESTS-OVER-CODE-REVIEW.md). Unlike the other external checks, the owner asked for PRD and ADR changes: they are **proposed** as PRD **[T]** text and ADRs 0014-0016.
+
+- **Holds:** line-by-line review is a weak bug filter and does not scale with AI volume (arXiv 2607.01904: PRs 3.1x, reviewers 1.5x, substantive review 39% to 21%); a second model is not an independent reviewer (correlated errors, ICML 2025); agents cheat on tests they can touch (ImpossibleBench, EvilGenie); coverage is a poor proxy (mutation score is the better one).
+- **Misstated in the article:** the self-correction blind spot figure (14 models of 5 families, a relative score on math); EvilGenie's test-file edits (only Gemini CLI did that); "100% coverage, 4% caught" (one example); the ICSE 2022 checklist (the security instruction did the work).
+- **Already in Warden:** trusted executor evidence, fail-before/pass-after, weakening detection, static-first ladder, approved feature criteria, the App never approving its own PR.
+- **Proposed (owner decisions):** separate test and fix sessions with OS-enforced frozen tests (ADR 0014); the human gate reviews the contract and test diff, boundary changes always get a maintainer, the reviewer prefers another model family (ADR 0015); an orchestrator-owned verify-and-continue loop, mutation findings on changed lines, optional holdouts and a longer quiet-escape list (ADR 0016).
+- **Not adopted:** Claude Code-specific settings (Warden is harness-agnostic), StrongDM's no-human-review rule and LLM-scored scenarios, the article's figures as thresholds, and any ruling on `AGENTS.md`/`CLAUDE.md` as protected paths (still open from PR #44).
+- **Owner rulings (2026-11-25):** bug reproducers need no maintainer look for now, to be tested; boundary changes come to the maintainer as a proposed design, MVP as decision-matrix questions; Warden is review only on contributor PRs (replaces the 2026-11-24 push-fixes ruling); a surviving mutant on a changed line fails the check; hidden acceptance checks are a pilot until they show real catches; the reviewer model is undecided, with per-model review statistics as a longer-term goal.
+
 ## Implications for Roadmap
 
 The six phases match the owner's six v1 rollout stages.

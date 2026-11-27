@@ -1,7 +1,7 @@
 # Tiered autonomy with independent risk, evidence and severity gates
 
 - **Status:** Draft
-- **Date:** 2026-11-24 (revised from 2026-11-16)
+- **Date:** 2026-11-25 (revised from 2026-11-24 and 2026-11-16)
 - **Decided by:** @trek-e
 
 ## Context
@@ -11,10 +11,10 @@ The first design never merged: every PR ended at a human gate. The owner redefin
 ## Decision
 
 - **Tiered autonomy:** explicit scope/impact rules and independent verification determine eligibility. Severity and change risk are separate; uncertainty escalates. A clean diff or self-rated confidence cannot override risk or authority restrictions.
-- **Auto-merge is the live default for eligible work**, including contributor PRs and factory-authored PRs. Shadow mode performs no GitHub writes; live actions are enabled through rollout gates. Warden does not write to a contributor's branch, with one exception: it may push fixes for failing CI (revised 2026-11-24, see below).
+- **Auto-merge is the live default for eligible work**, including contributor PRs and factory-authored PRs. Shadow mode performs no GitHub writes; live actions are enabled through rollout gates. Warden does not write to a contributor's branch (revised 2026-11-25, see below).
 - **Merge gate:** a blocker finding always stops a merge — not configurable. Major, minor and nit block only when enabled in config; all three are on by default (any nit can become a major with one change).
 - Merge additionally requires current accepted review inputs, task-appropriate evidence, authorized scope, valid approvals, all GitHub-required checks/reviews, non-draft status and no stop/hold. Expected-head protection and outcome reconciliation prevent treating enqueue as merge.
-- **CI fixes on contributor PRs (owner ruling 2026-11-24: "Let it push fixes"):** red CI does not skip review. Review finds what is failing, and Warden pushes the fix to the contributor's branch. The push fixes only that diagnosed failure, adds commits on top of the reviewed head as the App, and never force-pushes, rebases or amends; if the head moved, nothing is pushed. The new head returns to Review. When a fork has "Allow edits by maintainers" off, GitHub refuses the push, or the fix would change workflow files, Warden posts the cause and a patch for the author instead.
+- **Failing checks on contributor PRs: review only (owner ruling 2026-11-25: "We are a review agent for contributor, it is up to the contributor to address. at most we would approve/not approve CI runs, if CI runs are restricted to maintainer approval by the repo", confirmed "Yes, review only").** Red CI does not skip review. Review finds what is failing in the repository's GitHub Actions checks and reports it to the author as a finding, with a suggested change where useful. Warden never pushes commits to a contributor's branch. Where the repository requires maintainer approval before workflows run on a contributor's PR, Warden at most approves or does not approve that run; an unapproved run waits for the maintainer. Proposed, for the owner to confirm: approve only a run for the reviewed head, never for a PR that changes workflows or other human-gate paths. This replaces the 2026-11-24 ruling ("Let it push fixes") that let Warden push fixes to contributor branches.
 - Other findings route to contributor correction or factory Rework. Waiting CI does not consume an AI session or necessarily require a human decision; only actual uncertainty/approval needs escalate.
 - Enhancement and feature scope and acceptance criteria, `wontfix`, high-risk work, and changes to workflows, standing orders, access policy, `MAINTAINERS`, or Warden's own authority need the maintainer.
 - The decision corpus informs proposals for expanding narrowly scoped standing authority. A maintainer approves each expansion before it takes effect; historical agreement alone never grants new permissions.
@@ -29,7 +29,7 @@ Evidence in [`proof/inbox/RESULTS.md`](../../proof/inbox/RESULTS.md). Stop (glob
 ## Consequences
 
 - The human gate shrinks to escalations; success metrics track auto-merge rate and revert/escape rate on auto-merges to keep the thresholds honest.
-- Contributor PRs: review findings go back to the author. The only factory writes to a contributor's branch are the CI fixes above; they count against the factory rework limit and are not author activity for clocks or fix rounds. Capability tests must prove fork pushes succeed with maintainer edits allowed and are refused without them before this is live.
+- Contributor PRs: review findings, including failing checks, go back to the author. Warden makes no writes to a contributor's branch, so the fork-push capability tests and the rework accounting for such pushes are no longer needed. Approving a waiting workflow run needs its own capability proof: GitHub documents the approve endpoint for first-time contributors from public forks, and its use with the App's installation token is unproven.
 
 ## P1 implementation record (2026-11-18, `CORE-approvals`, `CORE-stop`)
 

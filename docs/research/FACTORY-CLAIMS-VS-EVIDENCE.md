@@ -47,6 +47,8 @@ Proposed fix: add agent instruction and harness config paths to the mandatory hu
 
 ### 3.2 The ruled CI-fix push starts from an untrusted checkout
 
+*Superseded 2026-11-25:* the owner made Warden review only on contributor PRs (ADR 0008), so there is no CI-fix push. The concern still applies to any future session that starts from a contributor's checkout.
+
 The 2026-11-24 ruling builds CI fixes "in the isolated factory workspace from the PR head". That is the one session that starts with contributor-controlled files in the harness's own working directory. `OPENCODE_DISABLE_PROJECT_CONFIG` stops `opencode.json`, but this research did not confirm whether OpenCode still loads `AGENTS.md` or `CLAUDE.md` from the working directory under that flag. That needs a capability test before the feature goes live: plant an instruction file on a sandbox PR head and prove the session does not follow it. Removing or renaming instruction files in the workspace before the session starts is a cheap belt-and-braces step.
 
 ### 3.3 Contributor auto-merge still leans on a model's review (moderate, narrower than it looks)

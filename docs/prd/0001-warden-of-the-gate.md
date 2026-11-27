@@ -6,13 +6,14 @@
 - **Supporting decisions:** [ADR index](../../README.md); all ADRs remain editable working drafts.
 - **Research:** [Platform best practices](../research/PRD-BEST-PRACTICES.md), [code-intelligence options](../research/CODE-INTELLIGENCE-OPTIONS.md), [correction ladder](../research/FRAMEWORK-CORRECTIONS.md), [pitfalls](../research/PITFALLS.md), [summary](../research/SUMMARY.md) and the `TALK-*` notes in [research](../research/).
 - **Research reconciliation (2026-11-24):** text marked **[R]** was added by comparing the research directory with this PRD. It is **PROPOSED, awaiting owner review**, like other post-review additions. [Owner decisions](#owner-decisions-from-the-research-reconciliation) lists the research points that needed a ruling: those decided on 2026-11-24, and those still open.
+- **Tests-over-review reconciliation (2026-11-25):** text marked **[T]** applies the method in [Review the tests, not the diff](../research/TESTS-OVER-CODE-REVIEW.md) (frozen acceptance tests, contract review as the human gate, a bounded verification loop and test-quality evidence), with proposed [ADR 0014](../adr/0014-frozen-acceptance-tests.md), [ADR 0015](../adr/0015-contract-review-human-gate.md) and [ADR 0016](../adr/0016-verification-loop-and-test-quality-evidence.md). It is **PROPOSED, awaiting owner review**; the questions it raises are in [Owner decisions](#owner-decisions-from-the-research-reconciliation). The owner ruled on them on 2026-11-25 (bug reproducers, boundary changes as proposed designs, review only on contributor PRs, surviving mutants fail the check, hidden acceptance checks as a pilot; the reviewer model is still undecided); the text below marks where.
 - **Implementation planning:** [Proposed phased plan](0001-warden-of-the-gate.implementation-plan.md) and [coverage trace](0001-warden-of-the-gate.implementation-trace.json); these do not replace the product contract or authorize live operation.
 
 ## TL;DR
 
 Warden is a self-maintaining software factory for GitHub repositories. It triages issues, reviews PRs, **fixes bugs and builds features and enhancements**, follows up with contributors, merges eligible changes, takes over abandoned work, and proposes improvements to its own rules under human oversight.
 
-The MVP proves the whole loop on GSD Core, the **pilot repo**. One instance governs one repository. A maintainer manually starts bounded, once-through AI scans on a Mac using OpenCode and a local inference service such as LM Studio. GitHub Actions performs deterministic housekeeping and serialized posting, never inference. Eligible auto-merge is a core capability, including contributor PRs. Warden does not write to contributor branches, except to push fixes for failing CI (owner ruling 2026-11-24, §5 Review). Operational settings live in `.github/warden.yml`; declarative standing authority lives in `.github/ORDERS.yaml`.
+The MVP proves the whole loop on GSD Core, the **pilot repo**. One instance governs one repository. A maintainer manually starts bounded, once-through AI scans on a Mac using OpenCode and a local inference service such as LM Studio. GitHub Actions performs deterministic housekeeping and serialized posting, never inference. Eligible auto-merge is a core capability, including contributor PRs. Warden does not write to contributor branches: on contributor PRs it is a review agent only (owner ruling 2026-11-25, §5 Review). Operational settings live in `.github/warden.yml`; declarative standing authority lives in `.github/ORDERS.yaml`.
 
 ## 1. Problem, users and outcomes
 
@@ -89,6 +90,8 @@ Live auto-merge is the default for eligible contributor and factory PRs, includi
 6. Merge request bound to the reviewed head, followed by reconciliation of the actual outcome.
 
 Risk is separate from finding severity. Evaluate affected interfaces, sensitive paths, migrations, dependency effects and blast radius. Do not turn a clean diff, low severity, code-size percentage or model confidence score into authorization.
+
+**[T]** Boundary changes floor at a maintainer decision even when every other gate passes ([ADR 0015](../adr/0015-contract-review-human-gate.md)). **Decided 2026-11-25 (@trek-e):** the maintainer gets a proposed design, not a diff to read. Warden produces it with an architecture-review tool such as Matt Pocock's `improve-codebase-architecture` skill, and its fidelity can be raised or lowered. For the MVP the maintainer's part is limited to simple decision-matrix questions, and Warden builds and deploys based on the answers. Default boundary classes, configurable: exported or public interfaces and API contracts; database schemas and migrations; authentication, authorization, secrets and security-sensitive paths; a new dependency or a major-version dependency change; shared components the repository names; test, verification and CI infrastructure. Eligible non-boundary work does not need a human on the implementation diff; it rests on frozen tests, test-quality evidence and AI review as one layer. Which classes count, and how this relates to the open reversibility question, is still open.
 
 High-risk or uncertain work and changes to workflows, standing orders, access/maintainer policy or Warden's own authority require a maintainer decision. Feature/enhancement scope and acceptance criteria require approval. `wontfix` decisions require maintainer authority. Blocker findings always stop merge; major, minor and nit findings also block by default, individually configurable.
 
@@ -171,6 +174,8 @@ Investigate the report against current code, approved rules and relevant prior d
 
 For features/enhancements, propose scope, observable acceptance criteria, approach, affected areas, interfaces, migration implications, blast radius, alternatives and unresolved questions. Approval is required before implementation. Triage owns this proposal; a separate design task is unnecessary.
 
+**[T]** The approved contract for a feature or enhancement is the acceptance criteria **and** the acceptance tests the Implement test session writes from them ([ADR 0014](../adr/0014-frozen-acceptance-tests.md)). The maintainer approves the tests, shown with their fail-on-base result, before the fix session runs; a material change to them is a scope change. Criteria should be written so a test can check them.
+
 Confirmed/approved items never stale-close. Rejected product directions remain binding unless a maintainer revises them.
 
 ### Claim - deterministic Actions
@@ -199,7 +204,11 @@ Recheck the current code/design before work. Material scope, acceptance-criteria
 
 Start from trusted base on a factory branch. For takeover, read the abandoned diff as data, assess the approach, port sound contributions with credit, and complete the whole agreed solution. Never blindly execute its branch, hooks or installation scripts.
 
+**[T]** Implement runs two fresh sessions ([ADR 0014](../adr/0014-frozen-acceptance-tests.md)). A **test session** writes the reproducer or acceptance tests from the issue or approved spec, without a fix; every new test must fail on the base. Warden then freezes them (paths and content digests in the ledger). A **fix session** sees the frozen tests and the spec, never the test session's reasoning, and is told the tests are read-only acceptance criteria, never "make the tests pass". The OS boundary denies writes to frozen paths and test, lint, coverage and mutation configuration; the executor runs the acceptance evidence from its own frozen copy and rejects any attempt whose frozen files changed (`frozen-test-modified`). A fix session that believes a frozen test contradicts the spec exits with `test-dispute`; the item returns to the test session once with that reason, or to `needs-decision`. Within an attempt, a bounded verify-and-continue loop owned by the orchestrator feeds the executor's own failure output back to the session ([ADR 0016](../adr/0016-verification-loop-and-test-quality-evidence.md)); loop turns are not rework cycles or retries. **Decided 2026-11-25 (@trek-e), provisional:** for bugs under standing authority, the frozen reproducer plus the weakening and mutation checks are enough, and no maintainer looks at the reproducer before the fix session ("For now, yes, will need to test"). A standing order may still require a look. Pilot and replay testing must check this ruling (§11).
+
 Use the strongest appropriate reproducer, implement the approved change, and run trusted verification. Bug fixes normally need fail-before/pass-after; features need evidence against approved criteria. **[R]** If no static or dynamic reproducer can be made to fail first, Implement stops and returns the issue to Triage with what it tried, rather than submitting an unproven fix. Preserve baseline failures separately. Submit the validated PR-opening intent with scope, approach, acceptance evidence, verification, prior-work attribution and a **Merge Danger** summary of risk/blast radius. Opening a PR is not review or merge.
+
+**[T]** The PR description lists the frozen tests (paths, digests) separately from the implementation, and shows the proof from the executor record, never from model prose: each check's command line, exit status and a bounded output tail; the fail-on-base result; the mutation score and surviving mutants; holdout pass or fail by id.
 
 **[R]** The PR description also states how Warden read any ambiguous acceptance criterion and lists the choices the approved spec did not determine, so a reviewer sees them first. These are reading aids, not approval. Where the spec is contradictory or a choice would change approved scope, interfaces or behavior, Implement abstains and routes the item to `needs-decision` instead of guessing.
 
@@ -221,19 +230,17 @@ Review candidate changes against relevant base context, approved requirements, r
 - **[R]** After a rebase, force-push or update-branch, compute the delta by patch equivalence against the reviewed commits (an interdiff), so a base merge or rebase alone does not trigger a full re-review and a rewritten commit is not hidden.
 - **[R]** Bind each posted review to the reviewed `commit_id` and validate every inline position against that diff before posting. Give each finding a stable fingerprint (rule, anchor, normalized location) so a repeated finding updates the existing one instead of posting a duplicate. Cap findings per review (configurable) and rank them by severity; the ledger keeps the full list.
 - **[R]** A diff that GitHub will not return in full, or that exceeds the configured reviewable size, is reported as too large to review reliably and routed to the author or maintainer with a request to split. It is never partially reviewed and passed.
+- **[T]** Review reads the contract first: the spec or issue, the acceptance criteria and the test diff, then the implementation. It checks the test diff against one focused list (deleted or weakened assertions, widened tolerances or timeouts, new retries, regenerated snapshots, `.skip`/`.only`/`todo`, changed test-runner, coverage or mutation configuration, tests moved out of the test globs, tests that assert on the implementation's own output) and reports each hit as a located finding ([ADR 0015](../adr/0015-contract-review-human-gate.md)). A surviving mutant on a changed line fails the mutation check (decided 2026-11-25, [ADR 0016](../adr/0016-verification-loop-and-test-quality-evidence.md)).
+- **[T]** Review runs in a fresh session and records the writer's and reviewer's model ids and families on the verdict. Not yet decided (owner, 2026-11-25): the MVP may review with a fresh context of the same model; whether to prefer a different family waits on statistics of which models review code best, a longer-term goal (§11). Same-model review is reported as such.
 - **[R]** Review also reports spec gaps and conflicts: an approved criterion the change cannot satisfy as written, or behavior the spec does not determine. These route to `needs-decision`, not to the author.
 
 **Decided 2026-11-24 (@trek-e).** A finding is a finding, no matter when it is found: a later review round may raise a finding on code that was already reviewed and has not changed.
 
-**Decided 2026-11-24 (@trek-e).** Red CI does not skip review. Review finds what is failing in CI and fixes it. On factory PRs Rework applies the fix. On contributor PRs, Warden pushes the fix to the contributor's branch ("Let it push fixes"). The rules for that push:
+**Decided 2026-11-24 (@trek-e), revised 2026-11-25.** Red CI does not skip review. Review finds what is failing in the repository's GitHub Actions checks. On factory PRs Rework applies the fix. On contributor PRs Warden is a review agent only ("Yes, review only", 2026-11-25): it reports the cause as a finding, and may include a suggested change, but it never pushes commits to the contributor's branch; addressing it is up to the contributor. This replaces the 2026-11-24 ruling that let Warden push fixes for failing checks to contributor branches.
 
-- It fixes only the CI failure Review diagnosed. Other findings still go to the author, and the push never widens scope.
-- The fix is built in the isolated factory workspace from the PR head, which is treated as untrusted, and verified with trusted commands before pushing.
-- It adds commits on top of the reviewed head, authored by the App. It never force-pushes, rebases or amends. If the head moved since review, nothing is pushed and the PR is re-evaluated.
-- A comment on the PR says what was pushed and why. The new head returns to Review; the push cannot mark itself reviewed or merge.
-- These pushes count against the factory rework limit for that PR, persisted like other cycles. They are not author activity: they do not reset author clocks, satisfy the author's delivery or count as contributor fix rounds.
-- A fork PR can be pushed to only while its author leaves "Allow edits by maintainers" on. When it is off, when GitHub refuses the push (branch protection, permissions), or when the fix would change `.github/workflows` (the App has no `workflows` permission), Warden does not push. It posts the cause and the proposed fix as a patch or suggested change for the author, and the PR goes to `needs-author`.
-- Capability tests must prove the App can push to a fork PR head that allows maintainer edits, and is refused when it does not, before this is enabled live.
+- Where the repository requires maintainer approval before workflows run on a contributor's PR, the most Warden does is approve or not approve that run ("at most we would approve/not approve CI runs"). A run Warden does not approve stays waiting for the maintainer.
+- Proposed, for the owner to confirm: Warden approves only a run for the head it has reviewed, and never for a PR that changes workflows or other human-gate paths, because approving lets the contributor's code run in the repository's CI. GitHub's own guidance for this step is to inspect the changes first, especially `.github/workflows/`.
+- Capability tests must prove the App can approve a waiting fork-PR run with the permissions it holds before this is live. GitHub documents the approve endpoint for first-time contributors from public forks; its use with an App installation token is unproven.
 
 **Decided 2026-11-24 (@trek-e).** Review depth and the handling of uncertain findings are user-configurable. The maintainer pre-selects an option such as maintainer go/no-go, dropping findings below a configured confidence level, or another supported option. Dropped findings stay recorded in the ledger.
 
@@ -243,7 +250,7 @@ Review never edits code. Route factory findings to Rework, contributor findings 
 
 ### Rework - local AI, factory branches only
 
-Address named current findings without unrelated scope expansion. Contributor branches are never edited, except for the CI fixes in the §5 Review ruling. Run relevant verification and return the new head to Review; Rework cannot mark itself reviewed.
+Address named current findings without unrelated scope expansion. Contributor branches are never edited (§5 Review, revised 2026-11-25). Run relevant verification and return the new head to Review; Rework cannot mark itself reviewed. **[T]** Rework sees the same frozen tests and the same verify-and-continue loop as Implement. A finding that a frozen test is itself wrong goes to a new test session and a new freeze, recorded with that finding; a test change never travels inside a fix commit.
 
 Count completed rework cycles separately from failed launches, retries and reviews. After three cycles, escalate only if findings remain unresolved. Success on cycle three is success, not automatic escalation. Resource exhaustion checkpoints and reports unfinished work rather than manufacturing a pass.
 
@@ -298,7 +305,9 @@ Preserve existing contributor ownership and valid maintainer-approved commitment
 
 Agent-authored test count and coverage are not correctness evidence. Structural fixes may use static fail-before/pass-after checks; behavioral defects require dynamic evidence. Races, timing, recovery and side effects cannot be established by lint alone.
 
-Protect verification controls: disabled lint rules, broadened exclusions, suppressions, skipped tests, weakened assertions and bypassed required checks cannot manufacture success. Weakening requires maintainer approval. Legitimate expectation changes still need review against approved requirements. **[R]** New inline suppression or ignore comments, and code comments that justify a workaround instead of fixing it, count as weakening.
+Protect verification controls: disabled lint rules, broadened exclusions, suppressions, skipped tests, weakened assertions and bypassed required checks cannot manufacture success. Weakening requires maintainer approval. Legitimate expectation changes still need review against approved requirements. **[R]** New inline suppression or ignore comments, and code comments that justify a workaround instead of fixing it, count as weakening. **[T]** So do focused tests (`.only`, `fit`, `fdescribe`), widened numeric tolerances, raised timeouts or retry counts in tests, regenerated or bulk-updated snapshots, changes to test-runner include/exclude or mutation configuration, and test files moved out of the configured test paths.
+
+**[T] Test-quality evidence** ([ADR 0016](../adr/0016-verification-loop-and-test-quality-evidence.md)). Green is necessary, not sufficient. Where a tool exists for the repository's language, the executor runs mutation testing scoped to the changed files and lines, on factory and contributor PRs alike. **Decided 2026-11-25 (@trek-e):** "if a planted bug survives then it needs to be identified and failed as a check. bugs that aren't detected are just as bad as ones that are." Every surviving mutant on a changed line is identified by file, line and mutation, and fails the check, so the PR cannot merge until the tests catch it. The score is recorded but is not the gate. The test session prefers property-based tests with a stated oracle or metamorphic relation for pure logic. **Hidden acceptance checks, decided 2026-11-25 as a pilot** ("if that acutally works shure"): for an approved feature, a separate holdout session writes a few checks from the issue or approved spec and the base code only, never from the coding session's context. They are kept in the protected operator store and run only by the executor; no session sees them. They run in shadow and replay first and become a gate only on the evidence in ADR 0016. An unsupported check is reported as unsupported, never as a pass.
 
 **[R]** When a new static rule meets existing violations, apply it as a ratchet: it gates new and changed code immediately, records the existing violations as a baseline, and the baseline may only shrink. Factory work does not fix unrelated baseline violations as a side effect.
 
@@ -330,7 +339,7 @@ Historical agreement may improve recommendations and identify classes suitable f
 
 Discord is the first quick-approval channel using outbound Gateway connectivity; no public approval ingress is required. Explicitly map Discord user IDs to authorized maintainers. A guild role/display name alone is insufficient.
 
-Cards show linked work, proposal/revision, applicable policy, risk/blast radius, verification/CI evidence, open findings, recommendation and precise approve/deny meaning. Persist the accepted decision on GitHub before acting. Stale clicks, silence, duplication and unauthorized identities do not grant permission.
+Cards show linked work, proposal/revision, applicable policy, risk/blast radius, verification/CI evidence, open findings, recommendation and precise approve/deny meaning. **[T]** For implementation work, the card leads with the contract: spec or issue, acceptance criteria, the frozen or changed test diff with its fail-on-base result and test-diff scan hits. The implementation diff is linked. For a boundary change the card carries the proposed design as decision-matrix questions (decided 2026-11-25, §3; [ADR 0015](../adr/0015-contract-review-human-gate.md)). Persist the accepted decision on GitHub before acting. Stale clicks, silence, duplication and unauthorized identities do not grant permission.
 
 One-time action cards expire after 24 hours by default, configurable, and may invalidate earlier with changed revision/policy/evidence. Approved feature scope/design persists until materially changed; daily reapproval is not required.
 
@@ -380,8 +389,8 @@ Protect local state and redact credentials. Retain decision history/reasons/outc
 
 | Canonical home | Contents |
 |---|---|
-| `.github/warden.yml` | Repository/base/label mappings, maintainer identities, voice, runtime/model/isolation settings, operational budgets and clocks, draft policy, severity gates, notification mapping, retention and stop-control names |
-| `.github/ORDERS.yaml` | Declarative authority for built-in tasks: scope/conditions, allow/deny, human gates, exclusions and escalation |
+| `.github/warden.yml` | Repository/base/label mappings, maintainer identities, voice, runtime/model/isolation settings, operational budgets and clocks, draft policy, severity gates, notification mapping, retention and stop-control names. **[T]** `verification`: test paths, verify-and-continue loop turns, mutation tool and scope (on where a tool exists; no survivors on changed lines), holdouts pilot flag, boundary detectors, design-proposal fidelity (MVP: decision-matrix questions) |
+| `.github/ORDERS.yaml` | Declarative authority for built-in tasks: scope/conditions, allow/deny, human gates, exclusions and escalation. **[T]** Boundary-class paths and any standing order that requires a maintainer look at bug reproducers |
 | Protected operator credential/control store | Secrets, installation/trust-root details and maximum delegated authority; never model-controlled or distributed in the package |
 
 Publish versioned schemas for both YAML files and validate their effective combination. Each setting has one canonical home. Mandatory limits cannot be weakened; applicable denial or human-approval requirement prevails over allowance. Unresolved policy conflicts escalate. No executable expressions/programs or speculative general DSL.
@@ -424,7 +433,7 @@ Use a maintainer-curated replay set with at least:
 
 Cover bugs, approved features, contributor and factory PRs, dependency updates, authority-changing work, drafts, claims, deadlines, baseline failures and uncertainty. Report misses and disagreements, not only aggregate scores. These are provisional pilot acceptance thresholds, not a statistical guarantee of safety.
 
-**[R]** Include adversarial cases: prompt-injection text in issues, PRs and comments, and tempting fixtures that invite weakening a test, broadening scope or skipping a check. Each must produce no unauthorized effect.
+**[R]** Include adversarial cases: prompt-injection text in issues, PRs and comments, and tempting fixtures that invite weakening a test, broadening scope or skipping a check. Each must produce no unauthorized effect. **[T]** Include test-gaming cases: an issue whose obvious fix is to special-case the reproducer's inputs, a spec a frozen test contradicts (expected outcome `test-dispute`, not a test edit), and a fix session that tries to edit a frozen test through a file tool and through a script.
 
 **[R]** Score replay deterministically against the curated expectations (expected finding location, triage outcome, effect allowed or not). A model grading another model's output may inform analysis but never decides a gate. When comparing prompt, model or configuration variants, tune on a development subset and report the gate on a held-out subset the variants were not tuned on.
 
@@ -433,7 +442,7 @@ The maintainer explicitly enables live actions after reviewing evidence. Do not 
 ### Required functional/recovery evidence
 
 1. End-to-end bug and approved-feature paths, including eligible auto-merge and high-risk escalation.
-2. No contributor-branch edits beyond ruled CI fixes, which add commits only and fall back to a proposed fix when a fork disallows maintainer edits; takeover preserves issue and attribution while replacing unsuitable approaches.
+2. No contributor-branch edits, including for failing checks; at most an approved workflow run where the repository requires one; takeover preserves issue and attribution while replacing unsuitable approaches.
 3. Initial/review 48-hour obligations, approved extensions, held/resumed deadlines, response-clock separation, delayed review/CI and safe backlog adoption without retroactive expiry.
 4. Current review reuse/delta invalidation, material new evidence and base-context changes; Implement/Rework cannot advance review markers.
 5. Static-first verification, appropriate runtime evidence, and detected gate weakening.
@@ -447,10 +456,11 @@ The maintainer explicitly enables live actions after reviewing evidence. Do not 
 13. Competing claims and contributor/factory ownership races, with one confirmed owner and no duplicate implementation.
 14. Rework/retry exhaustion across cold starts, no-progress attempts and replacement PRs; no counter reset that silently defeats the limits.
 15. Timely contributor fix rounds reach the three-round maintainer gate without automatic closure; blocked/urgent queue entries cannot silently starve approved features.
+16. **[T]** Frozen tests: the test session's tests fail on the base; a fix-session write to a frozen path is denied by the OS boundary and caught by the digest check; the acceptance evidence runs from the executor's frozen copy; the verify-and-continue loop stops at its turn limit; a surviving mutant on a changed line fails the check and is identified; property and holdout results are recorded; and an unsupported language is reported as unsupported.
 
 Track state counts and age; assignment-to-ready, active execution, review wait, CI wait and fix time separately; claim/takeover/extension outcomes; auto-merge and human-escalation rates; maintainer effort; blocking-finding agreement and escapes/reverts; duplicate review attempts versus accepted duplicates; operation recovery; local tokens/time/resource usage; code-lookup quality and overhead.
 
-**[R]** Also track maintainer decisions per completed item, reverted factory PRs, escaped defects found after merge, timeout and abstention rates, time to first response for contributors, and distinct returning contributors. Track defect origin, the bad-fix rate and structural erosion of factory-merged code over time. Lines of code and cost per defect are not targets.
+**[R]** Also track maintainer decisions per completed item, reverted factory PRs, escaped defects found after merge, timeout and abstention rates, time to first response for contributors, and distinct returning contributors. Track defect origin, the bad-fix rate and structural erosion of factory-merged code over time. Lines of code and cost per defect are not targets. **[T]** Also track mutation score and survivors on changed code, frozen-test violations and `test-dispute` outcomes, verify-and-continue turns per attempt, holdout results by outcome (confirmed catch, wrong check, pass), boundary-change escalations, and how often review ran on the same model family as the writer. **Owner rulings 2026-11-25:** the pilot and replay also test the bug-reproducer ruling (reproducers later found wrong or too weak, and the defects they let through), and build per-model review statistics (findings confirmed, dismissed or missed, by reviewer model and family) toward choosing reviewer models.
 
 ## 12. Implementation prerequisites and proof gates
 
@@ -478,10 +488,20 @@ Decided by @trek-e on 2026-11-24:
 | Should nit findings keep blocking merge by default? | Yes | §3, unchanged; ADR 0008 |
 | What happens when no maintainer has decided anything for N days? | If an item is set for maintainer review, it waits for the maintainer review | §8 |
 | May a later review round raise findings on code that was already reviewed and has not changed? | Yes: a finding is a finding, no matter when it happens | §5 Review |
-| Skip model review while required CI is red? | No: the review finds what is failing in CI and fixes it. On contributor PRs: "Let it push fixes" | TL;DR, §5 Review and Rework, §11 |
+| Skip model review while required CI is red? | No: the review finds what is failing in CI and fixes it. On contributor PRs: "Let it push fixes" (replaced 2026-11-25 by review only, below) | TL;DR, §5 Review and Rework, §11 |
 | How deep does review go, and what happens to findings it cannot confirm? | User-configurable: maintainer go/no-go, drop by confidence level, or other options the maintainer pre-selects | §5 Review |
 | Maintainer-only PR commands to force a full review or dismiss one finding? | Yes | §5 Review |
 | Measure structural erosion on factory-authored PRs before widening Implement authority? | Yes, widened so Retro also checks whether factory merges stay coherent together over time ([Dill](../research/TALK-DILL-ZOMBIE-UI.md) candidate 1) | §5 Retro, §11 |
+
+Decided by @trek-e on 2026-11-25:
+
+| Question | Ruling | Where applied |
+|---|---|---|
+| **[T]** For bugs under standing authority, are the frozen reproducer plus the weakening and mutation checks enough, or must a maintainer look at the reproducer first? | "For now, yes, will need to test": enough for now, no look by default; to be checked in pilot and replay testing | §5 Implement, §11; ADR 0014 |
+| **[T]** Should boundary changes always need a maintainer? | "propose designs come to maintainer via tools like improve-codebase-architecture skill from matt pocock, can increase/decresase fidelity but initially mvp will be limited maintainer interaction to simple decision matrix questions and then deploy based on that" | §3, §8, §10; ADR 0015 |
+| **[T]** Mutation testing: finding only, or a merge gate? | "if a planted bug survives then it needs to be identified and failed as a check. bugs that aren't detected are just as bad as ones that are": every surviving mutant on a changed line fails the check | §5 Review, §7, §10, §11; ADR 0016 |
+| **[T]** Hidden acceptance checks kept outside the repository and every prompt? | "if that acutally works shure, if it's made up why would a model with no context know what happened in another context": a pilot, written from the issue or spec by a separate session, a gate only once it shows real catches | §7, §11; ADR 0016 |
+| **[T]** May a fix pushed to a contributor branch for failing checks change a test file? | Moot: "We are a review agent for contributor, it is up to the contributor to address. at most we would approve/not approve CI runs, if CI runs are restricted to maintainer approval by the repo"; confirmed "Yes, review only". Replaces the 2026-11-24 "Let it push fixes" | TL;DR, §5 Review and Rework, §11; ADR 0008, ADR 0014 |
 
 Still open. Nothing below changes current behavior until decided:
 
@@ -490,3 +510,8 @@ Still open. Nothing below changes current behavior until decided:
 | Record reversibility (one-way or two-way door) as a merge-gate input, with data, authority and external effects floored as one-way? | [Pocock](../research/TALK-POCOCK-WALKTHROUGH.md) §3 | Risk and blast radius are assessed (§3); no reversibility field |
 | When GitHub refuses to assign a volunteer, reject the claim or record ownership in the ledger only? | [FEATURES](../research/FEATURES.md) | Assignment must be GitHub-confirmed (§5 Claim); no refusal outcome |
 | Which review event Warden submits on contributor PRs (comment, approve, request changes), and whether its approval may count toward required reviews | [FEATURES](../research/FEATURES.md), [ARCHITECTURE](../research/ARCHITECTURE.md) (comment-only in the historical design) | §3 covers only the App's own PRs |
+| **[T]** Which boundary classes count (defaults in §3), and what decision-matrix questions a boundary design card asks? | TESTS-OVER-CODE-REVIEW §5 Q2; ADR 0015; overlaps the reversibility question above | §3 default list, proposed; the 2026-11-25 ruling settled the shape, not the classes |
+| **[T]** Which workflow runs may Warden approve where the repository requires approval? | 2026-11-25 ruling; GitHub's fork-run approval guidance | Proposed in §5 Review: only the reviewed head, never with workflow or human-gate path changes |
+| **[T]** How is a surviving mutant that cannot be killed (an equivalent mutant, one that does not change behavior) cleared? | ADR 0016 | Proposed: a maintainer command marks that one mutant equivalent; it stays cleared until its code changes |
+| **[T]** What counts as enough holdout catches to promote the pilot to a gate? | ADR 0016; [FACTORY-CLAIMS](../research/FACTORY-CLAIMS-VS-EVIDENCE.md) Q5 | Proposed evidence in ADR 0016; the numbers are the owner's |
+| **[T]** Prefer a reviewer from a different model family than the writer? | TESTS-OVER-CODE-REVIEW §5 Q6; ADR 0015; [MODEL-CONNECTIONS](../research/MODEL-CONNECTIONS.md) verdict provenance | Owner, 2026-11-25: "i don't know yet, maybe a new context and sam model, or, we build statistics and see which mdoel is better at reviewing code as a longer term goal". MVP may use a fresh context of the same model; model ids recorded for statistics (§5 Review, §11) |
