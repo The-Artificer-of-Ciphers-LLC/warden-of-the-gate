@@ -6,7 +6,7 @@
 - The talk's technical companion, which McCarthy calls the "agent channel": "AI Coding Agents Need to Keep Their Promises", DEV Community, 2026-11-12, https://dev.to/jmccarthy/ai-coding-agents-need-to-keep-their-promises-2nhh
 - Full machine-generated transcript: [sources/mccarthy-brownfield-factories-transcript.md](sources/mccarthy-brownfield-factories-transcript.md)
 
-**Speaker:** Justin McCarthy, founder and CEO of Diffusion, formerly co-founder and CTO of StrongDM, where he built the StrongDM Software Factory (held-out scenarios, a "Digital Twin Universe" of service replicas, model-scored "scenario satisfaction") and published the Attractor specs. Checked on his speaker page (https://diffusion.io/speaking) and the AI Engineer speaker bio (https://ai.engineer/speakers/justin-mccarthy). Warden already cites his StrongDM work once: ADR 0016 (open PR #47) notes that StrongDM's holdout scenarios are scored by a model, which Warden does not allow to decide a gate.
+**Speaker:** Justin McCarthy, founder and CEO of Diffusion, formerly co-founder and CTO of StrongDM, where he built the StrongDM Software Factory (held-out scenarios, a "Digital Twin Universe" of service replicas, model-scored "scenario satisfaction") and published the Attractor specs. Checked on his speaker page (https://diffusion.io/speaking) and the AI Engineer speaker bio (https://ai.engineer/speakers/justin-mccarthy). Warden already cites his StrongDM work once: ADR 0016 notes that StrongDM's holdout scenarios are scored by a model, which Warden does not allow to decide a gate.
 
 **Interest to declare:** Diffusion sells software-factory work, and the talk says so twice ("we're standing by to help"). McCarthy calls the talk "intentionally a motivational speech without much technical detail"; the essay carries the technique.
 
@@ -93,6 +93,6 @@ Sources checked: `main` at `0ea9fa2` (PRD, ADRs 0001-0013 and 0019), open PRs #4
 
 ## Open questions for the owner
 
-1. **Promise checks:** adopt declared, base-against-candidate promise checks as an opt-in gate (proposal 1)? If yes, does GSD Core have promises you want declared first?
-2. **Behavior effect at Triage:** record `preserve` or `change` on every confirmed item and use it, instead of the PR label, to turn on ADR 0017's older-test gate and differential checks (proposal 2)?
+1. **Promise checks:** answered 2026-11-26. The owner said yes, and that promises are configured by whichever repository Warden is attached to, not tied to GSD Core. Written up as proposed [ADR 0023](../adr/0023-promise-checks.md).
+2. **Behavior effect at Triage:** answered 2026-11-26. The owner said yes, and that when the change fixes broken behavior, that broken behavior must not be what the fix is tested against. Written up as proposed [ADR 0024](../adr/0024-behavior-effect-at-triage.md), which adds a `fix` value next to `preserve` and `change`.
 3. **Timed promises:** should a speed or memory regression beyond tolerance block merge like a finding, or go to you as a decision, given how noisy timing is on one machine?
