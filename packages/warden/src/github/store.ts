@@ -26,6 +26,8 @@ export interface Store {
   /** Read-only. Throws a 404-shaped error when the item is not a pull request. */
   getPull(n: number): Promise<PullInfo>;
   listIssues(opts?: { state?: 'open' | 'closed' | 'all' }): Promise<IssueState[]>;
+  /** Read-only: may this login be assigned on this repository (GitHub's `GET /assignees/{login}`: 204 yes, 404 no)? Optional so simulated stores that do not model it stay valid; absent means "assume yes". */
+  canAssign?(login: string): Promise<boolean>;
   addAssignee(n: number, login: string): Promise<void>;
   removeAssignee(n: number, login: string): Promise<void>;
   addLabel(n: number, label: string): Promise<void>;
