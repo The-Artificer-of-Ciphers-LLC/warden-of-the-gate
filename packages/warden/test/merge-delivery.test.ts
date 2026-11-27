@@ -18,7 +18,8 @@ const setup = async (over: Record<string, unknown> = { mode: 'live' }) => {
 };
 const ledgerOf = async (r: Rig, n: number) => parseLedger((await r.world.view('x').listComments(n)).filter((c) => c.body.startsWith(LEDGER_MARK))[0].body)!;
 const record = (r: Rig, n: number, sev: string[] = []) => r.send({ kind: 'review-record', item: n, itemKind: 'pr', origin: 'ai', actor: 'warden-reviewer', payload: { head: 'headaaaa0000', base: 'basebbbb0000', verdict: sev.length ? 'changes needed' : 'no findings', severities: sev, policyDigest: r.policy.digest } });
-const request = (r: Rig, n: number, head = 'headaaaa0000', id = 'm1') => r.send({ kind: 'merge-request', item: n, itemKind: 'pr', origin: 'deterministic', actor: 'warden-actions', payload: { expectedHead: head }, source: { kind: 'event', id, observedAt: new Date(r.world.now()).toISOString() } });
+// observedAt is part of the operation identity (opidOf hashes the whole core), so a redelivery of one source event must reuse the same timestamp.
+const request = (r: Rig, n: number, head = 'headaaaa0000', id = 'm1', observedAt = new Date(r.world.now()).toISOString()) => r.send({ kind: 'merge-request', item: n, itemKind: 'pr', origin: 'deterministic', actor: 'warden-actions', payload: { expectedHead: head }, source: { kind: 'event', id, observedAt } });
 const merged = (r: Rig, n: number) => r.world.issues.get(n)!.pull!.merged === true;
 
 test('shadow mode never merges: the AI review cannot be recorded and a merge request is refused', async () => {
@@ -59,7 +60,8 @@ test('stale delivery: a request bound to an old head is rejected; a head that mo
 });
 
 test('duplicate delivery and a lost acknowledgement produce exactly one accepted merge', async () => {
-  const { r, n } = await setup(); await record(r, n); await request(r, n); await request(r, n);
+  const { r, n } = await setup(); await record(r, n);
+  const at = new Date(r.world.now()).toISOString(); await request(r, n, undefined, 'm1', at); await request(r, n, undefined, 'm1', at);   // the same event delivered twice
   const rep = await r.writer().drain(); assert.ok(rep.processed.some((p) => p.result === 'duplicate')); assert.equal(merged(r, n), true);
 
   const lost = await setup(); await record(lost.r, lost.n); await request(lost.r, lost.n);
