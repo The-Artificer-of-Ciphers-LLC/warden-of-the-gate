@@ -56,6 +56,9 @@ test('effective policy: deny > human > allow; mandatory human gates; narrow by d
   // a PR that edits ORDERS.yaml / workflows / maintainers can never be auto-authorized, even if a program "allows" everything
   const allowAll = { schemaVersion: 1 as const, programs: [{ name: 'all', tasks: ['merge'], decision: 'allow' as const }] };
   for (const p of ['.github/ORDERS.yaml', '.github/warden.yml', '.github/workflows/ci.yml', 'MAINTAINERS', 'CODEOWNERS']) assert.equal(evaluate(allowAll, { task: 'merge', paths: [p] }).decision, 'human', p);
+  // agent instruction and harness config files are human-gated too, at the root and nested
+  for (const p of ['AGENTS.md', 'packages/x/AGENTS.md', 'CLAUDE.md', 'docs/CLAUDE.md', 'GEMINI.md', '.opencode/agent.md', '.claude/settings.json', '.cursor/rules/a.mdc']) assert.equal(evaluate(allowAll, { task: 'merge', paths: [p] }).decision, 'human', p);
+  for (const p of ['src/CLAUDE.ts', 'notes/AGENTS.md.bak']) assert.equal(evaluate(allowAll, { task: 'merge', paths: [p] }).decision, 'allow', p);
   assert.ok(validateEffective(wardenCfg(), allowAll).some((f) => f.code === 'orders.broad-allow'));
 });
 test('state model: issue and PR states are distinct, no head on issues, facets independent, no reopen', () => {

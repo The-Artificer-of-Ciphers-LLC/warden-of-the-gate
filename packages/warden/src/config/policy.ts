@@ -2,7 +2,10 @@ import type { Orders, Program, WardenConfig } from './load.ts';
 import type { AuthorityCeiling } from '../credentials/types.ts';
 
 /** Paths whose change always needs a maintainer decision (workflow/access/maintainer/standing-order/self-authority). Mandatory, not configurable. */
-export const HUMAN_GATE_PATHS = ['.github/workflows/**', '.github/warden.yml', '.github/ORDERS.yaml', '.github/CODEOWNERS', 'MAINTAINERS', 'MAINTAINERS.md', '.github/MAINTAINERS', 'CODEOWNERS'];
+export const HUMAN_GATE_PATHS = ['.github/workflows/**', '.github/warden.yml', '.github/ORDERS.yaml', '.github/CODEOWNERS', 'MAINTAINERS', 'MAINTAINERS.md', '.github/MAINTAINERS', 'CODEOWNERS',
+  // Agent instruction and harness config files: coding harnesses load these as operator instructions, so a PR that edits them
+  // needs the maintainer (owner ruling 2026-11-27; FACTORY-CLAIMS-VS-EVIDENCE.md §3.1, GitInject).
+  'AGENTS.md', '**/AGENTS.md', 'CLAUDE.md', '**/CLAUDE.md', 'GEMINI.md', '**/GEMINI.md', '.opencode/**', '.claude/**', '.cursor/**'];
 
 export function globToRe(g: string): RegExp {
   const esc = g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*');
