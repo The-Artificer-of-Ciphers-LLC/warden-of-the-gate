@@ -1,6 +1,6 @@
 # Contributor-facing output is attributable to the configured GitHub App
 
-- **Status:** Draft
+- **Status:** Draft; confirmed by @trek-e on 2026-11-26 (posts come from the configured GitHub App, not as the maintainer), replacing the earlier gsd-core channel call
 - **Date:** 2026-11-16 (revised from 2026-11-11)
 - **Decided by:** @trek-e
 

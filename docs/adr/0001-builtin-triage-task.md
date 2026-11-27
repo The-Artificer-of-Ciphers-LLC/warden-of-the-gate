@@ -1,6 +1,6 @@
 # Triage is a factory built-in task; no repo-supplied commands
 
-- **Status:** Draft
+- **Status:** Draft; confirmed by @trek-e on 2026-11-26 (Triage is a Warden built-in, not a reused maintainer skill), replacing the earlier gsd-core channel call
 - **Date:** 2026-11-16 (revised from 2026-11-11)
 - **Decided by:** @trek-e
 
