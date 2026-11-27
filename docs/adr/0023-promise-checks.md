@@ -1,6 +1,6 @@
 # Promise checks: per-repository, base against candidate
 
-- **Status:** Proposed (2026-11-26). The owner said yes to promise checks on 2026-11-26 and ruled that they belong to whichever repository Warden is attached to, not to GSD Core. The details below await owner review. Nothing here changes behavior until accepted.
+- **Status:** Proposed (2026-11-26). The owner said yes to promise checks on 2026-11-26, ruled that they belong to whichever repository Warden is attached to, not to GSD Core, and ruled that a timed regression is noted rather than blocking, with intended and unintended cases told apart. The details below await owner review. Nothing here changes behavior until accepted.
 - **Date:** 2026-11-26
 - **Decided by:** @trek-e (adopt, per-repository); details pending
 - **Research:** [McCarthy brownfield factories talk](../research/TALK-MCCARTHY-BROWNFIELD-FACTORIES.md), proposal 1
@@ -19,7 +19,9 @@ Owner, 2026-11-26, on whether to adopt this and which GSD Core promises to decla
 - **What a promise declares.** Each promise has a name, a trusted command that prints one number, a unit, a direction (`lower` or `higher` is better), a tolerance (absolute or percent) and a kind (`counted` or `timed`). Like the rest of `.github/warden.yml`, it is read from the trusted base revision only (§3), so a PR cannot loosen the promise it is judged by.
 - **How it runs.** The trusted executor (§7) runs each promise command on the trusted base and on the candidate, in the same scan and the same isolated workspace. It records both numbers, the command and its output. A candidate outside the tolerance in the wrong direction is a regression.
 - **Counted promises** (sizes, counts, token totals) are deterministic. A regression is a finding and blocks merge, under the 2026-11-24 ruling that a finding is a finding.
-- **Timed promises** (speed, memory) are noisy, so one run decides nothing. Base and candidate are measured on the same host with warmup and repeated runs (at least 10, with outlier detection) and compared by median against the tolerance. Whether a timed regression blocks like a finding or goes to a maintainer decision is still open (question 2).
+- **Timed promises** (speed, memory) are noisy, so one run decides nothing. Base and candidate are measured on the same host with warmup and repeated runs (at least 10, with outlier detection) and compared by median against the tolerance.
+- **A timed regression is noted, not blocking** (owner, 2026-11-26). It is shown on the card with both medians and the tolerance. It is not a finding and does not block merge by itself.
+- **Intended or unintended.** On a `fix` item (ADR 0024), a timed regression is marked *possibly intended*: a function that was not working can take longer once it works. Owner, 2026-11-26: "if we are fixing something the fix could take longer if the function wasn't working as an example of condition that would be intended vs inintended". On a `preserve` item it is marked *unintended*, because the change was meant to alter nothing. On a `change` item it is marked *possibly intended*, since new behavior can cost time.
 - **All promises together.** A change whose purpose is one promise, such as "faster", may not regress another declared promise. The decision card shows every declared promise with base, candidate and tolerance, so a trade is visible.
 - **Unsupported is never a pass.** A promise whose command fails, times out or cannot run on the platform is reported as `promise: unsupported` for that item, as ADR 0017 does for differential checks.
 - **Over time.** Promise results are kept in the ledger and shown with the §11 scorecard (ADR 0018), so slow drift across many small changes is visible even when no single change breaks its tolerance.
@@ -53,8 +55,9 @@ promises:
 ## Questions for the owner
 
 1. Is `.github/warden.yml` the right home, or should promises sit in `.github/ORDERS.yaml` with other gates?
-2. Does a timed regression block like a finding, or go to a maintainer decision?
-3. Should `warden setup` offer to suggest starter promises for a repository, for the maintainer to accept or drop, or should it leave promises entirely to the maintainer?
+2. ~~Does a timed regression block like a finding, or go to a maintainer decision?~~ Decided 2026-11-26: noted on the card, not blocking, marked intended or unintended.
+3. A fix can also legitimately grow a counted promise (for example, package size when missing code is added). Should a counted regression on a `fix` or `change` item still block, or be noted like a timed one?
+4. Should `warden setup` offer to suggest starter promises for a repository, for the maintainer to accept or drop, or should it leave promises entirely to the maintainer?
 
 ## Related
 
@@ -63,3 +66,4 @@ promises:
 - [ADR 0016](0016-verification-loop-and-test-quality-evidence.md): test-quality evidence
 - [ADR 0017](0017-preexisting-tests-and-differential-checks.md): the same base-against-candidate executor and the `unsupported` rule
 - [ADR 0018](0018-measured-not-estimated.md): the scorecard and repeated measurement
+- [ADR 0024](0024-behavior-effect-at-triage.md): the `preserve`, `change` and `fix` facet used to mark a regression intended or unintended

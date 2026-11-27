@@ -95,4 +95,4 @@ Sources checked: `main` at `0ea9fa2` (PRD, ADRs 0001-0013 and 0019), open PRs #4
 
 1. **Promise checks:** answered 2026-11-26. The owner said yes, and that promises are configured by whichever repository Warden is attached to, not tied to GSD Core. Written up as proposed [ADR 0023](../adr/0023-promise-checks.md).
 2. **Behavior effect at Triage:** answered 2026-11-26. The owner said yes, and that when the change fixes broken behavior, that broken behavior must not be what the fix is tested against. Written up as proposed [ADR 0024](../adr/0024-behavior-effect-at-triage.md), which adds a `fix` value next to `preserve` and `change`.
-3. **Timed promises:** should a speed or memory regression beyond tolerance block merge like a finding, or go to you as a decision, given how noisy timing is on one machine?
+3. **Timed promises:** answered 2026-11-26. A timed regression is noted on the card, not blocking. On a fix it can be intended, because a function that was not working can take longer once it works, so the card marks it intended or unintended. Written into [ADR 0023](../adr/0023-promise-checks.md).
