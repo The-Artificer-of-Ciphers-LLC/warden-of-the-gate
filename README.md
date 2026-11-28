@@ -2,7 +2,7 @@
 
 A self-maintaining GitHub software factory that reviews and merges PRs, fixes bugs, builds approved features/enhancements, and learns from maintainer decisions.
 
-Current implementation status and continuation instructions: [November 18 handoff](docs/handoff/2026-11-18-handoff.md). P1 remains blocked on genuine native scheduled-run evidence; GitHub Support #5025247 is open.
+Current implementation status and continuation instructions: [November 18 handoff](docs/handoff/2026-11-18-handoff.md). The P1 scheduling gate was changed on 2026-11-28 after GitHub Support answered case #5025247: an external scheduler starts the sweep through `workflow_dispatch`, and GitHub's native schedule is only an optional backup ([ADR 0026](docs/adr/0026-external-dispatch-for-sweep.md)).
 
 Start with the [consolidated PRD](docs/prd/0001-warden-of-the-gate.md) and [glossary](GLOSSARY.md). The MVP is one repository per instance, manually triggered local AI on a Mac with OpenCode, plus deterministic GitHub Actions housekeeping and serialized effects. Operational configuration and standing authority are separate.
 
@@ -48,6 +48,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 | [ADR 0023](docs/adr/0023-promise-checks.md) | Promise checks: per-repository, base against candidate | Proposed (adopted in principle) |
 | [ADR 0024](docs/adr/0024-behavior-effect-at-triage.md) | Record a change's intended behavior effect at Triage | Proposed (facet adopted) |
 | [ADR 0025](docs/adr/0025-several-candidates-chosen-by-evidence.md) | Several fix candidates, chosen by deterministic evidence | Proposed (opt-in adopted) |
+| [ADR 0026](docs/adr/0026-external-dispatch-for-sweep.md) | An outside scheduler starts the sweep through `workflow_dispatch`; the native schedule is only a backup | Accepted |
 
 ## Research
 

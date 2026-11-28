@@ -279,7 +279,7 @@ Persist counters across manual scans, process restarts and replacement PRs for t
 
 ### Sweep - deterministic Actions
 
-Reconcile ledgers, label projections, holds, claims, delivery obligations, stale response obligations and uncertain operations. Report last successful sweep and overdue work; schedules are not exact-deadline guarantees.
+Reconcile ledgers, label projections, holds, claims, delivery obligations, stale response obligations and uncertain operations. Report last successful sweep and overdue work; schedules are not exact-deadline guarantees. Decided 2026-11-28 ([ADR 0026](../adr/0026-external-dispatch-for-sweep.md)): an external scheduler (for the MVP, `launchd` on the operator's Mac) starts Sweep through `workflow_dispatch`; GitHub's native `schedule` is only an optional backup; every sweep is idempotent, so a late, dropped or duplicate run does no harm and the next run catches up.
 
 | Obligation | Default | Clock/exemptions |
 |---|---|---|
@@ -295,7 +295,7 @@ Never stale-close unreviewed PRs, confirmed/approved issues, `keep-open` items o
 
 **[R]** Every Warden comment says how to reach a human maintainer. The repository links one short pinned explanation of how Warden works, its clocks and how to appeal, so contributors are not surprised by automated state.
 
-**[R]** GitHub disables scheduled workflows after 60 days without repository activity. Sweep records each successful run; `warden status` shows the last one, and a missed schedule beyond a configured interval raises an alert rather than silently stopping clocks.
+**[R]** GitHub disables scheduled workflows in a public repository after 60 days without repository activity, which matters only if the native backup is turned on. Sweep records each successful run; `warden status` shows the last one, and a missed schedule beyond a configured interval raises an alert rather than silently stopping clocks.
 
 ### Retro - local AI, manually invoked
 
@@ -601,6 +601,12 @@ Decided by @trek-e on 2026-11-27, for backlog item W-20 (issue #81). Both were p
 |---|---|---|
 | **[R]** Read `warden.yml`, `ORDERS.yaml`, Warden workflows and enforced rule files only from the trusted base revision, with full review and a maintainer decision for a PR that changes them? | Confirmed as written | §3; `config/trusted.ts`, `review/slice.ts`; ADR 0010 |
 | **[R]** Actions hardening: no PR code run with write credentials, event text only through environment variables, actions pinned by SHA, a workflow linter in CI, no `workflows` App permission, a reserved and protected factory branch prefix? | Confirmed as written | §3; `config/workflow-check.ts`, `.github/workflows/checks.yml`, `credentials/controller.ts` |
+
+Decided by @trek-e on 2026-11-28, after GitHub Support answered case #5025247. The proposal was put to the owner with GitHub's answer; his answer was "Change the gate".
+
+| Question | Ruling | Where applied |
+|---|---|---|
+| Keep, waive or change the owner's retained P1 scheduling gate (a genuine native `event: schedule` run), now that GitHub says scheduled runs are best effort, currently often hours apart and sometimes dropped, with nothing on the account or organization suppressing them? | "Change the gate": an external scheduler starts the sweep through `workflow_dispatch` (already proven); the native schedule stays only as an optional backup; sweeps must be idempotent so a late, dropped or duplicate run does no harm. Basis: GitHub's `schedule` documentation ("some queued jobs may be dropped", [GitHub](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)) and GitHub Support's recommendation of an external scheduler calling `workflow_dispatch` or `repository_dispatch` | §5 Sweep; [ADR 0026](../adr/0026-external-dispatch-for-sweep.md); [plan](0001-warden-of-the-gate.implementation-plan.md) P2; sweep example and quickstart |
 
 Still open. Nothing below changes current behavior until decided:
 

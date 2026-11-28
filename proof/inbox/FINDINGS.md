@@ -40,7 +40,7 @@ Raw evidence: [RESULTS.md](RESULTS.md) (generated from `results/*.json`). Mechan
 | Cross-repository global stop | **Production integration demonstrated:** human CLI stop/resume reaches the private control repository; actual Actions P1 writer halts and acknowledges; revoked reads fail closed | Repo-scoped `GITHUB_TOKEN` cannot substitute for the read-only App token |
 | Submit-only versus writer separation | Distinct App submit and Actions writer authors verified; production writer rejects a tampered ledger on HMAC integrity | Permission-level append-only isolation is **not claimed** |
 | Second GitHub identity (real contributor vs operator) | **Passed:** S02/S03/S10/S11 with real human and App credentials; supplemental non-operator stop-removal check passed | Both scenario writers ran locally; separate real Actions checks are linked below |
-| Scheduled sweep | **Not observed** in the writer diagnostics or an identical minimal reproduction in both disposable repositories, despite two successful manual controls. No observation is still running. | The missing event reproduces without Warden code; provider-internal cause remains unconfirmed and P1 gate remains open |
+| Scheduled sweep | **Not observed** in the writer diagnostics or an identical minimal reproduction in both disposable repositories, despite two successful manual controls. No observation is still running. | The missing event reproduces without Warden code. GitHub Support (2026-11-28): best-effort platform behavior, nothing suppresses the account. Gate changed to external `workflow_dispatch` ([ADR 0026](../../docs/adr/0026-external-dispatch-for-sweep.md)) |
 | Real Actions/GitHub outage | Simulated by disabling the workflow and by not running the writer | Server-side outage behaviour unverified |
 | Read-after-write staleness | 12 trials, no stale first read | Not a bound; safety does not depend on it (atomic create + fence re-check) but the fence's residual window does |
 | Scale | Largest live inbox about 60 comments; fake backend 60 intents | Listing cost at hundreds/thousands is extrapolated, not measured |
@@ -143,3 +143,14 @@ Read-only external corroboration:
 - The request asks GitHub to identify registration time/effective actor, explain the 20:07 and 20:12 UTC scheduling slots, distinguish delay/drop from suppression or absent registration, and provide a supported remedy or engineering reference. It explicitly acknowledges best-effort scheduling and prohibits re-enabling or modifying repository workflows without separate owner approval.
 - The organization's ticket-list endpoint returned HTTP 403, but the case became visible under the requester's personal ticket index after one refresh. The linked saved ticket is verified; no duplicate request or permission expansion was needed.
 - Only the initial owner-authorized report was present at verification. A provider response and genuine scheduled-run evidence remain outstanding. No observer, automatic ticket monitor or further live experiment was started; both original sandbox workflows were independently rechecked as `disabled_manually`.
+
+### GitHub Support answer and gate change (2026-11-28)
+
+GitHub Support answered case #5025247 on 2026-11-28. Its findings, recorded without the case text:
+
+- Nothing on the organization or the account suppresses scheduled runs, and no eligibility or protection state blocks schedules while allowing manual dispatch. This rules out the organization-eligibility and account-suppression hypotheses above.
+- The missing runs match a known platform-side problem in GitHub's schedule service since late May 2026: high-frequency schedules currently get far fewer runs than the cron asks for, often hours apart, and under enough load some queued runs are dropped. A 10-minute window is too short to show anything. This matches GitHub's [`schedule` documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+- Committing the workflow through the Contents API rather than a `git push` makes no difference, which settles the commit-method hypothesis.
+- GitHub recommends an external scheduler that calls `workflow_dispatch` or `repository_dispatch` when a workflow must run at a known interval.
+
+The owner then changed the gate ("Change the gate"): an external scheduler starts the sweep through `workflow_dispatch`, which the manual controls above and ADR 0012's backstop already showed works; the native schedule is only an optional backup; sweeps are idempotent. See [ADR 0026](../../docs/adr/0026-external-dispatch-for-sweep.md). The raw reports above stay unchanged as historical evidence; they are not reinterpreted as passes.

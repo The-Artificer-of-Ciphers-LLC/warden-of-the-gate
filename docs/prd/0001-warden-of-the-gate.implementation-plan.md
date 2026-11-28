@@ -86,7 +86,7 @@ This is the delivery order, not a requirement to put each phase into one large P
 
 ### Work and acceptance
 
-- `warden run --task intake`, `--task claim` and `--task sweep` reach registered built-ins through the shared writer; corresponding Actions event/scheduled handlers run without inference or a live Mac. No product workflow or arbitrary repo command becomes a factory task.
+- `warden run --task intake`, `--task claim` and `--task sweep` reach registered built-ins through the shared writer; corresponding Actions event and sweep handlers run without inference or a live Mac. The sweep is started through `workflow_dispatch` by an external scheduler, with the native schedule only an optional backup ([ADR 0026](../adr/0026-external-dispatch-for-sweep.md)). No product workflow or arbitrary repo command becomes a factory task.
 - Intake checks templates/metadata and explicit routes. Similarity flags a candidate only; it cannot establish a semantic duplicate, close an issue or mark a review complete.
 - Contributor volunteering assigns only an eligible unclaimed issue, after a fresh ownership check and confirmed GitHub assignment. Unrelated commenters cannot claim/extend for an assignee. Competing claims and factory starts leave one confirmed owner.
 - Preserve actual assignment/submission timestamps. Initial delivery is 48 elapsed hours from assignment; only genuinely complete ready-for-review work with evidence satisfies it. Record plausible timely delivery before unavailable semantic assessment; ambiguity waits for assessment rather than false takeover.
