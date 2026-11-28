@@ -6,7 +6,7 @@ import { ajv, ajvMessages } from '../config/schemas.ts';
 export interface ToolSurface { allow: string[] }                  // named allows over a deny-all start (P0: unlisted names grant nothing; positive-controlled)
 export interface Budgets { maxToolCalls: number; maxModelTurns: number; wallTimeMs: number }
 /** `workspace`: a directory the session may work in (writable only when asked). Without it the packet directory is the read-only workspace. */
-export interface SessionRequest { task: string; item: number; packetDir: string; tools: ToolSurface; resultSchema: object; budgets: Budgets; expectedModel: string; workspace?: { dir: string; writable: boolean; /** Workspace-relative paths the OS refuses to let the session change (ADR 0014 frozen tests). */ denyWrite?: string[] }; /** The packet holds a read-only snapshot of the repository under ./repo: the session may read and list it, nothing else. */ repoContext?: boolean }
+export interface SessionRequest { task: string; item: number; packetDir: string; tools: ToolSurface; resultSchema: object; budgets: Budgets; expectedModel: string; workspace?: { dir: string; writable: boolean; /** Workspace-relative paths the OS refuses to let the session change (ADR 0014 frozen tests). */ denyWrite?: string[] }; /** The packet holds a read-only snapshot of the repository under ./repo: the session may read and list it, nothing else. */ repoContext?: boolean; /** Set by runValidated: the schema check as a function, so a harness can put the validator's own message back to the model in its one repair round instead of failing a reply that parsed but did not fit the schema. Returns the problem, or null when the value fits. */ check?: (value: unknown) => string | null }
 export interface PreflightReport { ok: boolean; harnessVersion?: string; resolvedModel?: string; isolation?: string; /** Endpoint tier (MODEL-CONNECTIONS vocabulary) and the endpoint's host:port, for verdict provenance. Absent => recorded as `unknown`. */ tier?: string; endpoint?: string; failures: string[] }
 /** The harness as a run records it: its name plus the version the preflight observed (e.g. "opencode 2.4.1"). A configured label that already
  *  carries a version keeps it only when nothing was observed; an observed version always replaces it. */
@@ -50,12 +50,17 @@ export async function runValidated(runner: AgentRunner, req: SessionRequest, o: 
   let validate: ValidateFunction; try { validate = ajv.compile(req.resultSchema); } catch (e) { return { accepted: false, reason: 'result schema invalid: ' + String(e).slice(0, 100) }; }
   const ac = new AbortController(); o.signal?.addEventListener('abort', () => ac.abort(o.signal!.reason));
   const mon = new BudgetMonitor(req.budgets, ac, o.clock);
-  const res = await runner.run(req, ac.signal, mon);
+  const res = await runner.run({ ...req, check: (v) => (validate(v) ? null : ajvMessages(validate).join('; ')) }, ac.signal, mon);
   if (mon.exceeded) return { accepted: false, reason: mon.exceeded, result: { ...res, outcome: 'budget-exceeded', usage: mon.usage() } };
   if (res.outcome !== 'completed') return { accepted: false, reason: `session ${res.outcome}${res.reason ? ': ' + res.reason : ''}`, result: res };
   if (!validate(res.structuredOutput)) return { accepted: false, reason: 'structured output rejected: ' + ajvMessages(validate).join('; '), result: res };
   return { accepted: true, output: res.structuredOutput, result: res };
 }
+
+/** The one repair prompt, shared by every harness: says what was wrong, never what the answer should be. A parse problem and a schema problem read differently so the model fixes the right thing. */
+export const repairPrompt = (schemaProblem?: string): string => schemaProblem
+  ? `Your last reply was JSON but did not conform to the schema: ${schemaProblem.slice(0, 600)}. Do not call any tool now. Reply now with only the corrected single JSON object that conforms to the schema (no extra properties, every required field present).`
+  : 'Your last reply did not contain the required JSON object. Do not call any tool now. Reply now with only the single JSON object that conforms to the schema.';
 
 /** P1 has no model-backed task: this adapter is the honest "not ready" implementation. It never fabricates a result. */
 export class NotReadyRunner implements AgentRunner {

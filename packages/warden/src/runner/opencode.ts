@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { containmentSelfTest, spawnContained } from './seatbelt.ts';
 import type { ContainmentSpec } from './seatbelt.ts';
+import { repairPrompt } from './agent-runner.ts';
 import type { AgentRunner, BudgetMonitor, PreflightReport, SessionRequest, SessionResult } from './agent-runner.ts';
 import { OPENCODE_FLOOR, OPENCODE_MAJOR, SUPPORTED_OPENCODE } from '../version.ts';
 
@@ -232,11 +233,11 @@ export class OpenCodeRunner implements AgentRunner {
         dbg(round, msgs);
         const mine = msgs.filter((m) => !seen.has(key(m)) && m.type === 'assistant');
         const text = mine.flatMap((m) => (m.content ?? []).filter((c: any) => c.type === 'text').map((c: any) => c.text)).join('').trim();
-        const j = extractJson(text);
-        if (!j.error) return { outcome: 'completed', structuredOutput: j.value, usage: usage() };
+        const j = extractJson(text); const misfit = !j.error && req.check ? req.check(j.value) : null;
+        if (!j.error && (!misfit || round > 0)) return { outcome: 'completed', structuredOutput: j.value, usage: usage() };   // a misfit after the repair round goes to the caller's validator, which rejects it with its own message
         if (round === 0) {
           for (const m of msgs) seen.add(key(m));
-          const rp = await s.api('POST', `/api/session/${sid}/prompt`, { text: 'Your last reply did not contain the required JSON object. Do not call any tool now. Reply now with only the single JSON object that conforms to the schema.' });
+          const rp = await s.api('POST', `/api/session/${sid}/prompt`, { text: repairPrompt(misfit ?? undefined) });
           if (rp.status !== 200) return { outcome: 'failed', reason: `repair prompt ${rp.status}`, usage: usage() };
           created = (rp.body.data.time?.created ?? 0) - 1; if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true });
           continue;
