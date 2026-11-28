@@ -10,9 +10,11 @@
   - safety metrics weigh more than throughput metrics by default;
   - the model scorecard's replay sets.
 
-  Still proposed, awaiting owner review: the treatment of self-assessment and abstentions, and (2026-11-28) cost compared only on cases both configurations passed, with baselines per harness version and settings.
+  Decided 2026-11-28: cost compared only on cases both configurations passed, with baselines per harness version and settings.
+
+  Still proposed, awaiting owner review: the treatment of self-assessment and abstentions.
 - **Date:** 2026-11-25 (revised 2026-11-26 and 2026-11-27)
-- **Decided by:** @trek-e for the cited-rule rule, the pause and how it lifts (2026-11-26), and for the weighted scorecard, its default weights and the model scorecard (2026-11-27); pending for self-assessment and abstentions
+- **Decided by:** @trek-e for the cited-rule rule, the pause and how it lifts (2026-11-26), and for the weighted scorecard, its default weights and the model scorecard (2026-11-27), and for cost compared where both passed (2026-11-28); pending for self-assessment and abstentions
 - **Research:** [Sumner, "How to Ship Millions of Lines of Agent-Written Code"](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md), candidate 4; follow-up research on [model scorecards](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect) and [weighted, robust scorecards](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#3-a-weighted-robust-scorecard)
 
 ## Context
@@ -95,12 +97,12 @@ These parts follow Anthropic's guidance on agent evals and on eval statistics, a
   - Retro samples session transcripts each window.
   - Retro flags a regression set that has sat at 100%, so new cases get added.
 
-### Still proposed (2026-11-28): cost compared only where both passed
+### Decided (2026-11-28): cost compared only where both passed
 
-**Proposed, awaiting owner review.** Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lesson C. The post reports tool calls and tokens "on tasks both solve" when it compares two models (Adapter merging evaluation results). A model that gives up early spends little, so a cost figure over all cases can reward failure.
+**Decided 2026-11-28 (@trek-e): "Merge" on PR 175, in answer to "Merging it is your yes to the four proposals."** Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lesson C. The post reports tool calls and tokens "on tasks both solve" when it compares two models (Adapter merging evaluation results). A model that gives up early spends little, so a cost figure over all cases can reward failure.
 
 - **Cost compares like with like.** When two models or configurations are compared on tokens, tool calls, wall time or memory, the comparison uses only the cases both passed, and shows how many those were. Per-model budgets (PRD §9) are still measured over all runs, because a budget must hold for failures too.
-- **Baselines are per configuration.** A baseline window holds runs of the same repository class, model and task contract, as above, and also the same harness version and settings ([ADR 0022](0022-new-model-starts-paused.md) proposed amendment). The post's authors say results cannot be compared across harnesses (Evaluation setup).
+- **Baselines are per configuration.** A baseline window holds runs of the same repository class, model and task contract, as above, and also the same harness version and settings ([ADR 0022](0022-new-model-starts-paused.md) amendment). The post's authors say results cannot be compared across harnesses (Evaluation setup).
 
 ### Still proposed (2026-11-25)
 

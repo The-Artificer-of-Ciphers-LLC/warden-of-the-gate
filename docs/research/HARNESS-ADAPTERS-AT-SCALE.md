@@ -63,7 +63,7 @@ Checked against `main` at `ef6e12f`: the PRD, ADRs 0001 to 0026, and `packages/w
 
 ## Proposals in this PR
 
-All are **PROPOSED, awaiting owner review**, and marked **[H]** in the PRD.
+All are marked **[H]** in the PRD. **Decided 2026-11-28 (@trek-e): "Merge" on PR 175, in answer to "Merging it is your yes to the four proposals."**
 
 1. **ADR 0022 amendment (lesson A, J).** A qualification covers one configuration: the model identity ADR 0022 already defines, plus the harness name and the version the run reported, the settings that change model behavior (thinking or reasoning mode, sampling temperature, context compaction), and the digest of any adapter loaded on the base weights. A public benchmark score never qualifies.
 2. **ADR 0027 (lesson B).** Every replay case passes four deterministic checks before it counts: the expected answer passes, an empty answer fails a defect case, a wrong answer does not pass, and scoring the same recorded output twice gives the same result. A case that fails is kept in a rejected list with the failing check and does not count toward the §11 minimums.

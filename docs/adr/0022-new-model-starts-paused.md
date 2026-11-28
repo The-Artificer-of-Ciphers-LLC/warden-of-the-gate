@@ -1,6 +1,6 @@
 # A model new to the pool qualifies itself on replay
 
-- **Status:** Accepted as amended by the owner decision below (2026-11-28). Builds on ADR 0018. The file name keeps its original slug so existing links work. A further amendment (qualification covers the harness and settings too) is **proposed, awaiting owner review**, except when a harness release requalifies, which the owner decided on 2026-11-28; see the end of this ADR.
+- **Status:** Accepted as amended by the owner decision below (2026-11-28). Builds on ADR 0018. The file name keeps its original slug so existing links work. A further amendment (qualification covers the harness and settings too) was accepted on 2026-11-28; see the end of this ADR.
 - **Date:** 2026-11-26
 - **Decided by:** @trek-e, 2026-11-28
 - **Research:** [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md), mapping rows 2 and 6
@@ -41,9 +41,9 @@ Basis:
 
 The questions this ADR asked were: should a new model start paused; does a weights or version change count as new; may one-off frontier verdicts count before a regression pass.
 
-## Proposed amendment (2026-11-28): a qualification covers the harness and settings too
+## Amendment (2026-11-28): a qualification covers the harness and settings too
 
-**Proposed, awaiting owner review**, apart from the owner decision on harness releases below. Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lessons A and J. Nothing above changes until the owner accepts it.
+**Decided 2026-11-28 (@trek-e): "Merge" on PR 175, in answer to "Merging it is your yes to the four proposals."** Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lessons A and J.
 
 ### Why
 
@@ -51,7 +51,7 @@ The post trained one LoRA adapter per harness (pi, OpenCode, Hermes Agent) on th
 
 This ADR's identity names the endpoint, the model id and the version or weights digest. Provenance already records the harness and its version (`runner/provenance.ts`), and ADR 0018 already runs replay on every harness, prompt or configuration change. But the identity that decides whether a model is new leaves the harness and the settings out, so a model qualified under one harness version and thinking mode counts under another without a passing run.
 
-### Proposed decision
+### Decision
 
 - **A qualification is for one configuration.** It covers the model identity above plus:
   - the harness name and the major version of the version the run reported (`harnessVersion`, ADR 0004). A minor or patch release of the same major version keeps the qualification (owner decision below);
@@ -70,7 +70,7 @@ Asked whether every new OpenCode 2.x release (for example 2.4.1 to 2.5.0) should
 - This does not change ADR 0018: replay still runs on every harness change, minor and patch releases included, and a model whose results leave its limits there has auto-merge paused under the 2026-11-26 rule until the maintainer lifts it.
 - A changed adapter changes the weights the model runs, so it is already a new model under the decision above.
 
-The rest of this amendment is still proposed.
+The owner accepted the rest of this amendment the same day.
 
 ## Related
 

@@ -1,8 +1,8 @@
 # Replay cases are checked before they count
 
-- **Status:** Proposed, awaiting owner review (2026-11-28)
+- **Status:** Accepted (2026-11-28)
 - **Date:** 2026-11-28
-- **Decided by:** pending (@trek-e)
+- **Decided by:** @trek-e, 2026-11-28 ("Merge" on PR 175, in answer to "Merging it is your yes to the four proposals.")
 - **Research:** [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lesson B
 - **Builds on:** PRD §11 (pilot activation gate), [ADR 0018](0018-measured-not-estimated.md) (replay sets), [ADR 0022](0022-new-model-starts-paused.md) (qualification)
 
@@ -59,9 +59,9 @@ Where a check cannot be built for a case (for example, a one-hunk case has no hu
 - The checks are cheap: they run the scorer on a handful of synthetic answers per case and read the clone for the named commits.
 - The canary checks are narrow. They catch cases that accept everything or cannot be matched, not a subtly wrong expectation. A wrong expectation is still found the way it is today, by a disagreement the maintainer reviews.
 
-## Open question for the owner
+## Owner decision
 
-1. Adopt the four checks and the rejected list as written?
+Accepted as written, 2026-11-28.
 
 ## Related
 
