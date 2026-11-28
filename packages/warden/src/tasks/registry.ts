@@ -60,8 +60,9 @@ export async function planSweep(rawStore: Store, cfg: WardenConfig, o: { now: nu
   return out;
 }
 const whenOf = (d: Due) => ('since' in d ? d.since : d.kind === 'expire-commitment' ? d.dueAt : '');
+const isClosing = (f: SweepFinding) => f.due.kind === 'close-silence' || f.due.kind === 'close-information' || (f.due.kind === 'expire-commitment' && f.itemKind === 'pr');
 const toProposal = (f: SweepFinding): Proposal => {
-  const closes = f.due.kind === 'close-silence' || f.due.kind === 'close-information' || (f.due.kind === 'expire-commitment' && f.itemKind === 'pr');
+  const closes = isClosing(f);
   const releases = f.due.kind === 'expire-commitment' && f.itemKind === 'issue';
   return { item: f.item, kind: f.itemKind, adopted: true, from: f.state, to: closes ? 'closed' : releases ? 'ready' : null, labels: { add: [], remove: [] },
     reasons: [f.due.kind === 'defer' ? `deferred: ${f.due.why}` : f.due.kind === 'nudge' ? `${f.due.hours}h response nudge` : `${f.due.kind} (${f.due.kind === 'expire-commitment' ? 'due' : 'since'} ${whenOf(f.due)})`],
@@ -114,16 +115,18 @@ export async function submitReconcile(found: Array<{ item: number; itemKind: 'is
 }
 
 /** Submit enforceable findings as deterministic intents. `defer` verdicts are never submitted. Same finding => same opid (idempotent). */
-export async function submitSweep(findings: SweepFinding[], o: { submitStore: Store; repo: string; inboxIssue: number; now: number; journal?: Journal | null }): Promise<{ submitted: number[]; skipped: number[] }> {
-  const submitted: number[] = []; const skipped: number[] = [];
+export async function submitSweep(findings: SweepFinding[], o: { submitStore: Store; repo: string; inboxIssue: number; now: number; journal?: Journal | null; /** Closure caps (PRD section 6): `perRun`, and what is left of the day's allowance. Excess closures are deferred, not dropped. */ caps?: { perRun: number; remainingToday: number } }): Promise<{ submitted: number[]; skipped: number[]; closures: number; deferredClosures: number[] }> {
+  const submitted: number[] = []; const skipped: number[] = []; const deferredClosures: number[] = [];
+  const cap = o.caps ? Math.max(0, Math.min(o.caps.perRun, o.caps.remainingToday)) : Infinity; let closures = 0;
   for (const f of findings) {
     if (f.due.kind === 'defer' || f.due.kind === 'none') { skipped.push(f.item); continue; }
+    if (isClosing(f)) { if (closures >= cap) { deferredClosures.push(f.item); continue; } closures++; }
     const expect = f.due.kind === 'nudge' ? { kind: 'nudge', hours: f.due.hours } : f.due.kind === 'expire-commitment' ? { kind: f.due.kind, commitment: f.due.commitment } : { kind: f.due.kind };
     const intent = makeIntent({ v: 1, kind: 'sweep-action', repo: o.repo, item: f.item, itemKind: f.itemKind, origin: 'deterministic',
       source: { kind: 'sweep', id: `sweep:${f.item}:${expect.kind}${'hours' in expect ? expect.hours : ''}:${whenOf(f.due)}`, observedAt: iso(o.now) }, actor: o.submitStore.actor(), payload: { expect, obs: f.obs } });
     await submit(o.submitStore, o.inboxIssue, intent, o.journal ?? null); submitted.push(f.item);
   }
-  return { submitted, skipped };
+  return { submitted, skipped, closures, deferredClosures };
 }
 
 export async function runTask(task: string, o: { dryRun: boolean; store: Store; cfg: WardenConfig; items?: number[]; skip?: Set<number>; now?: number }): Promise<TaskOutcome> {

@@ -16,6 +16,8 @@ export const DEFAULT_WARDEN = {
     urgent: 'urgent',
   },
   voice: { style: 'neutral', signature: '' },
+  /** Closure caps for one sweep run and per calendar day (UTC); excess eligible closures are deferred and reported. */
+  sweep: { maxClosuresPerRun: 5, maxClosuresPerDay: 10 },
   /** What one review shows; the ledger keeps every finding either way. */
   review: { maxPostedFindings: 10, uncertainFindings: 'maintainer-decides' as 'maintainer-decides' | 'drop-below-confidence', minConfidence: 0.5 },
   runtime: {
