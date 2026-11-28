@@ -50,6 +50,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 | [ADR 0025](docs/adr/0025-several-candidates-chosen-by-evidence.md) | Several fix candidates, chosen by deterministic evidence | Proposed (opt-in adopted) |
 | [ADR 0026](docs/adr/0026-external-dispatch-for-sweep.md) | An outside scheduler starts the sweep through `workflow_dispatch`; the native schedule is only a backup | Accepted |
 | [ADR 0027](docs/adr/0027-replay-cases-are-validated.md) | Replay cases are checked before they count | Accepted |
+| [ADR 0028](docs/adr/0028-output-rules-written-once-and-checked.md) | Output rules are written once, and each is checked or marked as judgment; Triage gets the repository it judges | Proposed |
 
 ## Research
 
@@ -64,6 +65,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 - [McCarthy brownfield factories talk](docs/research/TALK-MCCARTHY-BROWNFIELD-FACTORIES.md): promises beyond features, preserve versus change, and coverage-guided inputs; basis for proposed [ADR 0023](docs/adr/0023-promise-checks.md) (per-repository promise checks) and [ADR 0024](docs/adr/0024-behavior-effect-at-triage.md) (preserve, change or fix, recorded at Triage).
 - [Maddalone software factories talk](docs/research/TALK-MADDALONE-SOFTWARE-FACTORIES.md): Joe Maddalone and Rob West on why the factory metaphor misleads; mostly confirms Warden's design, disagrees on duplication, and is the basis for the Triage spike, proposed [ADR 0025](docs/adr/0025-several-candidates-chosen-by-evidence.md) (several candidates chosen by evidence) and the auto-merge rate as a non-target.
 - [Harness adapters article (Hugging Face)](docs/research/HARNESS-ADAPTERS-AT-SCALE.md): per-harness RL adapters and how the authors checked their benchmark; basis for [ADR 0027](docs/adr/0027-replay-cases-are-validated.md) (replay cases checked before they count), an amendment to [ADR 0022](docs/adr/0022-new-model-starts-paused.md) (a qualification covers the harness and settings) and a cost rule in [ADR 0018](docs/adr/0018-measured-not-estimated.md).
+- [Coyle ontologies-as-guardrails talk](docs/research/TALK-COYLE-ONTOLOGIES-AS-GUARDRAILS.md): rules checked outside the model, every hand-off a contract, each rule written once; maps the 2026-11-28 replay misses to what guardrails can and cannot fix, and is the basis for proposed [ADR 0028](docs/adr/0028-output-rules-written-once-and-checked.md).
 
 The owner confirmed the shared MVP product understanding on November 17, 2026; the PRD review is complete and ready for implementation planning. Its final section names the remaining technical choices and capability proofs. No implementation, local-model benchmark or live activation is claimed by this documentation.
 
