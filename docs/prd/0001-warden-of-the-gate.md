@@ -11,6 +11,7 @@
 - **Agent-written-code talk (2026-11-25):** text marked **[S]** comes from [Sumner](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md). It is **PROPOSED, awaiting owner review**, except what @trek-e decided on 2026-11-26: the older-test rule, where new feature tests go and opt-in differential checks in §7; no planning documents and cited rules that must resolve in §5 Implement; the special-casing check in §5 Review and its replay case in §11; the scorecard pause and how it lifts in §5 Retro; and, on 2026-11-27, the weighted scorecard and model scorecard in §5 Retro, the replay sets in §11 and how a redundant added test is shown in §7. See [ADR 0017](../adr/0017-preexisting-tests-and-differential-checks.md) and [ADR 0018](../adr/0018-measured-not-estimated.md). Its open questions are in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
 - **Pi creators talk (2026-11-26):** text marked **[P]** comes from [the Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md). @trek-e decided its open questions on 2026-11-28; each [P] passage below carries its ruling. See [ADR 0020](../adr/0020-review-attention-and-maintainer-understanding.md), [ADR 0021](../adr/0021-cross-family-review-panel.md) and [ADR 0022](../adr/0022-new-model-starts-paused.md), and the rulings in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
 - **Harness adapters article (2026-11-28):** text marked **[H]** comes from [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md). It was **decided 2026-11-28 (@trek-e)**: "Merge" on PR 175, in answer to "Merging it is your yes to the four proposals." See [ADR 0027](../adr/0027-replay-cases-are-validated.md), the amendment at the end of [ADR 0022](../adr/0022-new-model-starts-paused.md) and the cost rule in [ADR 0018](../adr/0018-measured-not-estimated.md). Its questions are in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
+- **Ontologies-as-guardrails talk (2026-11-28):** text marked **[O]** comes from [Frank Coyle, "Ontologies as Guardrails for AI"](../research/TALK-COYLE-ONTOLOGIES-AS-GUARDRAILS.md). It is **PROPOSED, awaiting owner review**; merging the PR that adds it is the owner's yes. See proposed [ADR 0028](../adr/0028-output-rules-written-once-and-checked.md) and its question in [Owner decisions](#owner-decisions-from-the-research-reconciliation).
 
 ## TL;DR
 
@@ -181,6 +182,8 @@ For features/enhancements, propose scope, observable acceptance criteria, approa
 
 **[T]** The approved contract for a feature or enhancement is the acceptance criteria **and** the acceptance tests the Implement test session writes from them ([ADR 0014](../adr/0014-frozen-acceptance-tests.md)). The maintainer approves the tests, shown with their fail-on-base result, before the fix session runs; a material change to them is a scope change. Criteria should be written so a test can check them.
 
+**[O]** Triage reads the code it judges. The triage session gets the same read-only repository snapshot at the base revision that Review uses (read and list tools only), because the `not-actionable` tests (already fixed, already implemented, answered by existing behaviour or docs, intended behaviour) depend on the code. A `citation` evidence item names a repository path, and a result citing a path that is not in the snapshot is rejected whole; with no snapshot, `citation` is not offered. Duplicate search across issues stays with Intake, which flags candidates and never decides them ([ADR 0028](../adr/0028-output-rules-written-once-and-checked.md)).
+
 Confirmed/approved items never stale-close. Rejected product directions remain binding unless a maintainer revises them.
 
 ### Claim - deterministic Actions
@@ -251,6 +254,8 @@ Review candidate changes against relevant base context, approved requirements, r
 - **[T]** Review runs in a fresh session and records the writer's and reviewer's model ids and families on the verdict. **Decided 2026-11-28 (@trek-e):** a fresh context of the same model is a new reviewer ("new context makes same model a new reviewer"), and no different family is required. Same-model review is reported as such. The question is revisited only if replay statistics show a model missing defects in its own PRs more often than in other models' PRs (§11).
 - **[R]** Review also reports spec gaps and conflicts: an approved criterion the change cannot satisfy as written, or behavior the spec does not determine. These route to `needs-decision`, not to the author.
 - **[S] Decided 2026-11-26 (@trek-e).** Review checks the implementation, not only its tests, for special-casing (gamed tests): code that branches on a literal identifier, property name, file name or test input so that a check passes (Sumner's example: any object reading a property named `archive` treated as using one API). This is a finding even when every test and benchmark passes.
+
+**[O]** Every output rule the Triage and Review prompts state lives once, in a rule table beside the task's schema: the text the prompt shows, the hard limit the schema is built from, an optional softer target, and either its deterministic check or the mark `judgment`. Prompt rules, schema limits and post-schema checks are generated from that table, so they cannot disagree, and a test fails if the prompt states a rule the table does not hold. When a replay miss has a deterministic form, the fix is a check, not more prompt text. The replay report counts findings whose line is not in that file's diff separately from other false findings; they are not rejected until the owner rules on the counts ([ADR 0028](../adr/0028-output-rules-written-once-and-checked.md)).
 
 **Decided 2026-11-24 (@trek-e).** A finding is a finding, no matter when it is found: a later review round may raise a finding on code that was already reviewed and has not changed.
 
@@ -637,4 +642,10 @@ From the [harness adapters article](../research/HARNESS-ADAPTERS-AT-SCALE.md) (2
 | **[H]** Check every replay case (expected answer passes, doing nothing fails, a wrong answer does not pass, same input gives the same score) and keep failed cases in a rejected list? | Yes, as written in ADR 0027 (accepted) | §11; ADR 0027 |
 | **[H]** Compare cost only on cases both configurations passed, keep baselines per harness version and settings, and track denied tool calls per 1,000? | Yes | §11; ADR 0018 |
 
-Every earlier question from the research reconciliation is decided.
+From the [ontologies-as-guardrails talk](../research/TALK-COYLE-ONTOLOGIES-AS-GUARDRAILS.md) (2026-11-28). **Proposed**: merging the PR is the owner's yes.
+
+| Question | Proposal | Where applied |
+|---|---|---|
+| **[O]** Write each Triage and Review output rule once (prompt text, schema limit, check or `judgment`), give Triage the read-only repository snapshot, and count off-diff findings separately in replay? | Yes to all three, as written in ADR 0028 | §5 Triage, §5 Review; ADR 0028 |
+
+Every earlier question from the research reconciliation is decided; the [O] question above is open.
