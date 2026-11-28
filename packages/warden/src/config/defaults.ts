@@ -13,8 +13,11 @@ export const DEFAULT_WARDEN = {
       'waiting-checks': 'warden:waiting-checks', 'merge-ready': 'warden:merge-ready',
     } as Record<string, string>,
     keepOpen: 'keep-open',
+    urgent: 'urgent',
   },
   voice: { style: 'neutral', signature: '' },
+  /** What one review shows; the ledger keeps every finding either way. */
+  review: { maxPostedFindings: 10, uncertainFindings: 'maintainer-decides' as 'maintainer-decides' | 'drop-below-confidence', minConfidence: 0.5 },
   runtime: {
     harness: 'opencode', harnessVersion: '2.2.7', modelPool: ['local-default'], provider: 'local', remoteFallback: false, isolation: 'seatbelt',
     budgets: { maxItems: 10, maxModelTurns: 40, maxToolCalls: 200, wallTimeSeconds: 1800, maxOperationRetries: 5, maxFactoryImplementationPrs: 1 },
