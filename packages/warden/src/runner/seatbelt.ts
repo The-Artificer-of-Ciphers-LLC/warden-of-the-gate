@@ -13,6 +13,8 @@ import path from 'node:path';
 export interface ContainmentSpec {
   workspace: string;
   workspaceWritable: boolean;
+  /** Workspace-relative paths the contained process may READ but never write, create over, rename or delete (ADR 0014: the frozen tests and the configuration of the tools that judge them). An OS rule, not a harness setting. */
+  denyWrite?: string[];
   /** Private HOME/TMPDIR for the contained process; always writable. */
   scratch: string;
   /** Extra read-only roots (toolchain dirs). Must not contain credentials. */
@@ -89,6 +91,8 @@ export function buildProfile(spec: ContainmentSpec): string {
     `(allow file-read* file-write* (subpath ${q(scratch)}))`,
     '(deny network*)',
     ...(spec.allowTcp ?? []).map((a) => `(allow network-outbound (remote ip "localhost:${a.port}"))`),
+    // Evaluated last so the deny wins over the workspace write allowance above.
+    ...(spec.denyWrite ?? []).map((p) => `(deny file-write* (literal ${q(path.join(ws, p))}))`),
     ...(spec.listenPorts ?? []).flatMap((p) => [`(allow network-bind (local ip "localhost:${p}"))`, `(allow network-inbound (local ip "localhost:${p}"))`]),
   ];
   return lines.filter(Boolean).join('\n') + '\n';

@@ -111,7 +111,7 @@ export class OpenCodeRunner implements AgentRunner {
       update: 'disable', share: 'disabled', policies: ['opencode', ...BUILTIN_LOCAL_PROVIDERS].map((resource) => ({ action: 'provider.use', resource, effect: 'deny' as const })) };
   }
 
-  private async start(workspace: string, signal?: AbortSignal, writable = false): Promise<Server> {
+  private async start(workspace: string, signal?: AbortSignal, writable = false, denyWrite: string[] = []): Promise<Server> {
     const net0 = classifyBaseURL(this.o.baseURL); if (!net0.local || !net0.port) throw new Error(`provider endpoint is not loopback: ${net0.reason}`);
     const stateDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'warden-oc-')));
     for (const d of ['home', 'config/opencode', 'data', 'state', 'cache', 'tmp']) mkdirSync(path.join(stateDir, d), { recursive: true });
@@ -119,7 +119,7 @@ export class OpenCodeRunner implements AgentRunner {
     const port = await freePort();
     const env = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin', HOME: path.join(stateDir, 'home'), XDG_CONFIG_HOME: path.join(stateDir, 'config'), XDG_DATA_HOME: path.join(stateDir, 'data'),
       XDG_STATE_HOME: path.join(stateDir, 'state'), XDG_CACHE_HOME: path.join(stateDir, 'cache'), TMPDIR: path.join(stateDir, 'tmp'), ...HARDEN_ENV };
-    const spec: ContainmentSpec = { workspace, workspaceWritable: writable, scratch: stateDir, allowTcp: [{ port: net0.port }], listenPorts: [port], readonlyPaths: ['/opt/homebrew/bin', '/opt/homebrew/Cellar/opencode'], env };
+    const spec: ContainmentSpec = { workspace, workspaceWritable: writable, denyWrite, scratch: stateDir, allowTcp: [{ port: net0.port }], listenPorts: [port], readonlyPaths: ['/opt/homebrew/bin', '/opt/homebrew/Cellar/opencode'], env };
     const child = spawnContained(spec, this.o.bin, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], { cwd: workspace });
     let log = ''; child.stdout!.on('data', (d) => { log += d; }); child.stderr!.on('data', (d) => { log += d; });
     const base = `http://127.0.0.1:${port}`; let password = ''; const t0 = Date.now();
@@ -192,7 +192,7 @@ export class OpenCodeRunner implements AgentRunner {
       const wsDir = realpathSync(req.workspace?.dir ?? req.packetDir); const writable = !!req.workspace?.writable;
       const w = this.windowProblem(); if (w) return { outcome: 'failed', reason: w, usage: usage() };
       if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-ctx ${JSON.stringify({ contextLimit: this.o.contextLimit, outputLimit: this.o.outputLimit, windowGuard: this.o.windowGuard })}\n`);
-      s = await this.start(wsDir, signal, writable);
+      s = await this.start(wsDir, signal, writable, req.workspace?.denyWrite ?? []);
       const re = await this.resolve(s, signal); if (!re.ok) return { outcome: 'failed', reason: `routing re-check failed at execution time: ${re.reasons.join('; ')}`, usage: usage() };
       const ses = await s.api('POST', '/api/session', { title: 'warden-review', model: { id: this.o.modelId, providerID: LOCAL_PROVIDER_ID }, location: { directory: wsDir }, permissions: [DENY_ALL, ...req.tools.allow.map((a) => ({ action: a, resource: '*', effect: 'allow' as const }))] });
       if (ses.status !== 200) return { outcome: 'failed', reason: `create session ${ses.status}`, usage: usage() };
