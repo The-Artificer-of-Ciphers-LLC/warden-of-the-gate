@@ -285,7 +285,7 @@ test('rework refuses: not factory-owned, not a factory branch, stale review, not
 
 test('ADR 0014 rework keeps the freeze: the PR ledger carries it from the open; the session cannot write the frozen tests, and changing, deleting or disputing one consumes a cycle and pushes nothing; a drifted branch blocks before any session', async (t) => {
   const { s, pr, rw } = await openedPr(t); const led = await ledgerOf(s.r, pr.number);
-  assert.deepEqual(led.frozen?.files.map((f) => f.path), ['test/sum.test.js']); assert.equal(led.frozen?.baseCommit, s.cfg.baseSha); assert.match(led.frozen!.files[0].sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(led.frozen?.files.map((f) => f.path), ['test/sum.test.js']); assert.equal(led.frozen?.baseCommit, s.cfg.baseSha); assert.match(led.frozen!.files[0].sha256, /^[0-9a-f]{64}$/); assert.deepEqual(led.frozenResult, [{ check: 'unit', exit: 1 }], 'what the frozen tests did on the base is recorded for the decision card');
   const before = git(s.bare, ['rev-parse', `refs/heads/warden/bug-${s.n}`]).trim();
   const c = await openedPr(t); const ok = reworkModel(REWORK_FIX, ['f1']); const done = await c.rw(ok); assert.equal(done.kind, 'reworked', JSON.stringify(done));   // an untampered rework still works, on its own PR
   assert.ok(ok.sessions[0].deny!.includes('test/sum.test.js'), 'the OS write denial covers the frozen test'); assert.match(ok.sessions[0].prompt, /FROZEN[^\n]*test\/sum\.test\.js/);
