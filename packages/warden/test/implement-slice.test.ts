@@ -214,6 +214,13 @@ test('ADR 0016 mutation: no tool is unsupported (never a pass); a killed mutant 
   const again = await bad.run(new Model(goodEdit), { cfg: { ...bad.cfg, mutation: TOOL('Survived') } }); assert.equal(again.kind, 'opened', JSON.stringify(again)); assert.match(bad.published[0].body, new RegExp(`1 cleared by a maintainer as equivalent \\(${id}\\)`));
 });
 
+test('ADR 0016 properties: the test session is told to prefer properties for pure logic; their presence among the frozen tests is reported from the files, not from the model', async (t) => {
+  const none = await setup(); t.after(none.cleanup); const m = new Model(goodEdit); assert.equal((await none.run(m)).kind, 'opened');
+  assert.match(m.sessions[0].prompt, /prefer property-based tests[^\n]*Properties are encouraged, not required/); assert.match(none.published[0].body, /property-based tests among the frozen tests: none \(example tests only\)/);
+  const prop = await setup(); t.after(prop.cleanup); const o = await prop.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'test') writeFileSync(join(ws, 'test/sum.test.js'), TEST + "// const fc = require('fast-check'); fc.assert(fc.property(fc.nat(), (n) => n >= 0));\n"); }));
+  assert.equal(o.kind, 'opened', JSON.stringify(o)); assert.match(prop.published[0].body, /property-based tests among the frozen tests: test\/sum\.test\.js/);
+});
+
 test('takeover: abandoned contributor work is read as DATA on top of the trusted base, ported work is credited, the factory branch is separate and the contributor branch is never touched', async (t) => {
   let abandoned = 0;
   const s = await setup({ ledger: () => undefined }); t.after(s.cleanup);
