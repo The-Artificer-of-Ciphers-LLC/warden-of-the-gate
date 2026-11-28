@@ -83,6 +83,8 @@ export interface Ledger {
   forceReview?: { by: string; at: string };
   /** Findings a maintainer dismissed (`/warden dismiss <fingerprint>`); a dismissed finding stays dismissed while its code is unchanged (the fingerprint includes the anchor text). */
   dismissed?: Record<string, { by: string; at: string; reason?: string }>;
+  /** ADR 0016: surviving mutants a maintainer cleared as equivalent (`/warden clear-mutant <id> <reason>`). The id includes the mutated line's text, so a clearance lapses when that code changes. */
+  mutantClearances?: Record<string, { by: string; at: string; reason: string }>;
   /** The review last posted to GitHub for this PR (head and the fingerprints it contained): the same review is never posted twice. */
   reviewPosted?: { head: string; fingerprints: string[]; at: string };
   /** Critical escape / unauthorized effect: the affected scope is paused (only notes and an explicit maintainer resume are accepted) and evidence is preserved. */

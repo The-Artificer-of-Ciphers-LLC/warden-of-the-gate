@@ -488,6 +488,34 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 6
+        },
+        "mutation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "args": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "reportPath": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 3600000
+            }
+          }
         }
       }
     },

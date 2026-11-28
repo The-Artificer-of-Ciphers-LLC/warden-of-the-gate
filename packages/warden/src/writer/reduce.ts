@@ -57,6 +57,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
       if (l.owner && l.owner.id === i.actor) return { accept: true, plan: [...project(c.policy, 'claimed', 'ready'), note(`Released by ${i.actor}.`)], apply: (led) => { led.state = 'ready'; led.owner = null; led.obligations = led.obligations.filter((x) => x.type !== 'delivery'); } };
       return rej('not-owner', `Release by ${i.actor} rejected: not the current owner.`);
     }
+    case 'clear-mutant': return clearMutant(l, i, c);
     case 'note': return { accept: true, plan: [note(String(pl.text ?? 'note'))] };
     case 'transition': {
       const to = String(pl.to ?? ''); const from = l.state;
@@ -326,6 +327,15 @@ function forceReview(l: Ledger, i: Intent, c: ReduceCtx): Decision {
 }
 /** `/warden dismiss <fingerprint> [reason]`: a maintainer dismisses ONE finding. It stays dismissed while its code is unchanged (the fingerprint includes the anchor line's text) and is removed from the
  *  recorded severities, so it no longer gates a merge. */
+/** `/warden clear-mutant <id> <reason>`: a maintainer clears ONE surviving mutant as equivalent. Warden never marks a mutant equivalent itself. */
+function clearMutant(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Clearance rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Clearance by ${i.actor} rejected: not an authorized maintainer.`);
+  const pl = i.payload as { mutant?: string; reason?: string }; const id = String(pl.mutant ?? ''); const reason = String(pl.reason ?? '').trim();
+  if (!/^[0-9a-f]{12}$/.test(id) || !reason) return rej('clear-mutant-malformed', 'Clearance rejected: name one mutant id and give a reason.');
+  if (l.mutantClearances?.[id]) return rej('already-cleared', `Mutant ${id} is already cleared.`);
+  return { accept: true, plan: [note(`Mutant ${id} cleared by ${i.actor} as equivalent (${reason.slice(0, 200)}). The clearance lapses when that code changes.`)], apply: (led) => { led.mutantClearances = { ...(led.mutantClearances ?? {}), [id]: { by: i.actor, at: iso(c.now), reason: reason.slice(0, 200) } }; } };
+}
 function dismissFinding(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!c.sourceVerified) return rej('unverified-source', 'Dismissal rejected: the GitHub source could not be verified.');
   if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Dismissal by ${i.actor} rejected: not an authorized maintainer.`);
