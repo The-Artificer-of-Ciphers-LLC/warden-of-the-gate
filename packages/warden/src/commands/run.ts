@@ -1,3 +1,4 @@
+import { lastSweepRecord } from '../sweep/last.ts';
 import { mustReviewAgain } from '../review/force.ts';
 import { reviewPostIntent, reviewRecordIntent } from '../review/record.ts';
 import { GitHubPublisher, HttpsGitRemote, PathRemote } from '../implement/github-publisher.ts';
@@ -74,6 +75,7 @@ export async function run(c: Ctx): Promise<Result> {
       const findings = await planSweep(store, cfg, { now, skip });
       const sw = await submitSweep(findings, { ...base, repo: cfg.repository });
       const rec = await submitReconcile(await planReconcile(store, cfg, { skip }), { ...base, repo: cfg.repository });
+      const last = lastSweepRecord({ now, clockActions: sw.submitted.length, deferred: sw.skipped.length, reconciles: rec.length, aborted: abort.signal.aborted }); if (last) { mkdirSync(st.path('.'), { recursive: true, mode: 0o700 }); st.writeJson(st.path('last-sweep.json'), last); }   // status reports it
       return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred; run \`warden writer drain\` to apply` };
     }
     const makeSink = (): IntentSink => {
