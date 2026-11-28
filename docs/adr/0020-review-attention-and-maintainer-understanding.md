@@ -1,8 +1,8 @@
 # Review attention classes: the maintainer chooses which code they keep reading
 
-- **Status:** Proposed, awaiting owner review (2026-11-26). Nothing here changes behavior until accepted.
+- **Status:** Accepted as amended by the owner decision below (2026-11-28).
 - **Date:** 2026-11-26
-- **Decided by:** pending @trek-e
+- **Decided by:** @trek-e, 2026-11-28
 - **Research:** [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md), mapping rows 7-9 and 22-24
 
 ## Context
@@ -30,11 +30,12 @@ This is not the same as ADR 0015's boundary classes. A boundary class is about r
 - Adds one report (the digest) and one config section. No model work, no authority change.
 - Not measured: whether digests are read, or whether reading them preserves understanding. Retro can count digests opened only if the channel reports opens.
 
-## Questions for the owner
+## Owner decision (2026-11-28)
 
-1. Adopt attention classes?
-2. Which modes to offer: all three, or only `read-after` plus today's default?
-3. Digest cadence: per Retro run, weekly, or per merge?
+- Adopted, with all three modes. The owner: "only from trusted sources, contributor pre from forks or non-trusted sources, no." The lighter modes (`read-after` and `evidence-only` in place of full review) apply only to PRs from trusted sources. A contributor PR from a fork or another untrusted source always gets full review, whatever attention class its paths have.
+- The digest goes out weekly, with the Retro run ("Yes, open the PR" to the proposal). Basis: Phabricator's post-publish audit is nonblocking, and its guide gives reviewing a set of changes "at the end of the week" as its example ([Phabricator Audit](https://secure.phabricator.com/book/phabricator/article/audit/)); GitHub CODEOWNERS is the established path-based review before merge ([GitHub](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)).
+
+The questions this ADR asked were: adopt attention classes; which modes to offer; digest cadence.
 
 ## Related
 
