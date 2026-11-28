@@ -273,6 +273,25 @@ async function sectionD(r: Report) {
     }
     return false;
   };
+  /**
+   * Start the long count in session `sid` and return once tokens are flowing on the tap. The small model sometimes cuts the
+   * count short (2026-11-28: D5 passed on one run, then found nothing streaming on the next), so a turn that ends before
+   * streaming is seen is recorded and the prompt is sent again, up to 3 times. `generating` is false only if no attempt
+   * streamed; the checks that need it then fail rather than act on a finished turn.
+   */
+  const startLongGeneration = async (sid: string) => {
+    const attempts: { outcome: string; ms: number; finish?: string; textChars: number }[] = [];
+    let last: any;
+    for (let i = 0; i < 3; i++) {
+      last = await prompt(s, sid, LONG_GENERATION);
+      if (await waitGenerating(90000)) return { generating: true, prompt: last, attempts };
+      const d = await awaitCompletion(s, sid, last.time.created - 1, 30000);
+      const lastAsst = d.msgs.filter((m: any) => m.type === 'assistant' && m.time?.created >= last.time.created).at(-1);
+      attempts.push({ outcome: d.outcome, ms: d.ms, finish: lastAsst?.finish, textChars: summarize(lastAsst ? [lastAsst] : []).text.length });
+      if (d.timedOut) break; // a turn still running but not streaming: do not stack another prompt on it
+    }
+    return { generating: false, prompt: last, attempts };
+  };
   const openStreams = (before = Infinity) => inferenceRequests(tap, 0, before).filter((x) => x.completedAt === undefined && x.clientClosedAt === undefined);
   let s = await boot(tapCfg(), ws);
   const writeTools = [DENY_ALL, allow('read'), allow('write'), allow('edit'), allow('apply_patch')];
@@ -283,8 +302,8 @@ async function sectionD(r: Report) {
   let ses = await createSession(s, { directory: ws, permissions: writeTools });
   const w1 = await runPrompt(s, ses.id, 'You are an automated test harness. You MUST call the write tool with the exact arguments given; never describe or simulate a call. Call the write tool to create the file notes.txt with exactly this content: PARTIAL-WORK. Then reply with the single word: written');
   const wrote = existsSync(path.join(ws, 'notes.txt'));
-  const p1 = await prompt(s, ses.id, LONG_GENERATION);
-  const generatingAtInterrupt = await waitGenerating(60000); // the long count must be streaming when the interrupt lands
+  const long1 = await startLongGeneration(ses.id); // the long count must be streaming when the interrupt lands
+  const p1 = long1.prompt; const generatingAtInterrupt = long1.generating;
   const metricsBefore = await metricsSnapshot();
   const t0 = Date.now();
   const openAtInterrupt = openStreams(t0); // live records: their clientClosedAt fills in when the harness hangs up
@@ -299,7 +318,7 @@ async function sectionD(r: Report) {
   const m1 = await messages(s, ses.id);
   const sm1 = summarize(m1);
   const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  check(r, { id: 'D1-interrupt-stops-generation', claim: 'interrupt returns, session records outcome=interrupted, and the harness stops the generation it asked for: every inference stream open at the interrupt is hung up within 3s (observed on the wire by the tap) and no new inference request starts', expected: 'generating at interrupt; interrupted; >=1 open stream, all hung up <=3s; 0 new', observed: { generatingAtInterrupt, interrupt: ir.body, outcome: done.outcome, stopMs, streamsOpenAtInterrupt: streams, startedAfterInterrupt }, pass: generatingAtInterrupt && ir.body?.interrupted === true && done.outcome === 'interrupted' && allHungUp && startedAfterInterrupt === 0 });
+  check(r, { id: 'D1-interrupt-stops-generation', claim: 'interrupt returns, session records outcome=interrupted, and the harness stops the generation it asked for: every inference stream open at the interrupt is hung up within 3s (observed on the wire by the tap) and no new inference request starts', expected: 'generating at interrupt; interrupted; >=1 open stream, all hung up <=3s; 0 new', observed: { generatingAtInterrupt, shortTurnsBeforeStreaming: long1.attempts, interrupt: ir.body, outcome: done.outcome, stopMs, streamsOpenAtInterrupt: streams, startedAfterInterrupt }, pass: generatingAtInterrupt && ir.body?.interrupted === true && done.outcome === 'interrupted' && allHungUp && startedAfterInterrupt === 0 });
   // Server side: mlx-serve documents /metrics.json (with --metrics) but not its keys. The owner's build (2026-11-28) reports
   // counters.requests_cancelled_total and gauges.requests_running. Each stream the harness hung up must show up as a cancelled
   // request on the server, i.e. mlx-serve stopped it. The server is shared, so the counter can only rise by MORE (another client's
@@ -318,8 +337,8 @@ async function sectionD(r: Report) {
 
   // D5 hard crash (SIGKILL) mid-run, restart on the same state dir
   ses = await createSession(s, { directory: ws, permissions: [DENY_ALL], title: 'crash-victim' });
-  await prompt(s, ses.id, LONG_GENERATION);
-  const generatingAtKill = await waitGenerating(60000);
+  const long5 = await startLongGeneration(ses.id); // the SIGKILL must land while tokens are streaming
+  const generatingAtKill = long5.generating;
   const metricsDuringCrash = await metricsSnapshot();
   const tk = Date.now();
   const openAtKill = openStreams(tk);
@@ -350,7 +369,7 @@ async function sectionD(r: Report) {
   // Recovery policy: never continue the crashed session; start a FRESH one (ADR 0004: fresh session per item).
   const fresh = await createSession(s2, { directory: ws, permissions: [DENY_ALL], title: 'recovery' });
   const rr2 = await runPrompt(s2, fresh.id, 'Reply with the single word: recovered', 120000);
-  check(r, { id: 'D5-crash-recovery', claim: 'after SIGKILL of the harness mid-generation, a restarted harness on the same state dir still lists the crashed session and its prompt (audit trail); a FRESH session on the restarted harness completes normally, and no inference stream is left open: the killed harness\'s stream to the model server hangs up within 3s of the kill and none is open after recovery (observed by the tap; whether mlx-serve stops decoding is D1b)', expected: 'session + prompt persisted; stream hung up; 0 open; fresh session succeeds', observed: { generatingAtKill, sessionListed: !!found, userPromptPersisted: !!userMsg, harnessAutoResumedUnfinishedTurn: autoResumed, interrupt: intr2.body, streamsOpenAtKill: killStreams, openStreamsAfterRecovery: openAfterRecovery, freshOutcome: rr2.done.outcome, freshText: rr2.summary.text.slice(0, 30) }, pass: !!found && !!userMsg && killHungUp && openAfterRecovery === 0 && rr2.done.outcome === 'succeeded' && /recovered/i.test(rr2.summary.text) });
+  check(r, { id: 'D5-crash-recovery', claim: 'after SIGKILL of the harness mid-generation, a restarted harness on the same state dir still lists the crashed session and its prompt (audit trail); a FRESH session on the restarted harness completes normally, and no inference stream is left open: the killed harness\'s stream to the model server hangs up within 3s of the kill and none is open after recovery (observed by the tap; whether mlx-serve stops decoding is D1b)', expected: 'session + prompt persisted; stream hung up; 0 open; fresh session succeeds', observed: { generatingAtKill, shortTurnsBeforeStreaming: long5.attempts, sessionListed: !!found, userPromptPersisted: !!userMsg, harnessAutoResumedUnfinishedTurn: autoResumed, interrupt: intr2.body, streamsOpenAtKill: killStreams, openStreamsAfterRecovery: openAfterRecovery, freshOutcome: rr2.done.outcome, freshText: rr2.summary.text.slice(0, 30) }, pass: !!found && !!userMsg && killHungUp && openAfterRecovery === 0 && rr2.done.outcome === 'succeeded' && /recovered/i.test(rr2.summary.text) });
   // Informational: what happens if the runner instead re-prompts the crashed session
   const same = await runPrompt(s2, ses.id, 'Reply with the single word: recovered', 150000);
   check(r, { id: 'D5b-same-session-resume-hazard', claim: 'FINDING (informational): re-prompting the crashed session also answers its dangling unanswered prompt (long essay), i.e. unbounded work - so recovery must use a fresh session', expected: 'informational', observed: { outcome: same.done.outcome, ms: same.done.ms, replyChars: same.summary.text.length, harnessAutoResumedUnfinishedTurn: autoResumed }, pass: true, severity: 'informational' });
