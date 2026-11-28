@@ -1,8 +1,8 @@
 # A bounded verification loop owned by the orchestrator, and evidence that the tests guard behavior
 
-- **Status:** Proposed, awaiting owner review (2026-11-25). Nothing here changes behavior until accepted, except the owner rulings below.
+- **Status:** Accepted by @trek-e on 2026-11-27 ("Accept, in that order"), proposed 2026-11-25. Build order, decided with it: 0014 (frozen tests), then 0016 (verification loop), then 0015 (contract review). This ADR is built second. The owner rulings below were made before acceptance and stand.
 - **Date:** 2026-11-25
-- **Decided by:** pending @trek-e
+- **Decided by:** @trek-e (rulings 2026-11-25 and 2026-11-27; accepted 2026-11-27)
 - **Research:** [Review the tests, not the diff](../research/TESTS-OVER-CODE-REVIEW.md)
 
 ## Context
