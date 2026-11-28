@@ -113,6 +113,10 @@ changes in how it is observed:
   Flash model wrote the file and ended the turn, so nothing was streaming at the interrupt. D1 now writes `notes.txt` in
   one turn, then interrupts a second turn of the same session running the long count, as D5 does. D2 still requires
   that uncommitted write to be listed by git after the cancel.
+- **D1 and D5 resend the count if the model cuts it short** (third 2026-11-28 rerun): D5 passed on one run and on the
+  next found nothing streaming at the kill, because the small model sometimes ends the count early. The count is now
+  sent up to 3 times in the same session, each time waiting up to 90 s for tokens to flow on the tap, and every short
+  turn is recorded under `shortTurnsBeforeStreaming`. D1 and D5 still fail if no attempt streams.
 - **C4 compares the resolved model with the configured default.** On 2.2.7 the hardened hosted-default case resolved
   to another LM Studio model OpenCode found by itself, which failed the expected-model check. On 2.4.1 that provider is
   denied and only the expected model is declared, so OpenCode substituted the expected model and the case passed by
