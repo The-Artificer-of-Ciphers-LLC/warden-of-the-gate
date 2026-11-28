@@ -44,3 +44,22 @@ P1 scheduling gate and Support case 5025247; adoption command syntax; App Conten
 ## P7 measurement track (runs alongside)
 
 State: not qualified. New model, dev half, one run: accepted 17/18, recall 3/6, strict extras 13 of 16. The finding-id prompt rule was tried and not adopted (item 1.12). A repeat run of the unmodified setup, to measure variance, has not been done. A clean holdout on the current harness does not exist, and any further run on that holdout is another look at it.
+
+## Progress (2026-11-27): Wave 1 executed
+
+| # | State | PR | Notes |
+|---|---|---|---|
+| 1.1 | merged | 126 | Operator docs: Node 26, mlx-serve, ADR table through 0024 |
+| 1.2 | merged | 125 | Outgoing validation; also checked before the plan is recorded in the ledger |
+| 1.3 | merged | 127 | Real assignability check (optional `Store.canAssign`) |
+| 1.4 | merged | 128 | Fingerprints, inline flags, severity-ranked cap helper |
+| 1.5 | merged | 129 | `review-record` producer, live mode only. Triage records NOT done: they need a new intent kind and a ruling on what an accepted triage does in live mode |
+| 1.6 | merged | 130 | `review-post`: COMMENT review plus check run, fake GitHub only; the HttpStore calls are written to the REST docs and never run (needs pull-requests and checks write) |
+| 1.7 | merged | 131 | `/warden review` and `/warden dismiss`; login-based authorization (PRD says numeric ID); scan path not yet honouring a forced review |
+| 1.8 | merged | 132 | Review config keys, optional finding confidence, authorized urgency for review and triage scans. Open: review DEPTH has no defined options; the prompt does not ask for confidence; `approvedFeature` has no caller until an implement scan exists |
+| 1.9 | merged | 133 | `last-sweep.json` written by a completed Mac-side sweep |
+| 1.10 | merged | 134 | Closure caps (5 per run, 10 per day: unspecified numbers chosen by the agent) and a single-scan lock. The per-day count is host-local |
+| 1.11 | merged | 135 | Configured voice on posted comments; style wording unreviewed |
+| 1.12 | closed | n/a | Finding-id prompt rule tried and not adopted |
+
+Everything above ran against the simulated GitHub and scripted models. Nothing was posted to a real repository, no permission or token changed, nothing was published or activated.
