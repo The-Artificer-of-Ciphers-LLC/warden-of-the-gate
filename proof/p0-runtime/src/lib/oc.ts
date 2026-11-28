@@ -1,4 +1,4 @@
-// OpenCode (pinned v2.x) headless driver over its local HTTP API. Evidence harness, not production.
+// OpenCode (any 2.x from 2.2.7, ADR 0004 amendment 2026-11-27) headless driver over its local HTTP API. Evidence harness, not production.
 // Isolation of harness state: XDG_* dirs + scrubbed env, so the maintainer's own ~/.config/opencode
 // (remote providers, MCP servers, plugins) can never influence a proof run.
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -7,8 +7,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnContained, type ContainmentSpec } from './seatbelt.ts';
 
-export const PINNED_OPENCODE = '2.2.7';
+/** Same range as packages/warden/src/version.ts: any 2.x at or above 2.2.7 (the version these proofs first ran on). 1.x and 3.x+ are refused. */
+export const OPENCODE_MAJOR = 2;
+export const OPENCODE_FLOOR = '2.2.7';
+export const SUPPORTED_OPENCODE = `>=${OPENCODE_FLOOR} <${OPENCODE_MAJOR + 1}.0.0`;
 export const OPENCODE_BIN = '/opt/homebrew/bin/opencode';
+
+/** `opencode --version` prints e.g. "opencode v2.4.1"; compare only the semantic version. */
+export function parseVersion(out: string): string | undefined { return String(out).match(/(\d+\.\d+\.\d+)/)?.[1]; }
+/** True when `version` is inside SUPPORTED_OPENCODE (same major, not below the floor). */
+export function inSupportedRange(version: string | undefined): boolean {
+  if (!version || !/^\d+\.\d+\.\d+$/.test(version)) return false;
+  const [ma, mi, pa] = version.split('.').map(Number); const [fa, fi, fp] = OPENCODE_FLOOR.split('.').map(Number);
+  if (ma !== OPENCODE_MAJOR) return false;
+  return !(ma < fa || (ma === fa && (mi < fi || (mi === fi && pa < fp))));
+}
 
 export interface ServerOpts {
   config: Record<string, unknown>;
@@ -32,6 +45,8 @@ export interface Server {
   api: (method: string, p: string, body?: unknown, signal?: AbortSignal) => Promise<{ status: number; body: any }>;
   stop: (sig?: NodeJS.Signals) => Promise<void>;
   pid: number;
+  /** ms from "listening" until GET /api/provider or /api/model/default first showed loaded providers (-1 = never, within the wait). */
+  providersReadyMs: number;
 }
 
 export function harnessEnv(stateDir: string, extra: Record<string, string> = {}): Record<string, string> {
@@ -77,8 +92,21 @@ export async function startServer(o: ServerOpts): Promise<Server> {
     let j: any = t; try { j = JSON.parse(t); } catch { /* keep text */ }
     return { status: r.status, body: j };
   };
+  // OpenCode 2.4.x prints "listening" before its providers load: for a few seconds GET /api/provider answers `data: []` and
+  // GET /api/model/default answers `data: null` (owner's probe, 2026-11-28). Wait for the load, as the Warden adapter does
+  // (judgeRouting's `loading` state), so a check never judges a half-started harness. Non-fatal: preflight still judges what it sees.
+  let providersReadyMs = -1; const tl = Date.now();
+  while (Date.now() - tl < 30000) {
+    if (child.exitCode !== null) break;
+    try {
+      const [prov, def] = await Promise.all([api('GET', '/api/provider'), api('GET', '/api/model/default')]);
+      const loaded = (Array.isArray(prov.body?.data) && prov.body.data.length > 0) || !!def.body?.data;
+      if (loaded || prov.status !== 200 || def.status !== 200) { providersReadyMs = Date.now() - tl; break; }
+    } catch { /* not answering yet */ }
+    await new Promise((r) => setTimeout(r, 250));
+  }
   return {
-    base, password, child, stateDir, pid: child.pid!, api, logs: () => log,
+    base, password, child, stateDir, pid: child.pid!, api, logs: () => log, providersReadyMs,
     stop: async (sig = 'SIGTERM') => {
       try { process.kill(-child.pid!, sig); } catch { /* gone */ }
       await new Promise((r) => setTimeout(r, 400));

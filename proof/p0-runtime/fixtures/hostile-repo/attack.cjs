@@ -59,7 +59,7 @@ async function run(lbl) {
   // --- network ---
   await conn('tcp_approved_port', 'control', '127.0.0.1', T.approvedPort);
   await conn('tcp_unapproved_loopback_port', 'network', '127.0.0.1', T.deniedPort);
-  await conn('tcp_lmstudio_port', 'network', '127.0.0.1', T.lmstudioPort);
+  await conn('tcp_model_server_port', 'network', '127.0.0.1', T.modelPort);
   if (T.full) {
     await conn('tcp_internet_1.1.1.1_443', 'network', '1.1.1.1', 443, 3000);
     await new Promise((res) => dns.lookup('example.com', (e, a) => { rec('dns_example_com', 'network', e ? 'BLOCKED' : 'ALLOWED', e ? e.code : a); res(); }));

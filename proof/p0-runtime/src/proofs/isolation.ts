@@ -6,6 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { check, finish, newReport, PROOF_ROOT, sh } from '../lib/report.ts';
+import { MODEL_PORT } from '../lib/runtime-common.ts';
 import {
   buildProfile, containmentSelfTest, defaultBackend, realpath, runContained, runGuarded, ContainmentUnavailableError,
   type Backend, type ContainmentSpec, type RunResult,
@@ -64,7 +65,23 @@ async function main() {
   mkdirSync(canaryDir);
   const canaryFile = path.join(canaryDir, 'credentials');
   writeFileSync(canaryFile, 'HOME-CREDENTIAL-CANARY');
-  const lm = 1235; // real local LM Studio server port on this Mac
+  // The local model server's port (mlx-serve, 11234). Contained code must not reach it. If nothing listens there (no model server
+  // running), the proof opens a stand-in listener on it, so the uncontained control still connects and the check needs no model.
+  const modelPort = MODEL_PORT;
+  // Connect first and open the stand-in only if nothing answers: on macOS a 127.0.0.1 bind can succeed beside a server bound to
+  // 0.0.0.0 (SO_REUSEADDR), which would steal the maintainer's own model traffic for the length of the proof.
+  const answering = await new Promise<boolean>((resolve) => {
+    const c = net.connect({ host: '127.0.0.1', port: modelPort });
+    const t = setTimeout(() => { c.destroy(); resolve(true); }, 1500); // no refusal: something holds the port
+    c.on('connect', () => { clearTimeout(t); c.destroy(); resolve(true); });
+    c.on('error', (e: NodeJS.ErrnoException) => { clearTimeout(t); resolve(e.code !== 'ECONNREFUSED'); });
+  });
+  const standIn = answering ? null : await new Promise<net.Server | null>((resolve) => {
+    const srv = net.createServer((c) => c.destroy());
+    srv.once('error', () => resolve(null));
+    srv.listen(modelPort, '127.0.0.1', () => resolve(srv));
+  });
+  report.inputs.modelPort = { port: modelPort, listener: standIn ? 'proof stand-in (no model server running)' : 'model server already listening' };
   const approved = await listen();
   const denied = await listen();
   process.env.WARDEN_WRITE_TOKEN = CANARY_TOKEN; // present in the maintainer env; must never reach contained code
@@ -72,7 +89,7 @@ async function main() {
   const mainCheckout = realpath(path.resolve(PROOF_ROOT, '..', '..', '..', '..', '..')); // unrelated checkout on disk
   const targets = (full: boolean) => ({
     full, canaryFile, canaryDir, outsideDir, siblingSentinel: path.join(siblingDir, 'other-repo-secret.txt'), mainCheckout,
-    credPaths: CRED_CANDIDATES, approvedPort: approved.port, deniedPort: denied.port, lmstudioPort: lm,
+    credPaths: CRED_CANDIDATES, approvedPort: approved.port, deniedPort: denied.port, modelPort,
   });
   const devDir = sh('xcode-select', ['-p']);
   const mkWs = (name: string) => {
@@ -98,7 +115,7 @@ async function main() {
         cwd: ws, encoding: 'utf8', env: { ...process.env, ATTACK_TARGETS: JSON.stringify(targets(false)) }, timeout: 60000,
       });
       const att = parseAttack(r.stdout);
-      const need = ['read_canary_in_home', 'list_home_dir', 'read_sibling_sentinel', 'env_has_write_token', 'write_parent_of_workspace', 'write_canary_dir', 'write_outside_tmp', 'symlink_read_canary', 'tcp_unapproved_loopback_port', 'tcp_lmstudio_port'];
+      const need = ['read_canary_in_home', 'list_home_dir', 'read_sibling_sentinel', 'env_has_write_token', 'write_parent_of_workspace', 'write_canary_dir', 'write_outside_tmp', 'symlink_read_canary', 'tcp_unapproved_loopback_port', 'tcp_model_server_port'];
       const allowed = need.filter((id) => att.find((a) => a.id === id)?.outcome === 'ALLOWED');
       check(report, { id: 'F1-control-uncontained', claim: 'positive control: with no boundary the same hostile payload reads the home canary, sees the write token, escapes the workspace and reaches unapproved loopback ports', expected: 'all control vectors ALLOWED', observed: { allowed, missing: need.filter((n) => !allowed.includes(n)) }, pass: allowed.length === need.length });
       report.inputs.uncontainedControlOutcomes = Object.fromEntries(att.map((a) => [a.id, a.outcome]));
@@ -184,7 +201,7 @@ async function main() {
       check(report, { id: 'F4-memory-limit-ulimit-v', claim: 'UNAVAILABLE GUARANTEE (informational): a per-process memory cap cannot be set on macOS (ulimit -v fails with EINVAL) - memory must be bounded by the model/context budget, the wall-clock kill and host-level monitoring instead', expected: 'informational: documents whether ulimit -v works', observed: mem.stdout.trim().split('\n').slice(-2), pass: true, severity: 'informational' });
     }
   } finally {
-    approved.server.close(); denied.server.close();
+    approved.server.close(); denied.server.close(); standIn?.close();
     rmSync(canaryDir, { recursive: true, force: true });
     rmSync(path.join(home, '.warden-p0-escaped.txt'), { force: true });
     rmSync(base, { recursive: true, force: true });

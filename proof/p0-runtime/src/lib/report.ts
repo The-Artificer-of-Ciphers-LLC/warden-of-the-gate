@@ -12,8 +12,9 @@ export interface Check {
   expected: string;
   observed: unknown;
   pass: boolean;
-  /** 'blocked' = a required guarantee is unavailable (stop dependent work). */
-  severity?: 'required' | 'informational';
+  /** 'required' decides the verdict. 'informational' records an observation. 'unverified' is a claim this setup cannot observe
+   *  (e.g. mlx-serve documents no per-request status): it never passes, never decides the verdict, and is listed so nobody reads it as proven. */
+  severity?: 'required' | 'informational' | 'unverified';
 }
 
 export interface Report {
@@ -62,18 +63,19 @@ export function newReport(proof: string, area: string, inputs: Record<string, un
 
 export function check(r: Report, c: Omit<Check, 'severity'> & { severity?: Check['severity'] }): boolean {
   r.checks.push({ severity: 'required', ...c });
-  const tag = c.pass ? 'PASS' : 'FAIL';
+  const tag = c.severity === 'unverified' ? 'UNVERIFIED' : c.pass ? 'PASS' : 'FAIL';
   console.log(`[${tag}] ${c.id}: ${c.claim}`);
-  if (!c.pass) console.log(`        expected: ${c.expected}\n        observed: ${JSON.stringify(c.observed)?.slice(0, 600)}`);
+  if (!c.pass && c.severity !== 'unverified') console.log(`        expected: ${c.expected}\n        observed: ${JSON.stringify(c.observed)?.slice(0, 600)}`);
   return c.pass;
 }
 
 export function finish(r: Report, file: string): Report {
   r.finishedAt = new Date().toISOString();
-  r.verdict = r.checks.filter((c) => c.severity !== 'informational').every((c) => c.pass) ? 'PASS' : 'FAIL';
+  r.verdict = r.checks.filter((c) => c.severity === 'required').every((c) => c.pass) ? 'PASS' : 'FAIL';
   mkdirSync(RESULTS_DIR, { recursive: true });
   writeFileSync(path.join(RESULTS_DIR, file), JSON.stringify(r, null, 2) + '\n');
   const p = r.checks.filter((c) => c.pass).length;
-  console.log(`\n${r.area}: ${r.verdict} (${p}/${r.checks.length} checks) -> results/${file}`);
+  const u = r.checks.filter((c) => c.severity === 'unverified').length;
+  console.log(`\n${r.area}: ${r.verdict} (${p}/${r.checks.length} checks${u ? `, ${u} unverified` : ''}) -> results/${file}`);
   return r;
 }
