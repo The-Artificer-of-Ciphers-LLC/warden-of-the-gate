@@ -1,6 +1,6 @@
 # A model new to the pool qualifies itself on replay
 
-- **Status:** Accepted as amended by the owner decision below (2026-11-28). Builds on ADR 0018. The file name keeps its original slug so existing links work.
+- **Status:** Accepted as amended by the owner decision below (2026-11-28). Builds on ADR 0018. The file name keeps its original slug so existing links work. A further amendment (qualification covers the harness and settings too) was accepted on 2026-11-28; see the end of this ADR.
 - **Date:** 2026-11-26
 - **Decided by:** @trek-e, 2026-11-28
 - **Research:** [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md), mapping rows 2 and 6
@@ -40,6 +40,37 @@ Basis:
 - The same model name can change behavior substantially within months ([Chen, Zaharia and Zou, 2023](https://arxiv.org/abs/2307.09009)).
 
 The questions this ADR asked were: should a new model start paused; does a weights or version change count as new; may one-off frontier verdicts count before a regression pass.
+
+## Amendment (2026-11-28): a qualification covers the harness and settings too
+
+**Decided 2026-11-28 (@trek-e): "Merge" on PR 175, in answer to "Merging it is your yes to the four proposals."** Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lessons A and J.
+
+### Why
+
+The post trained one LoRA adapter per harness (pi, OpenCode, Hermes Agent) on the same base model and evaluated each under its own harness. The same weights scored differently under each harness and with thinking on or off, and the authors say "you cannot compare the results across different harnesses" because one of them compacts context and the others do not (Evaluation setup). An adapter trained on one harness changed behavior under another (Does the efficiency and performance ability transfer across harnesses?), and none of the adapters clearly carried to a very different agent loop (Evaluation on out-of-distribution tasks and setup).
+
+This ADR's identity names the endpoint, the model id and the version or weights digest. Provenance already records the harness and its version (`runner/provenance.ts`), and ADR 0018 already runs replay on every harness, prompt or configuration change. But the identity that decides whether a model is new leaves the harness and the settings out, so a model qualified under one harness version and thinking mode counts under another without a passing run.
+
+### Decision
+
+- **A qualification is for one configuration.** It covers the model identity above plus:
+  - the harness name and the major version of the version the run reported (`harnessVersion`, ADR 0004). A minor or patch release of the same major version keeps the qualification (owner decision below);
+  - the settings that change what the model does: thinking or reasoning mode and effort, sampling temperature, and the harness's context compaction setting;
+  - the digest of any adapter (for example a LoRA) loaded on the base weights. A base model with an adapter is a different model from the base alone.
+- **A change to any of these is a new configuration** and follows the rule above: its verdicts stay out of auto-merge until it qualifies on replay, with no maintainer step when it passes and is not degraded. The OpenCode 2.x range ruling (ADR 0004, 2026-11-27) is unchanged: it decides which versions preflight accepts, not which have qualified.
+- **A public benchmark score never qualifies a model**, including a score measured under the same harness. A harness-adapted model, such as `harness-hub/Qwen3.8-27B-opencode-adapted` (Apache-2.0, trained under OpenCode 2.2.7), is a pool candidate like any other and qualifies on Warden's replay set.
+- **Comparisons stay within one configuration.** The paired comparison against the model being replaced runs both on the same harness version and settings, or reports that it could not.
+
+### Owner decision (2026-11-28): requalify on a new major version or a settings change
+
+Asked whether every new OpenCode 2.x release (for example 2.4.1 to 2.5.0) should make the model pass replay again before its verdicts count toward auto-merge, the owner answered: "Major or settings only".
+
+- A new harness major version (for example OpenCode 2.x to 3.x) or a change to a setting listed above is a new configuration, and its verdicts stay out of auto-merge until it qualifies on replay.
+- A minor or patch release within the same major version (for example 2.4.1 to 2.5.0) keeps the existing qualification. Auto-merge does not wait for a new replay pass.
+- This does not change ADR 0018: replay still runs on every harness change, minor and patch releases included, and a model whose results leave its limits there has auto-merge paused under the 2026-11-26 rule until the maintainer lifts it.
+- A changed adapter changes the weights the model runs, so it is already a new model under the decision above.
+
+The owner accepted the rest of this amendment the same day.
 
 ## Related
 

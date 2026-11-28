@@ -48,11 +48,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      # Every test file except the two that run repository code inside the macOS Seatbelt boundary. Those two need
+      # Every test file except the three that run repository code inside the macOS Seatbelt boundary. Those three need
       # /usr/bin/sandbox-exec on a tested macOS major (src/runner/seatbelt.ts TESTED_MACOS_MAJOR) and run in the macOS job below.
+      # holdout.test.ts joined them with the hidden-checks pilot: runHoldouts runs each check through verify/executor.ts runChecks.
       # They are left out here by name, not skipped: the macOS job runs the complete suite, so nothing is hidden.
       - name: Tests (all files except the Seatbelt ones)
-        run: node --test --test-reporter=spec $(find test -name '*.test.ts' ! -name implement-slice.test.ts ! -name verify-executor.test.ts | sort)
+        run: node --test --test-reporter=spec $(find test -name '*.test.ts' ! -name implement-slice.test.ts ! -name verify-executor.test.ts ! -name holdout.test.ts | sort)
       # Packs the release candidate, installs it into an empty project and drives the installed executable (needs the npm registry for ajv and yaml).
       - run: npm run verify-install
 
