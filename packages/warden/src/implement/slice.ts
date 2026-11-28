@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Comment, IssueState, Store } from '../github/store.ts';
 import { readOnly } from '../github/store.ts';
-import { runValidated } from '../runner/agent-runner.ts';
-import type { AgentRunner, Budgets } from '../runner/agent-runner.ts';
+import { harnessLabel, runValidated } from '../runner/agent-runner.ts';
+import type { AgentRunner, Budgets, PreflightReport } from '../runner/agent-runner.ts';
 import { classifyPreflight } from '../review/slice.ts';
 import { evaluate } from '../config/policy.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
@@ -141,7 +141,7 @@ export async function runImplement(o: ImplementOpts): Promise<ImplOutcome> {
     const credited = ab ? creditTrailers(ab.commits.map((x) => ({ ...x, ported: (model.portedCommits ?? []).includes(x.sha) })), c.factoryLogins) : [];
     const evidence = (cmp.map((x) => `${x.kind} ${x.id}: base ${x.base}, candidate ${x.candidate} (${x.relation})`) as string[]).concat((cand as CheckResult[]).map((r) => `executor ${r.id} exit ${r.code} at ${r.revision}, output sha256 ${r.outputSha256.slice(0, 12)}`));
     const body = renderPrBody({ scope: `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${it.title.slice(0, 120)}`, approach: model.approach + (model.interpretation ? `\n\nHow ambiguous requirements were read: ${model.interpretation}` : ''), evidence,
-      attribution: { aiAssisted: true, model: c.model, harness: c.harness, credited: ab && credited.length ? [...new Set(ab.commits.filter((x) => (model.portedCommits ?? []).includes(x.sha)).map((x) => x.authorLogin).filter((x) => !/\[bot\]$/.test(x)))] : undefined }, danger: { door: door.door, blastRadius: model.danger.blastRadius, why: door.floor ? `Forced one-way: the change touches schema, migration, auth, secrets or deletes files. ${model.danger.why}` : model.danger.why }, closes: [o.item] });
+      attribution: { aiAssisted: true, model: c.model, harness: harnessLabel(c.harness, (pf as PreflightReport).harnessVersion), credited: ab && credited.length ? [...new Set(ab.commits.filter((x) => (model.portedCommits ?? []).includes(x.sha)).map((x) => x.authorLogin).filter((x) => !/\[bot\]$/.test(x)))] : undefined }, danger: { door: door.door, blastRadius: model.danger.blastRadius, why: door.floor ? `Forced one-way: the change touches schema, migration, auth, secrets or deletes files. ${model.danger.why}` : model.danger.why }, closes: [o.item] });
     const sha = commitAll(ws, `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${model.summary}`, c.factoryAuthor, credited);
     const pr = await o.publisher.open({ branch, sha, title: `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${it.title.slice(0, 80)}`, body, workspace: ws, baseSha: c.baseSha }); if (pr.number === null) { note('prepared', pr.url); return out('prepared', `Prepared branch ${branch} (${door.door} door) locally at ${pr.url}. Nothing was published: opening a PR needs write credentials the current ceiling does not grant.`, { pr, evidence: ev }); }
     rec.pr = pr.number;

@@ -1,7 +1,7 @@
 # All AI work runs locally on a local-first model pool, through open harnesses
 
 - **Status:** Draft
-- **Date:** 2026-11-16 (revised from 2026-11-11)
+- **Date:** 2026-11-16 (revised from 2026-11-11; amended 2026-11-27, OpenCode version range)
 - **Decided by:** @trek-e
 
 ## Context
@@ -25,13 +25,22 @@ The first design ran all AI work in one vendor's agent on the maintainer's machi
 - The runner rejects any resolved non-local provider/model in MVP. Local unavailability preserves pending work and reports the failure rather than selecting a remote model.
 - A lightweight Discord/credential helper may remain available without triggering AI scans. CI/approval updates can reevaluate already-reviewed gates without model inference.
 
+## Amendment 2026-11-27: OpenCode is a 2.x range, not one pinned build
+
+Owner ruling (@trek-e, 2026-11-27), in his words: "open code is 2.4.1 we need to not pini to that 2.2.7 version should pin to 2.x.x".
+
+- The OpenCode adapter accepts any **2.x release at or above 2.2.7** (`>=2.2.7 <3.0.0`). 1.x, 3.0.0 and later, and 2.x releases below 2.2.7 are refused at preflight with the reason named. The floor stays at 2.2.7 because that is the only version the P0 proofs below ran on.
+- Each run records the version `opencode --version` actually reported (`harnessVersion` in the run's result and report files, and in a factory PR's attribution line, e.g. "via opencode 2.4.1"), in place of a fixed "opencode 2.2.7" label.
+- Warden never checked the OpenCode binary's sha256 at run time; the hash above was recorded by the P0 proof only. Nothing is pinned to a hash now either.
+- **Open check:** the P0 proofs (`PROOF-runtime`, `PROOF-isolation`) ran on 2.2.7 and have **not** been re-run on 2.4.1 or any other 2.x release. The guarantees in the table below are observed for 2.2.7 only until the owner re-runs them on his Mac against the version he uses. The hardening flags, deny-all permission surface and resolved-provider check are still applied to every 2.x release, so a 2.x change that breaks one of them fails the preflight or the session rather than running unguarded.
+
 ## P0 proof record (2026-11-18, `PROOF-runtime`)
 
 Evidence: [`proof/p0-runtime`](../../proof/p0-runtime/README.md) — `results/runtime.json` (44/44 checks), `results/isolation.json` (28/28), commands in the README. These are spikes, not production modules. Host: Apple silicon, macOS 27.2.1, Node 26.13.0.
 
 **Chosen and pinned**
 
-- **Harness:** OpenCode **v2.2.7** (Homebrew; binary sha256 `17d42049…eab5`, recorded in the report), driven headless through its local HTTP API (`opencode serve`, per-run password, loopback). OpenCode 2.3.0 is available and **not adopted**; re-run the proofs before moving the pin.
+- **Harness:** OpenCode **v2.2.7** (Homebrew; binary sha256 `17d42049…eab5`, recorded in the report), driven headless through its local HTTP API (`opencode serve`, per-run password, loopback). OpenCode 2.3.0 is available and **not adopted**; re-run the proofs before moving the pin. *Superseded 2026-11-27 by the version-range ruling below: the exact pin is now a 2.x range, and 2.2.7 is its floor.*
 - **Harness state:** per-run `XDG_*` directories and a scrubbed environment. The maintainer's `~/.config/opencode` (remote provider, MCP servers) never participates.
 - **Hardening flags (required, not optional):** `OPENCODE_DISABLE_MODELS_FETCH`, `OPENCODE_DISABLE_FREE_MODELS`, `OPENCODE_DISABLE_AUTOUPDATE`, `OPENCODE_DISABLE_PROJECT_CONFIG`, `OPENCODE_FILEWATCHER_DISABLE`, plus config `policies: provider.use deny opencode`, `update: disable`, `share: disabled`. Observed without them: the harness enables a hosted `opencode` provider by default and contacts `models.opencode.ai` / `opencode.ai`; a repo-supplied `opencode.json` can redirect the provider (C7, B6).
 - **Isolation backend:** **macOS Seatbelt via `sandbox-exec`**, deny-default profile (`system.sb` baseline), rebuilt environment, per-run scratch `HOME`, network limited to named loopback ports, reads limited to system/toolchain/workspace. Process-group kill on wall-clock timeout; `ulimit -t`/`-f` enforced. Tested on macOS major 27 only; any other major, a missing binary or any failed canary probe is *unknown containment* and blocks execution (F3: five defective-boundary variants all blocked, repo code never ran).

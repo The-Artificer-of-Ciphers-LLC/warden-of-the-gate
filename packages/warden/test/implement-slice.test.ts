@@ -69,6 +69,12 @@ test('a bug is fixed end to end: claim, trusted base checkout, model edits, exec
   assert.equal(git(s.bare, ['log', '-1', '--format=%an', `refs/heads/${p.branch}`]).trim(), 'warden-factory');
 });
 
+test('the PR attribution names the OpenCode version the run actually used, not a fixed pin (ADR 0004, OpenCode 2.x)', async (t) => {
+  const s = await setup(); t.after(s.cleanup); s.cfg.harness = 'opencode';
+  const o = await s.run(new Model(goodEdit, { ...GOOD, harnessVersion: '2.4.1' })); assert.equal(o.kind, 'opened', JSON.stringify(o));
+  assert.match(s.published[0].body, /model local-default via opencode 2\.4\.1\./);
+});
+
 test('a bug fix without a failing-before test is NOT opened: the evidence comes from the executor, not the model; the attempt is consumed', async (t) => {
   const s = await setup(); t.after(s.cleanup);
   const o = await s.run(new Model((ws) => writeFileSync(join(ws, 'sum.js'), FIXED)));
