@@ -13,7 +13,7 @@ const receipts = async (r: ReturnType<typeof rig>) => (await r.world.view('x').l
 test('the review-record intent carries severities only, no finding text; the same review has the same identity, a new head or finding does not', () => {
   const a = reviewRecordIntent({ repo: 'acme/widgets', item: 7, marker: MARKER() });
   assert.equal(a.kind, 'review-record'); assert.equal(a.origin, 'ai'); assert.equal(a.itemKind, 'pr');
-  assert.deepEqual(a.payload, { head: 'a1b2c3d4e5f6', base: 'base000000aa', verdict: 'changes needed', severities: ['minor'], policyDigest: 'digest1' });
+  assert.deepEqual(a.payload, { head: 'a1b2c3d4e5f6', base: 'base000000aa', verdict: 'changes needed', severities: ['minor'], fingerprints: ['aaaaaaaaaaaaaaaa'], policyDigest: 'digest1' });
   assert.equal(JSON.stringify(a).includes('"rationale"'), false, 'no finding text is copied');
   assert.equal(makeIntent(a).opid, makeIntent(reviewRecordIntent({ repo: 'acme/widgets', item: 7, marker: MARKER() })).opid);
   assert.notEqual(makeIntent(a).opid, makeIntent(reviewRecordIntent({ repo: 'acme/widgets', item: 7, marker: MARKER({ head: 'ffff00000000' }) })).opid);
