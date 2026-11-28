@@ -47,6 +47,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 | [ADR 0022](docs/adr/0022-new-model-starts-paused.md) | A model new to the pool starts with auto-merge paused | Proposed |
 | [ADR 0023](docs/adr/0023-promise-checks.md) | Promise checks: per-repository, base against candidate | Proposed (adopted in principle) |
 | [ADR 0024](docs/adr/0024-behavior-effect-at-triage.md) | Record a change's intended behavior effect at Triage | Proposed (facet adopted) |
+| [ADR 0025](docs/adr/0025-several-candidates-chosen-by-evidence.md) | Several fix candidates, chosen by deterministic evidence | Proposed (opt-in adopted) |
 
 ## Research
 
@@ -59,6 +60,7 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 - [Agent-written-code talk (Sumner)](docs/research/TALK-SUMNER-AGENT-WRITTEN-CODE.md): tests that predate the change, differential checks, special-casing and run-over-run measurement; basis for proposed [ADR 0017](docs/adr/0017-preexisting-tests-and-differential-checks.md) and [ADR 0018](docs/adr/0018-measured-not-estimated.md).
 - [Pi creators live stream](docs/research/TALK-PI-CREATORS-LIVE.md): how Pi's maintainers decide what to read and trust; basis for proposed [ADR 0020](docs/adr/0020-review-attention-and-maintainer-understanding.md) (attention classes), [ADR 0021](docs/adr/0021-cross-family-review-panel.md) (cross-family review panel) and [ADR 0022](docs/adr/0022-new-model-starts-paused.md) (new models start paused).
 - [McCarthy brownfield factories talk](docs/research/TALK-MCCARTHY-BROWNFIELD-FACTORIES.md): promises beyond features, preserve versus change, and coverage-guided inputs; basis for proposed [ADR 0023](docs/adr/0023-promise-checks.md) (per-repository promise checks) and [ADR 0024](docs/adr/0024-behavior-effect-at-triage.md) (preserve, change or fix, recorded at Triage).
+- [Maddalone software factories talk](docs/research/TALK-MADDALONE-SOFTWARE-FACTORIES.md): Joe Maddalone and Rob West on why the factory metaphor misleads; mostly confirms Warden's design, disagrees on duplication, and is the basis for the Triage spike, proposed [ADR 0025](docs/adr/0025-several-candidates-chosen-by-evidence.md) (several candidates chosen by evidence) and the auto-merge rate as a non-target.
 
 The owner confirmed the shared MVP product understanding on November 17, 2026; the PRD review is complete and ready for implementation planning. Its final section names the remaining technical choices and capability proofs. No implementation, local-model benchmark or live activation is claimed by this documentation.
 
