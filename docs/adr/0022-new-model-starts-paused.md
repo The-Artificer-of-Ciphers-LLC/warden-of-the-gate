@@ -1,6 +1,6 @@
 # A model new to the pool qualifies itself on replay
 
-- **Status:** Accepted as amended by the owner decision below (2026-11-28). Builds on ADR 0018. The file name keeps its original slug so existing links work. A further amendment (qualification covers the harness and settings too) is **proposed, awaiting owner review**; see the end of this ADR.
+- **Status:** Accepted as amended by the owner decision below (2026-11-28). Builds on ADR 0018. The file name keeps its original slug so existing links work. A further amendment (qualification covers the harness and settings too) is **proposed, awaiting owner review**, except when a harness release requalifies, which the owner decided on 2026-11-28; see the end of this ADR.
 - **Date:** 2026-11-26
 - **Decided by:** @trek-e, 2026-11-28
 - **Research:** [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md), mapping rows 2 and 6
@@ -43,7 +43,7 @@ The questions this ADR asked were: should a new model start paused; does a weigh
 
 ## Proposed amendment (2026-11-28): a qualification covers the harness and settings too
 
-**Proposed, awaiting owner review.** Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lessons A and J. Nothing above changes until the owner accepts it.
+**Proposed, awaiting owner review**, apart from the owner decision on harness releases below. Research: [Hugging Face, "Introducing harness adapters"](../research/HARNESS-ADAPTERS-AT-SCALE.md), lessons A and J. Nothing above changes until the owner accepts it.
 
 ### Why
 
@@ -54,16 +54,23 @@ This ADR's identity names the endpoint, the model id and the version or weights 
 ### Proposed decision
 
 - **A qualification is for one configuration.** It covers the model identity above plus:
-  - the harness name and the version the run reported (`harnessVersion`, ADR 0004);
+  - the harness name and the major version of the version the run reported (`harnessVersion`, ADR 0004). A minor or patch release of the same major version keeps the qualification (owner decision below);
   - the settings that change what the model does: thinking or reasoning mode and effort, sampling temperature, and the harness's context compaction setting;
   - the digest of any adapter (for example a LoRA) loaded on the base weights. A base model with an adapter is a different model from the base alone.
 - **A change to any of these is a new configuration** and follows the rule above: its verdicts stay out of auto-merge until it qualifies on replay, with no maintainer step when it passes and is not degraded. The OpenCode 2.x range ruling (ADR 0004, 2026-11-27) is unchanged: it decides which versions preflight accepts, not which have qualified.
 - **A public benchmark score never qualifies a model**, including a score measured under the same harness. A harness-adapted model, such as `harness-hub/Qwen3.8-27B-opencode-adapted` (Apache-2.0, trained under OpenCode 2.2.7), is a pool candidate like any other and qualifies on Warden's replay set.
 - **Comparisons stay within one configuration.** The paired comparison against the model being replaced runs both on the same harness version and settings, or reports that it could not.
 
-### Question for the owner
+### Owner decision (2026-11-28): requalify on a new major version or a settings change
 
-When OpenCode moves between 2.x releases (for example 2.4.1 to 2.5.0), should the model requalify before its verdicts count toward auto-merge, as proposed? The alternative is to requalify only on a new major version or a settings change. The post's evidence is about different harnesses and thinking modes, not about releases of one harness, so it supports the strict rule for settings but does not settle it for minor versions.
+Asked whether every new OpenCode 2.x release (for example 2.4.1 to 2.5.0) should make the model pass replay again before its verdicts count toward auto-merge, the owner answered: "Major or settings only".
+
+- A new harness major version (for example OpenCode 2.x to 3.x) or a change to a setting listed above is a new configuration, and its verdicts stay out of auto-merge until it qualifies on replay.
+- A minor or patch release within the same major version (for example 2.4.1 to 2.5.0) keeps the existing qualification. Auto-merge does not wait for a new replay pass.
+- This does not change ADR 0018: replay still runs on every harness change, minor and patch releases included, and a model whose results leave its limits there has auto-merge paused under the 2026-11-26 rule until the maintainer lifts it.
+- A changed adapter changes the weights the model runs, so it is already a new model under the decision above.
+
+The rest of this amendment is still proposed.
 
 ## Related
 

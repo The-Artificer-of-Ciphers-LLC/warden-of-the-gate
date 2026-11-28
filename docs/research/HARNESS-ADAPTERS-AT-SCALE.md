@@ -70,6 +70,8 @@ All are **PROPOSED, awaiting owner review**, and marked **[H]** in the PRD.
 3. **ADR 0018 addition (lesson C).** Cost comparisons between configurations use only the cases both passed, with that count shown. Baselines are kept per harness version and settings as well as per model.
 4. **PRD §11 metrics (lesson K).** Denied tool calls per 1,000 tool calls, by model and harness version, in the on-demand metrics report.
 
-## Question only the owner can answer
+## Question for the owner (now decided)
 
 Proposal 1 means that when OpenCode moves from one 2.x release to another (for example 2.4.1 to 2.5.0), or a thinking or sampling setting changes, the model's verdicts stop counting toward auto-merge until a replay run on the new version passes. ADR 0018 already runs replay on every harness change; what is new is that auto-merge waits for the pass. The alternative is to treat a harness patch or minor release as the same configuration and requalify only on a new major or a settings change. The post's evidence (lesson A) is about different harnesses and thinking modes, not about patch releases of one harness, so it supports the strict rule for settings but does not settle it for minor versions.
+
+**Decided 2026-11-28 (@trek-e):** "Major or settings only". A new major version or a settings change requalifies; a minor or patch release does not. Recorded in ADR 0022 and PRD §9.
