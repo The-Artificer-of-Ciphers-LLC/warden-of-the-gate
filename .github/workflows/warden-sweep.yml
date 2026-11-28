@@ -1,0 +1,21 @@
+# PLACEHOLDER for the launchd dispatch test (ADR 0026). It does no sweep work and holds no secret: it only logs that it was dispatched, which proves
+# a LaunchAgent that dispatches this workflow by name can start a sweep through workflow_dispatch. Replace it with
+# packages/warden/templates/workflows/warden-sweep.yml.example when the real sweep is installed.
+name: warden-sweep
+on:
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: warden-sweep, cancel-in-progress: false }
+jobs:
+  log-dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Log the dispatch
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          echo "WARDEN_SWEEP_PLACEHOLDER dispatched event=${EVENT} actor=${ACTOR} ref=${REF} run=${RUN_ID} at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
