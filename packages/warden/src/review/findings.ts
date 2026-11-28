@@ -53,3 +53,12 @@ export function capFindings(findings: readonly Finding[], cap = DEFAULT_MAX_POST
   const ranked = findings.map((f, i) => ({ f, i })).sort((a, b) => (RANK.get(a.f.severity)! - RANK.get(b.f.severity)!) || (a.i - b.i)).map((x) => x.f);
   const n = Math.max(0, Math.floor(cap)); return { shown: ranked.slice(0, n), omitted: Math.max(0, ranked.length - n) };
 }
+
+/** The new-file line ranges of a unified diff's hunks (context and changed lines both count: the hunk is the place a reviewer looks at). */
+export function hunkRanges(patch: string | undefined): Array<{ from: number; to: number }> {
+  const out: Array<{ from: number; to: number }> = []; if (!patch) return out;
+  for (const raw of patch.split('\n')) { const h = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))?\s*@@/); if (h) { const from = Number(h[1]); const len = h[2] === undefined ? 1 : Number(h[2]); out.push({ from, to: from + Math.max(len, 1) - 1 }); } }
+  return out;
+}
+/** Are two new-file lines of the same diff in the same hunk? (A finding "hits" a known defect by same file and same changed hunk, not only by exact line: owner ruling 2026-11-27.) */
+export function sameHunk(patch: string | undefined, a: number, b: number): boolean { return hunkRanges(patch).some((r) => a >= r.from && a <= r.to && b >= r.from && b <= r.to); }

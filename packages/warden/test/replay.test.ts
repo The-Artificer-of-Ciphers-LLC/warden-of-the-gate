@@ -39,7 +39,7 @@ test('a full-size, maintainer-curated set that the model handles well qualifies;
   for (let i = 0; i < 20; i++) { big.cases.push({ ...pr, id: `pr${i}` } as never, { ...iss, id: `is${i}` } as never); }
   assert.equal((await runReplay(big, o(new Model(smart)))).qualification.qualified, true);
   const noisy = new Model((r) => r.task === 'review' ? { verdict: 'changes needed', findings: [{ id: 'f1', severity: 'major', path: 'src/sum.js', line: 3, rationale: 'x', correction: 'y' }, { id: 'f2', severity: 'minor', path: 'src/sum.js', line: 99, rationale: 'x', correction: 'y' }, { id: 'f3', severity: 'minor', path: 'src/sum.js', line: 98, rationale: 'x', correction: 'y' }] } : smart(r));
-  const bad = await runReplay(big, o(noisy)); assert.equal(bad.qualification.qualified, false); assert.match(bad.qualification.reasons.join(' '), /false-positive rate/);
+  const bad = await runReplay(big, o(noisy)); assert.equal(bad.qualification.qualified, false); assert.match(bad.qualification.reasons.join(' '), /blocking-finding agreement/);
 });
 
 test('a stop mid-replay means the set is not qualified; malformed sets are rejected before any model call', async () => {
