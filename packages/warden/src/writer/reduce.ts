@@ -474,5 +474,6 @@ function linkPr(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!Number.isInteger(pl.issue)) return silent('link-needs-issue');
   if (l.linked.includes(pl.issue as number)) return silent('already-linked');
   const factory = (i.payload as { factory?: boolean }).factory === true; const frozen = factory && !l.frozen ? cleanFrozen((i.payload as { frozen?: unknown }).frozen) : null;
-  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; if (frozen) led.frozen = frozen; } };
+  const frRaw = (i.payload as { failOnBase?: unknown }).failOnBase; const fr = Array.isArray(frRaw) && frRaw.length <= 8 && frRaw.every((e) => e && typeof e.check === 'string' && e.check.length <= 40 && (e.exit === null || Number.isInteger(e.exit))) ? (frRaw as Array<{ check: string; exit: number | null }>).map((e) => ({ check: e.check, exit: e.exit })) : null;
+  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; if (frozen) led.frozen = frozen; if (frozen && fr) led.frozenResult = fr; } };
 }
