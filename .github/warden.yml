@@ -13,4 +13,4 @@ inbox:
   controlIssue: 2
 runtime:
   modelPool:
-    - beamster/Qwen3.8-Flash-Next-Sushi-2bpw
+    - pipenetwork/Inkling-2-Mini-MLX-bf16

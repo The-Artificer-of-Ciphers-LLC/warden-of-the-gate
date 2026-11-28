@@ -9,6 +9,7 @@ import type { AgentRunner, Budgets, PreflightReport } from '../runner/agent-runn
 import { iso } from '../util.ts';
 import { reviewResultSchema } from './schema.ts';
 import { buildReviewPrompt } from './prompt.ts';
+import { reviewChecks } from './rules.ts';
 import { annotate } from './findings.ts';
 import { isScanFinding, MUTATION_PREFIX, scanFindings } from './test-scan.ts';
 import type { MutationResult } from '../verify/mutation.ts';
@@ -129,15 +130,8 @@ export async function runReview(o: ReviewOpts): Promise<ReviewOutcome> {
   const output = res.output as ReviewOutput;
 
   // Independent validation (warden-core, not the model): whole-result rejection, never partial.
-  const inScope = new Set(pull.files.map((f) => f.path));
-  const outside = output.findings.find((f) => !inScope.has(f.path));
-  if (outside) return fail(`The schema was fine, but a finding cites ${outside.path}, which is not in this pull request. Warden's separate scope check rejected the whole result.`, `out-of-scope:${outside.path}`);
-  if ((output.verdict === 'no findings') !== (output.findings.length === 0)) return fail('The verdict contradicts the findings list. Rejected whole.', 'verdict-inconsistent');
-  if (new Set(output.findings.map((f) => f.id)).size !== output.findings.length) return fail('Finding ids are not unique. Rejected whole.', 'duplicate-ids');
-  if (m && priorModel.length) {
-    const want = priorModel.map((f) => f.id).sort().join(','); const got = (output.revalidated ?? []).map((r) => r.id).sort().join(',');
-    if (want !== got) return fail(`A delta review must re-check every earlier finding (${want}); it addressed (${got || 'none'}). Rejected whole.`, 'revalidation-incomplete');
-  }
+  const broken = reviewChecks(output, { inScope: new Set(pull.files.map((f) => f.path)), prior: m ? priorModel : [] });   // the rule table's checks (ADR 0028)
+  if (broken) return fail(broken.notice, broken.reason);
   let after: PullInfo;
   try { after = await store.getPull(o.item); } catch { return fail('The pull request could not be re-read to confirm the head. Rejected.', 'head-unconfirmed'); }
   if (after.head !== pull.head) return fail(`The contributor pushed ${after.head.slice(0, 8)} while the review ran on ${pull.head.slice(0, 8)}. A review is bound to the code it saw, so it is rejected as stale.`, 'head-moved');
