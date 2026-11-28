@@ -58,7 +58,7 @@ Sources checked: `main` at `9065743` (PRD, ADRs 0001-0022), open PR #57 (propose
 | 7d | Feeding a factory forces early, false precision | Warden works only on submitted issues and never invents work; the PR cap limits throughput (McCarthy note, row 7). | **Confirms** on the pressure. The early-precision risk remains for features, which is gap 1. |
 | West | Automation share is a factory metric | §11 tracks "auto-merge and human-escalation rates" alongside reverts, escapes, bad-fix rate, erosion and returning contributors. It says lines of code and cost per defect are not targets; it does not say this of the auto-merge rate. | **Small addition.** See proposal 3. |
 
-## Proposed changes (all for the owner's call)
+## Proposed changes (all three adopted 2026-11-27)
 
 ### 1. A throwaway spike before a feature spec is approved (amends PRD §5 Triage and ADR 0001)
 
@@ -67,7 +67,7 @@ Sources checked: `main` at `9065743` (PRD, ADRs 0001-0022), open PR #57 (propose
 - **Proposed rule.** When a feature or enhancement proposal lists unresolved questions that code could answer, Triage may ask for one bounded spike. It runs in the Implement containment (factory workspace, OS boundary, no tokens), on a scratch branch that is never pushed and is deleted after the run. Its output is a short report attached to the proposal card: what was tried, what worked, what it suggests for scope and criteria, and the diff size it took. The spike's code never becomes the implementation, and is not evidence for any gate. The maintainer still approves the spec as today.
 - **Cost.** One more local session for some features. Triage itself stays read-only.
 
-### 2. Optional multiple candidates, chosen by evidence (new ADR candidate, 0025)
+### 2. Optional multiple candidates, chosen by evidence (now proposed [ADR 0025](../adr/0025-several-candidates-chosen-by-evidence.md))
 
 - **The gap.** Warden produces exactly one implementation per item. When that attempt fails or comes out large, the only recourse is rework or abstention.
 - **The evidence.** Brown et al., "Large Language Monkeys: Scaling Inference Compute with Repeated Sampling" (arXiv 2407.21787, 2024): on SWE-bench Lite, independent samples from DeepSeek-Coder-V2 resolved 15.9% of issues with one sample and 56% with 250, picking correct solutions with unit tests. The paper also finds that picking without an automatic check (majority vote, reward models) stops improving after a few hundred samples. Warden has the automatic check: frozen tests, mutation and weakening detection, run by the trusted executor.
@@ -103,8 +103,10 @@ Sources checked: `main` at `9065743` (PRD, ADRs 0001-0022), open PR #57 (propose
 | AI reliance lowers understanding of the code written | Shen and Tamkin, Anthropic, 2026-01-29 (https://www.anthropic.com/research/AI-assistance-coding-skills; arXiv 2601.20245) | Confirmed: 50% vs 67% quiz score, largest gap on debugging; n = 52, short-term measure |
 | "Newcomers will invent new ways", "duplication is cheap now" | Nothing beyond the video | Speaker only |
 
-## Open questions for the owner
+## Owner decisions
 
-1. **Spike before spec approval (proposal 1):** add it as an option Triage can request for features, or leave the proposal text-only?
-2. **Multiple candidates (proposal 2):** write it up as proposed ADR 0025 (opt-in, default N = 1), or not pursue it?
-3. **Auto-merge rate (proposal 3):** add it to the "not targets" line in §11?
+@trek-e answered all three on 2026-11-27: "yes take all three".
+
+1. **Spike before spec approval (proposal 1):** adopted in PRD §5 Triage.
+2. **Multiple candidates (proposal 2):** written up as proposed [ADR 0025](../adr/0025-several-candidates-chosen-by-evidence.md), opt-in, one candidate by default; details await review.
+3. **Auto-merge rate (proposal 3):** added to the not-targets line in PRD §11; still tracked.

@@ -1,4 +1,4 @@
-# EXAMPLE, NOT INSTALLED: copy into .github/workflows/ only after reading it. Scheduling follows ADR 0025: GitHub runs `schedule` triggers
+# EXAMPLE, NOT INSTALLED: copy into .github/workflows/ only after reading it. Scheduling follows ADR 0026: GitHub runs `schedule` triggers
 # best effort (they can be hours late, and under load some are dropped), so the primary trigger is `workflow_dispatch`, started on a
 # timer by an external scheduler (for the MVP a launchd LaunchAgent running `gh workflow run warden-sweep.yml`; see docs/quickstart.md).
 # Sweeps are idempotent, so a late, dropped or duplicate run does no harm and the next run catches up. Never an exact-deadline guarantee.

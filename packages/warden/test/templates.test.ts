@@ -7,7 +7,7 @@ import { checkWorkflow } from '../src/config/workflow-check.ts';
 /** The example workflows are inert (`.example`), parse as YAML, and keep the security invariants the design depends on. */
 const dir = new URL('../templates/workflows/', import.meta.url);
 const files = readdirSync(dir);
-test('example workflows: inert, valid, trusted-branch checkout only, minimal permissions, serialized writer, sweep started by workflow_dispatch with the native schedule only as a commented backup (ADR 0025)', () => {
+test('example workflows: inert, valid, trusted-branch checkout only, minimal permissions, serialized writer, sweep started by workflow_dispatch with the native schedule only as a commented backup (ADR 0026)', () => {
   assert.deepEqual(files.sort(), ['warden-events.yml.example', 'warden-sweep.yml.example', 'warden-writer.yml.example']);
   for (const f of files) {
     const text = readFileSync(new URL(f, dir), 'utf8'); const d = parse(text);
@@ -22,7 +22,7 @@ test('example workflows: inert, valid, trusted-branch checkout only, minimal per
     assert.ok(!/contents:\s*write|pull-requests:\s*write|id-token/.test(text), `${f}: no write permission beyond issues`);
   }
   const writer = parse(readFileSync(new URL('warden-writer.yml.example', dir), 'utf8')); assert.equal(writer.concurrency.group, 'warden-writer'); assert.equal(writer.concurrency['cancel-in-progress'], false);
-  const sweep = readFileSync(new URL('warden-sweep.yml.example', dir), 'utf8'); assert.ok('workflow_dispatch' in parse(sweep).on, 'an external scheduler starts the sweep through workflow_dispatch'); assert.ok(!parse(sweep).on.schedule, 'the native schedule is an optional backup, commented out by default'); assert.match(sweep, /ADR 0025/); assert.match(sweep, /# Optional backup only/);
+  const sweep = readFileSync(new URL('warden-sweep.yml.example', dir), 'utf8'); assert.ok('workflow_dispatch' in parse(sweep).on, 'an external scheduler starts the sweep through workflow_dispatch'); assert.ok(!parse(sweep).on.schedule, 'the native schedule is an optional backup, commented out by default'); assert.match(sweep, /ADR 0026/); assert.match(sweep, /# Optional backup only/);
   assert.ok(Object.keys(parse(readFileSync(new URL('warden-events.yml.example', dir), 'utf8')).on).includes('pull_request_target'));
 });
 
