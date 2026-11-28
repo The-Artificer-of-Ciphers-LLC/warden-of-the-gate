@@ -1,3 +1,4 @@
+import { reviewRecordIntent } from '../review/record.ts';
 import { GitHubPublisher, HttpsGitRemote, PathRemote } from '../implement/github-publisher.ts';
 import type { PullWriter } from '../implement/github-publisher.ts';
 import type { PrPublisher } from '../implement/slice.ts';
@@ -168,6 +169,11 @@ export async function run(c: Ctx): Promise<Result> {
         cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('triage', 'packets') } });
       return { code: o.kind === 'accepted' || o.kind === 'reused' ? 0 : o.kind === 'rejected' ? 1 : 4, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task triage #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
+    /** Live mode only: an accepted review is handed to the writer as a `review-record` intent. Shadow mode submits nothing (and the writer would refuse an AI-origin intent anyway). */
+    const recordAccepted = async (item: number, marker: Parameters<typeof reviewRecordIntent>[0]['marker']): Promise<{ opid: string } | { error: string } | undefined> => {
+      if (pol.mode !== 'live') return undefined;
+      try { return await makeSink().submit(reviewRecordIntent({ repo: cfg.repository, item, marker })); } catch (e) { return { error: String((e as Error).message).slice(0, 160) }; }
+    };
     if (task === 'review') {
       // P3 first checkpoint: ONE read-only shadow review of ONE pull request. Local only: nothing is posted, merged or written to the contributor's branch.
       const maxAttempts = 3;   // the prototype's budget of 3 is a guess to settle with live evidence
@@ -183,8 +189,9 @@ export async function run(c: Ctx): Promise<Result> {
         if (c.flags['dry-run']) { const sel = select(pick.cands, caps); return { code: 0, data: { task, outcome: 'proposed', mode: 'dry-run', run: sel.run.map((x) => x.item), pending: sel.deferred, blocked: sel.blocked, skipped: pick.skipped, mutations: 0 }, text: `task review (dry-run): would run ${sel.run.map((x) => '#' + x.item).join(', ') || 'nothing'}; pending ${sel.deferred.length}, blocked ${sel.blocked.length}, skipped ${pick.skipped.length}; no model call, no repository mutation` }; }
         const scanRunner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: (str(c.flags, 'model-url') ?? str(c.flags, 'lmstudio-url')), ...modelLimits(c.flags) }) : new NotReadyRunner();
         const rep = await scanReviews({ store, runner: scanRunner, kvFor, cfg: rcfg, caps, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest });
+        const recordedItems: Record<number, unknown> = {}; for (const x of rep.completed) if (x.outcome === 'accepted') { const mk = kvFor(x.item).read()?.marker; if (mk) recordedItems[x.item] = await recordAccepted(x.item, mk); }
         mkdirSync(st.path('runs'), { recursive: true, mode: 0o700 }); const file = st.path('runs', `review-scan-${rep.startedAt.replace(/[:.]/g, '-')}.json`); st.writeJson(file, rep);
-        return { code: rep.completed.some((x) => x.outcome === 'rejected') ? 1 : 0, data: { task, outcome: 'scanned', ...rep, runner: scanRunner.name, reportFile: file }, text: `task review (scan, shadow): ${rep.completed.length} completed (${rep.completed.map((x) => `#${x.item} ${x.outcome}`).join(', ') || 'none'}), ${rep.pending.length} pending, ${rep.blocked.length} blocked, ${rep.skipped.length} skipped${rep.stoppedEarly ? `; ended early: ${rep.stoppedEarly}` : ''}; report ${file}` };
+        return { code: rep.completed.some((x) => x.outcome === 'rejected') ? 1 : 0, data: { task, outcome: 'scanned', ...rep, ...(Object.keys(recordedItems).length ? { recorded: recordedItems } : {}), runner: scanRunner.name, reportFile: file }, text: `task review (scan, shadow): ${rep.completed.length} completed (${rep.completed.map((x) => `#${x.item} ${x.outcome}`).join(', ') || 'none'}), ${rep.pending.length} pending, ${rep.blocked.length} blocked, ${rep.skipped.length} skipped${rep.stoppedEarly ? `; ended early: ${rep.stoppedEarly}` : ''}; report ${file}` };
       }
       const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task review: --item must be a pull request number' };
       const kv = fileKV(st);
@@ -194,7 +201,8 @@ export async function run(c: Ctx): Promise<Result> {
       const o = await runReview({ store, item, runner, kv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest,
         cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets'), ...lookupCfg } });
       const code = o.kind === 'accepted' || o.kind === 'reused' || o.kind === 'checks-only' ? 0 : o.kind === 'rejected' ? 1 : 4;
-      return { code, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task review #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
+      const recorded = o.kind === 'accepted' && o.marker ? await recordAccepted(item, o.marker) : undefined;
+      return { code, data: { task, outcome: o.kind, ...o, ...(recorded ? { recorded } : {}), runner: runner.name }, text: `task review #${item}: ${o.kind.toUpperCase()}: ${o.notice}${recorded ? ` Recorded for the writer (${'opid' in recorded ? recorded.opid : 'not submitted: ' + recorded.error}); run \`warden writer drain\` to apply.` : ''}` };
     }
     const out = await runTask(task, { dryRun: !!c.flags['dry-run'], store, cfg, items: str(c.flags, 'item') ? String(str(c.flags, 'item')).split(',').map(Number) : undefined, skip });
     const protection = { readOnlyStoreEnforced: !!c.flags['dry-run'], globalDryRun: ctl.dryRun ? 'present' : ctl.unknown ? 'unknown' : 'absent', backend: be.name };
