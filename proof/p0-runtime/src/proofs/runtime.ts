@@ -276,13 +276,15 @@ async function sectionD(r: Report) {
   const openStreams = (before = Infinity) => inferenceRequests(tap, 0, before).filter((x) => x.completedAt === undefined && x.clientClosedAt === undefined);
   let s = await boot(tapCfg(), ws);
   const writeTools = [DENY_ALL, allow('read'), allow('write'), allow('edit'), allow('apply_patch')];
-  // D1 interrupt mid-generation, with a workspace write already done
+  // D1 interrupt mid-generation, with a workspace write already done in this session and not yet committed.
+  // The write is its own turn: asked to write and then count in one turn, the Flash model on mlx-serve wrote the file and
+  // ended the turn without counting (2026-11-28), so nothing was generating when the interrupt landed. D5's prompt, the
+  // long count alone, did stream, so the interrupted turn here is that same prompt.
   let ses = await createSession(s, { directory: ws, permissions: writeTools });
-  const LONG = 'You are an automated test harness. You MUST call the named tool with the exact arguments given; never describe or simulate a call. Step 1: call the write tool to create the file notes.txt with exactly this content: PARTIAL-WORK. Step 2: only after that tool call has completed, do this: ' + LONG_GENERATION;
-  const p1 = await prompt(s, ses.id, LONG);
-  let wrote = false;
-  for (let i = 0; i < 120 && !wrote; i++) { await sleep(1000); wrote = existsSync(path.join(ws, 'notes.txt')); }
-  const generatingAtInterrupt = wrote && await waitGenerating(60000); // the long count must be streaming when the interrupt lands
+  const w1 = await runPrompt(s, ses.id, 'You are an automated test harness. You MUST call the write tool with the exact arguments given; never describe or simulate a call. Call the write tool to create the file notes.txt with exactly this content: PARTIAL-WORK. Then reply with the single word: written');
+  const wrote = existsSync(path.join(ws, 'notes.txt'));
+  const p1 = await prompt(s, ses.id, LONG_GENERATION);
+  const generatingAtInterrupt = await waitGenerating(60000); // the long count must be streaming when the interrupt lands
   const metricsBefore = await metricsSnapshot();
   const t0 = Date.now();
   const openAtInterrupt = openStreams(t0); // live records: their clientClosedAt fills in when the harness hangs up
@@ -308,7 +310,7 @@ async function sectionD(r: Report) {
   const cancelledDelta = observable ? cAfter! - cBefore! : null;
   const serverPick = (m: Awaited<ReturnType<typeof metricsSnapshot>>) => ({ status: m.status, requestsCancelledTotal: cancelled(m), requestsRunning: m.numbers?.['gauges.requests_running'], requestsWaiting: m.numbers?.['gauges.requests_waiting'], generationTokensTotal: m.numbers?.['counters.generation_tokens_total'] });
   check(r, { id: 'D1b-server-stops-decoding', claim: 'the model server itself stops decoding once the harness hangs up: mlx-serve counts each hung-up stream as a cancelled request (/metrics.json counters.requests_cancelled_total rises by at least the number of hung-up streams within ~3s)', expected: observable ? `cancelled delta >= ${openAtInterrupt.length} (and >= 1)` : 'UNVERIFIED: /metrics.json not served or has no counters.requests_cancelled_total (start mlx-serve with --metrics)', observed: { hungUpStreams: openAtInterrupt.length, cancelledDelta, before: serverPick(metricsBefore), after: serverPick(metricsAfter) }, pass: observable && allHungUp && cancelledDelta! >= Math.max(1, openAtInterrupt.length), ...(observable ? {} : { severity: 'unverified' as const }) });
-  check(r, { id: 'D2-work-recoverable', claim: 'after cancel, partial work is recoverable: transcript persisted, workspace changes enumerable via git, and the workspace can be restored to the base revision', expected: 'notes.txt dirty + transcript present', observed: { wroteBeforeCancel: wrote, dirty, assistantMessages: sm1.assistantCount, reasoningOrTextPersisted: m1.some((x) => x.type === 'assistant' && (x.content ?? []).length > 0) }, pass: wrote && dirty.some((l) => l.includes('notes.txt')) && sm1.assistantCount >= 1 });
+  check(r, { id: 'D2-work-recoverable', claim: 'after cancel, partial work is recoverable: transcript persisted, workspace changes enumerable via git, and the workspace can be restored to the base revision', expected: 'notes.txt dirty + transcript present', observed: { wroteBeforeCancel: wrote, writeTurnOutcome: w1.done.outcome, dirty, assistantMessages: sm1.assistantCount, reasoningOrTextPersisted: m1.some((x) => x.type === 'assistant' && (x.content ?? []).length > 0) }, pass: wrote && dirty.some((l) => l.includes('notes.txt')) && sm1.assistantCount >= 1 });
   execFileSync('git', ['clean', '-fdq'], { cwd: ws }); execFileSync('git', ['checkout', '-q', '--', '.'], { cwd: ws });
   check(r, { id: 'D3-restore-clean', claim: 'workspace restores to a clean base state (rollback path for abandoned work)', expected: 'clean', observed: execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }), pass: execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }).trim() === '' });
   const rr = await runPrompt(s, ses.id, 'Reply with the single word: resumed');
