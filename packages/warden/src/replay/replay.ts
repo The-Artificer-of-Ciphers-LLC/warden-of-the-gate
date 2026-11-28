@@ -1,3 +1,4 @@
+import { isScanFinding } from '../review/test-scan.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -58,7 +59,7 @@ export async function runReplay(set: ReplaySet, o: ReplayOpts): Promise<ReplayRe
         const n = world.addIssue({ isPr: true, title: c.title, author: 'contributor' }); world.issues.get(n)!.pull = { head: c.head ?? 'a'.repeat(40), base: c.base ?? 'b'.repeat(40), ci: 'passing', files: c.files.map((f) => ({ ...f })) };
         const rcfg = o.lookupClone ? { ...cfg, context: lookupProvider(o.lookupClone, { root: dir }), maxContextChars: o.maxContextChars, maxPromptChars: o.maxPromptChars } : cfg;
         let rec: ReviewRecord | null = null; const r = await runReview({ store, item: n, runner: o.runner, cfg: rcfg, kv: { read: () => rec, write: (_i, x) => { rec = JSON.parse(JSON.stringify(x)); } }, stopped: () => o.stopped?.() ?? false, signal: o.signal, clock: Date.now, ...(o.contextFor && c.base ? { context: (d: string) => o.contextFor!(c.base!, d) } : {}) });
-        const findings = r.marker?.findings ?? []; const must = 'mustFind' in c.expect ? c.expect.mustFind : [];
+        /* the deterministic test-diff scan measures the diff, not the model */ const findings = (r.marker?.findings ?? []).filter((f) => !isScanFinding(f)); const must = 'mustFind' in c.expect ? c.expect.mustFind : [];
         // A finding matches a known defect by SAME FILE and SAME CHANGED HUNK (owner ruling 2026-11-27), or by the curated lines themselves.
         const hit = (m: { path: string; lineMin: number; lineMax: number }, f: { path: string; line: number }) => f.path === m.path && ((f.line >= m.lineMin && f.line <= m.lineMax) || sameHunk(c.files.find((x) => x.path === m.path)?.patch, m.lineMin, f.line));
         const hits = must.filter((m) => findings.some((f) => hit(m, f))).length;
