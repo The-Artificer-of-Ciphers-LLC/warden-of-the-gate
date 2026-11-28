@@ -42,9 +42,9 @@ All PRDs and ADRs below are **editable working drafts**. Historical research is 
 | [ADR 0017](docs/adr/0017-preexisting-tests-and-differential-checks.md) | Evidence from tests that predate the change; opt-in differential checks | Decided (one detail Proposed) |
 | [ADR 0018](docs/adr/0018-measured-not-estimated.md) | Measured, not estimated: weighted robust scorecards, untrusted self-assessment | Partly decided |
 | [ADR 0019](docs/adr/0019-decision-model-router.md) | Decision-model router: routes work, never authorizes it | Proposed (post-MVP) |
-| [ADR 0020](docs/adr/0020-review-attention-and-maintainer-understanding.md) | Review attention classes: the maintainer chooses what they keep reading | Proposed |
-| [ADR 0021](docs/adr/0021-cross-family-review-panel.md) | Optional cross-family review panel, bounded rounds | Proposed |
-| [ADR 0022](docs/adr/0022-new-model-starts-paused.md) | A model new to the pool starts with auto-merge paused | Proposed |
+| [ADR 0020](docs/adr/0020-review-attention-and-maintainer-understanding.md) | Review attention classes: the maintainer chooses what they keep reading | Accepted, amended (2026-11-28) |
+| [ADR 0021](docs/adr/0021-cross-family-review-panel.md) | Optional cross-family review panel, bounded rounds | Accepted, post-pilot (2026-11-28) |
+| [ADR 0022](docs/adr/0022-new-model-starts-paused.md) | A model new to the pool qualifies itself on replay | Accepted, amended (2026-11-28) |
 | [ADR 0023](docs/adr/0023-promise-checks.md) | Promise checks: per-repository, base against candidate | Proposed (adopted in principle) |
 | [ADR 0024](docs/adr/0024-behavior-effect-at-triage.md) | Record a change's intended behavior effect at Triage | Proposed (facet adopted) |
 | [ADR 0025](docs/adr/0025-several-candidates-chosen-by-evidence.md) | Several fix candidates, chosen by deterministic evidence | Proposed (opt-in adopted) |

@@ -1,8 +1,8 @@
 # Optional cross-family review panel, with bounded rounds
 
-- **Status:** Proposed, awaiting owner review (2026-11-26). Nothing here changes behavior until accepted. The MVP reviewer stays as decided in ADR 0015: a fresh context, possibly the same model.
+- **Status:** Accepted as an opt-in mode built after the pilot (2026-11-28). The MVP reviewer is a fresh context of the same model, decided by the owner on 2026-11-28.
 - **Date:** 2026-11-26
-- **Decided by:** pending @trek-e
+- **Decided by:** @trek-e, 2026-11-28
 - **Research:** [Pi creators live stream](../research/TALK-PI-CREATORS-LIVE.md), mapping rows 13-16
 
 ## Context
@@ -28,11 +28,15 @@ Warden already has the pieces a panel needs: finding fingerprints that deduplica
 - Needs the endpoint registry to know each model's family; that is still open in [MODEL-CONNECTIONS](../research/MODEL-CONNECTIONS.md).
 - No change to merge authority, review events or who decides.
 
-## Questions for the owner
+## Owner decision (2026-11-28)
 
-1. Offer the panel as an opt-in mode?
-2. May agreement count serve as the confidence measure for the "drop below confidence" option?
-3. Confirm the round bound: no re-review of an unchanged head except by maintainer command?
+The owner answered "Yes, open the PR" to this proposal:
+
+1. The panel is an opt-in mode, off by default, built after the pilot and not in the MVP.
+2. Agreement may serve as the confidence measure for "drop below confidence" only once replay shows that dropping by agreement drops no true finding. Blocking findings never drop, whatever the count. Basis: strong models often make the same mistakes, even across providers, so agreement is evidence only after it is measured ([Kim et al., ICML 2025](https://arxiv.org/abs/2506.07962)).
+3. The round bound stands: no re-review of an unchanged head except by maintainer command.
+
+On the related question of the default reviewer, the owner decided the same day: "new context makes same model a new reviewer". A preregistered replay of 183 reviews found a fresh session of the same model caught as many escaped bugs as a reviewer from another family, or more ([Stephens, 2026](https://stephens.page/blog/fresh-eyes-beat-a-second-family/paper/)), so the replay comparison for a panel should include a fresh same-model session as its control.
 
 ## Related
 
