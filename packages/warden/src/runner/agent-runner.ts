@@ -7,7 +7,7 @@ export interface ToolSurface { allow: string[] }                  // named allow
 export interface Budgets { maxToolCalls: number; maxModelTurns: number; wallTimeMs: number }
 /** `workspace`: a directory the session may work in (writable only when asked). Without it the packet directory is the read-only workspace. */
 export interface SessionRequest { task: string; item: number; packetDir: string; tools: ToolSurface; resultSchema: object; budgets: Budgets; expectedModel: string; workspace?: { dir: string; writable: boolean; /** Workspace-relative paths the OS refuses to let the session change (ADR 0014 frozen tests). */ denyWrite?: string[] }; /** The packet holds a read-only snapshot of the repository under ./repo: the session may read and list it, nothing else. */ repoContext?: boolean }
-export interface PreflightReport { ok: boolean; harnessVersion?: string; resolvedModel?: string; isolation?: string; failures: string[] }
+export interface PreflightReport { ok: boolean; harnessVersion?: string; resolvedModel?: string; isolation?: string; /** Endpoint tier (MODEL-CONNECTIONS vocabulary) and the endpoint's host:port, for verdict provenance. Absent => recorded as `unknown`. */ tier?: string; endpoint?: string; failures: string[] }
 /** The harness as a run records it: its name plus the version the preflight observed (e.g. "opencode 2.4.1"). A configured label that already
  *  carries a version keeps it only when nothing was observed; an observed version always replaces it. */
 export const harnessLabel = (harness: string, observed?: string) => observed ? `${harness.split(' ')[0]} ${observed}` : harness;

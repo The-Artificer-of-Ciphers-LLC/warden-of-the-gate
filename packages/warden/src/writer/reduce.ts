@@ -1,3 +1,5 @@
+import { cleanProvenance, provenanceText } from '../runner/provenance.ts';
+import type { Provenance } from '../runner/provenance.ts';
 import type { Effect, Ledger, Obligation, WorkflowState } from '../state/model.ts';
 import { canOverride, canTransition, isTerminal } from '../state/model.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
@@ -300,7 +302,8 @@ function reviewRecord(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
   if (i.origin !== 'ai') return silent('review-record-origin');
   if (l.kind !== 'pr') return silent('review-record-on-issue');
-  const pl = i.payload as { head?: string; base?: string; verdict?: string; severities?: unknown; fingerprints?: unknown; policyDigest?: string };
+  const pl = i.payload as { head?: string; base?: string; verdict?: string; severities?: unknown; fingerprints?: unknown; policyDigest?: string; provenance?: unknown };
+  const prov = cleanProvenance(pl.provenance);
   const sev = Array.isArray(pl.severities) ? (pl.severities as unknown[]) : null;
   if (!pl.head || !pl.base || !pl.verdict || !sev || sev.some((s) => !['blocker', 'major', 'minor', 'nit'].includes(String(s)))) return silent('review-record-malformed');
   if (c.item?.isPr !== true) return silent('review-record-unobserved');
@@ -310,7 +313,7 @@ function reviewRecord(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const sevs = keepIdx.map((k) => sev[k]) as Array<'blocker' | 'major' | 'minor' | 'nit'>; const fpsKept = fpsIn ? keepIdx.map((k) => fpsIn[k]) : undefined; const gates = c.policy.merge?.gates; const gated = sevs.some((s) => s === 'blocker' || (gates ? gates[s] : true));
   const from = l.state; const to: WorkflowState | null = !['needs-review', 'waiting-checks'].includes(from) ? null : gated ? (l.owner?.kind === 'factory' ? 'needs-rework' : null) : 'merge-ready';
   const move = to && canTransition('pr', from, to).ok ? to : null;
-  return { accept: true, plan: move ? [...project(c.policy, from, move), ...(move === 'needs-rework' ? [note(`Review found ${sevs.filter((s) => s === 'blocker' || (gates ? gates[s] : true)).length} blocking finding(s); this factory pull request returns to rework (cycle accounting is persisted).`)] : [])] : [], apply: (led) => { if (move) moveTo(led, move, undefined, c.now); led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sevs, ...(fpsKept ? { fingerprints: fpsKept } : {}), policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; if (led.forceReview && Date.parse(i.source.observedAt) >= Date.parse(led.forceReview.at)) delete led.forceReview; } };
+  return { accept: true, plan: move ? [...project(c.policy, from, move), ...(move === 'needs-rework' ? [note(`Review found ${sevs.filter((s) => s === 'blocker' || (gates ? gates[s] : true)).length} blocking finding(s); this factory pull request returns to rework (cycle accounting is persisted).`)] : [])] : [], apply: (led) => { if (move) moveTo(led, move, undefined, c.now); led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sevs, ...(fpsKept ? { fingerprints: fpsKept } : {}), policyDigest: pl.policyDigest, ...(prov ? { provenance: prov } : {}), acceptedAt: iso(c.now) }; if (led.forceReview && Date.parse(i.source.observedAt) >= Date.parse(led.forceReview.at)) delete led.forceReview; } };
 }
 
 /** `/warden review`: a maintainer asks for a full review of this pull request even though the head is unchanged. The writer only records the request; the next review run on the Mac sees it in the ledger
@@ -382,7 +385,7 @@ function mergeRequest(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const v = evaluateMerge(input);
   if (v.action !== 'merge') return silent(`merge-${v.action}:${v.reasons.join('; ')}`);
   const b = bindingFor(input, v);
-  return { accept: true, plan: [note(`Merge requested for head ${b.expectedHead.slice(0, 8)} (${v.via}${v.approvalId ? ' ' + v.approvalId : ''}). The merge is bound to that head and recorded only after GitHub confirms it.`), { t: 'merge', expectedHead: b.expectedHead }, ...project(c.policy, 'merge-ready', 'merged'), { t: 'mark-merged' }] };
+  return { accept: true, plan: [note(`Merge requested for head ${b.expectedHead.slice(0, 8)} (${v.via}${v.approvalId ? ' ' + v.approvalId : ''}). The merge is bound to that head and recorded only after GitHub confirms it. The review it rests on came from ${l.review?.provenance ? provenanceText(l.review.provenance as Provenance) : 'a session with no recorded provenance'}.`), { t: 'merge', expectedHead: b.expectedHead }, ...project(c.policy, 'merge-ready', 'merged'), { t: 'mark-merged' }] };
 }
 
 /** Persistent rework accounting (three cycles, configurable). A COMPLETED attempt consumes a cycle even with no progress; a failed LAUNCH consumes the
