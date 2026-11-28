@@ -10,7 +10,7 @@ Legend: **[verified]** means exercised in this repository by an automated test o
 |---|---|
 | Node | `>= 26` **[verified]** (`engines`; the example workflows and `warden setup` enforce it) |
 | Mac for model work | macOS with Seatbelt (`sandbox-exec`); tested on macOS 27 only. Model-backed tasks refuse to start without a verified boundary **[verified]** |
-| OpenCode | pinned `2.2.7`; any other version is refused **[verified]** |
+| OpenCode | any 2.x release from `2.2.7` up (`>=2.2.7 <3.0.0`, ADR 0004); 1.x and 3.x are refused, and each run records the version it used. The P0 proofs ran on 2.2.7 only **[verified for 2.2.7]** |
 | Local model | served on loopback by a local OpenAI-compatible server, mlx-serve (default `http://127.0.0.1:11234/v1`; `--model-url` overrides). `--context-limit N` is required with `--runner opencode`: give the context window the model is loaded with on the server; Warden refuses the run rather than guess one (`--output-limit N`, default 32768, must be smaller); a non-loopback provider, or a resolved model that is not a configured local one, is refused. There is no hosted fallback **[verified]** |
 | GitHub | a repository you own; a GitHub App with `issues: write`, `metadata: read` and `actions: read` installed only on it **[owner]** |
 

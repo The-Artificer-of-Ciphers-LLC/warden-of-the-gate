@@ -8,10 +8,16 @@ export interface Budgets { maxToolCalls: number; maxModelTurns: number; wallTime
 /** `workspace`: a directory the session may work in (writable only when asked). Without it the packet directory is the read-only workspace. */
 export interface SessionRequest { task: string; item: number; packetDir: string; tools: ToolSurface; resultSchema: object; budgets: Budgets; expectedModel: string; workspace?: { dir: string; writable: boolean; /** Workspace-relative paths the OS refuses to let the session change (ADR 0014 frozen tests). */ denyWrite?: string[] }; /** The packet holds a read-only snapshot of the repository under ./repo: the session may read and list it, nothing else. */ repoContext?: boolean }
 export interface PreflightReport { ok: boolean; harnessVersion?: string; resolvedModel?: string; isolation?: string; failures: string[] }
+/** The harness as a run records it: its name plus the version the preflight observed (e.g. "opencode 2.4.1"). A configured label that already
+ *  carries a version keeps it only when nothing was observed; an observed version always replaces it. */
+export const harnessLabel = (harness: string, observed?: string) => observed ? `${harness.split(' ')[0]} ${observed}` : harness;
 export type SessionOutcome = 'completed' | 'interrupted' | 'budget-exceeded' | 'failed';
 export interface SessionResult { outcome: SessionOutcome; structuredOutput?: unknown; transcriptPath?: string; usage: { toolCalls: number; modelTurns: number; wallMs: number }; reason?: string }
 export interface AgentRunner {
+  /** `pinnedVersion`: the harness version, or range of versions, the adapter accepts (OpenCode: `>=2.2.7 <3.0.0`, ADR 0004). */
   readonly name: string; readonly pinnedVersion: string;
+  /** The harness version the last preflight observed, i.e. what this run actually used; recorded with the run's result. */
+  readonly observedVersion?: string;
   /** Resolved model + all enabled providers must be local, isolation present, endpoint answering. Any unknown => ok:false (blocks execution). */
   preflight(): Promise<PreflightReport>;
   /** Fresh serial session. MUST honor `signal` (interrupt) and call `monitor.observe` as tool calls/turns happen. */

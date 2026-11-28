@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OpenCodeRunner, classifyBaseURL, extractJson, parseVersion } from '../src/runner/opencode.ts';
+import { OpenCodeRunner, SUPPORTED_OPENCODE, classifyBaseURL, extractJson, openCodeVersionProblem, parseVersion } from '../src/runner/opencode.ts';
 
 test('classifyBaseURL accepts only loopback literals and rejects lookalike hosts and userinfo tricks', () => {
   assert.equal(classifyBaseURL('http://127.0.0.1:11234/v1').local, true);
@@ -23,6 +23,28 @@ test('preflight fails closed when the harness is missing or the endpoint is not 
 
 test('parseVersion reads the real `opencode --version` output shape and rejects garbage', () => {
   assert.equal(parseVersion('opencode v2.2.7\n'), '2.2.7'); assert.equal(parseVersion('2.2.7'), '2.2.7'); assert.equal(parseVersion('no version'), undefined);
+});
+
+test('OpenCode is accepted as a 2.x range from 2.2.7 (owner ruling 2026-11-27, ADR 0004): 2.4.1 runs, 1.x, 3.x and anything below 2.2.7 are refused', () => {
+  assert.equal(SUPPORTED_OPENCODE, '>=2.2.7 <3.0.0');
+  for (const ok of ['2.2.7', '2.2.8', '2.4.1', '2.10.0', '2.99.99']) assert.equal(openCodeVersionProblem(ok), undefined, ok);
+  for (const bad of ['1.9.9', '1.0.0', '3.0.0', '3.1.4', '10.0.0']) assert.match(String(openCodeVersionProblem(bad)), /outside the supported range >=2\.2\.7 <3\.0\.0/, bad);
+  for (const old of ['2.2.6', '2.1.9', '2.0.0']) assert.match(String(openCodeVersionProblem(old)), /older than 2\.2\.7/, old);
+  assert.match(String(openCodeVersionProblem('2.4')), /not a version number/);
+});
+
+test('preflight records the OpenCode version it observed and refuses only versions outside 2.x', async (t) => {
+  const { chmodSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'warden-oc-ver-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const fake = (v: string) => { const bin = path.join(dir, `opencode-${v}`); writeFileSync(bin, `#!/bin/sh\necho "opencode v${v}"\n`); chmodSync(bin, 0o755); return bin; };
+  const versionFailure = (f: string[]) => f.filter((x) => /opencode \d+\.\d+\.\d+ is (outside|older)/.test(x));
+  const r241 = new OpenCodeRunner({ bin: fake('2.4.1'), modelId: 'm', contextLimit: 65536, baseURL: 'https://api.example.com/v1' }); const p241 = await r241.preflight();
+  assert.equal(p241.harnessVersion, '2.4.1'); assert.equal(r241.observedVersion, '2.4.1', 'the run records the version it actually used'); assert.deepEqual(versionFailure(p241.failures), []);
+  assert.equal(r241.pinnedVersion, '>=2.2.7 <3.0.0');
+  for (const v of ['1.14.0', '3.0.0']) {
+    const r = new OpenCodeRunner({ bin: fake(v), modelId: 'm', contextLimit: 65536, baseURL: 'https://api.example.com/v1' }); const p = await r.preflight();
+    assert.equal(p.ok, false); assert.equal(r.observedVersion, v); assert.equal(versionFailure(p.failures).length, 1, p.failures.join('; '));
+  }
 });
 
 test('the context window is never guessed: preflight refuses without a confirmed window and names the flag', async () => {

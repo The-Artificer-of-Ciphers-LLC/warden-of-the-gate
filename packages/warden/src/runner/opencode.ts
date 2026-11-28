@@ -7,12 +7,13 @@ import path from 'node:path';
 import { containmentSelfTest, spawnContained } from './seatbelt.ts';
 import type { ContainmentSpec } from './seatbelt.ts';
 import type { AgentRunner, BudgetMonitor, PreflightReport, SessionRequest, SessionResult } from './agent-runner.ts';
+import { OPENCODE_FLOOR, OPENCODE_MAJOR, SUPPORTED_OPENCODE } from '../version.ts';
 
-/** The pinned OpenCode adapter (ADR 0006), lifted from the P0 runtime proof. One fresh serial session per call: a contained headless server
+/** The OpenCode adapter (ADR 0006), lifted from the P0 runtime proof. One fresh serial session per call: a contained headless server
  *  on a random loopback port, hardened environment and isolated XDG state, a deny-all tool surface, local-only provider. The packet is inlined
  *  into the prompt and the model replies with one JSON object (structured output is prompt-driven, then Ajv-validated by the caller).
  *  The runner, not the harness, enforces tool-call and wall-clock budgets (P0: the harness step cap bounds model steps only). */
-export const PINNED_OPENCODE = '2.2.7';
+export { OPENCODE_FLOOR, OPENCODE_MAJOR, SUPPORTED_OPENCODE };
 export const DEFAULT_OPENCODE_BIN = '/opt/homebrew/bin/opencode';
 export const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]', 'localhost']);
 const HARDEN_ENV: Record<string, string> = {
@@ -20,7 +21,7 @@ const HARDEN_ENV: Record<string, string> = {
 };
 const DENY_ALL = { action: '*', resource: '*', effect: 'deny' as const };
 
-export interface OpenCodeOptions { bin?: string; pinned?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; /** false turns OpenCode's automatic compaction off (an experiment switch; default is OpenCode's own). */ autoCompact?: boolean; /** share of the loaded window (0..1) at which a session is told to answer now; 0 disables. */ windowGuard?: number; maxPromptChars?: number; startupMs?: number }
+export interface OpenCodeOptions { bin?: string; /** lowest accepted 2.x version; defaults to OPENCODE_FLOOR. */ minVersion?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; /** false turns OpenCode's automatic compaction off (an experiment switch; default is OpenCode's own). */ autoCompact?: boolean; /** share of the loaded window (0..1) at which a session is told to answer now; 0 disables. */ windowGuard?: number; maxPromptChars?: number; startupMs?: number }
 
 export function classifyBaseURL(raw: string): { local: boolean; host: string; port?: number; reason?: string } {
   let u: URL; try { u = new URL(raw); } catch { return { local: false, host: raw, reason: 'unparseable URL' }; }
@@ -32,6 +33,16 @@ export function classifyBaseURL(raw: string): { local: boolean; host: string; po
 
 /** `opencode --version` prints e.g. "opencode v2.2.7"; compare only the semantic version. */
 export function parseVersion(out: string): string | undefined { return out.match(/(\d+\.\d+\.\d+)/)?.[1]; }
+
+const triple = (v: string) => v.split('.').map(Number);
+/** Why an OpenCode version is refused, or undefined when it is accepted: same major as OPENCODE_MAJOR (2) and not below the floor (2.2.7). */
+export function openCodeVersionProblem(version: string, floor: string = OPENCODE_FLOOR): string | undefined {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) return `opencode version "${version}" is not a version number`;
+  const [ma, mi, pa] = triple(version); const [fa, fi, fp] = triple(floor);
+  if (ma !== OPENCODE_MAJOR) return `opencode ${version} is outside the supported range ${SUPPORTED_OPENCODE} (major ${ma}, Warden supports ${OPENCODE_MAJOR}.x)`;
+  if (ma < fa || (ma === fa && (mi < fi || (mi === fi && pa < fp)))) return `opencode ${version} is older than ${floor}, the lowest supported version (${SUPPORTED_OPENCODE})`;
+  return undefined;
+}
 
 export function extractJson(text: string): { value?: unknown; error?: string } {
   const t = text.trim(); const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -46,11 +57,13 @@ interface Server { base: string; child: ChildProcess; stateDir: string; pid: num
 
 export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
-  private o: Required<Omit<OpenCodeOptions, 'pinned' | 'autoCompact' | 'windowGuard'>> & { pinned: string; autoCompact?: boolean; windowGuard: number };
+  /** The version `opencode --version` reported at the last preflight: what this run actually used. */
+  observedVersion?: string;
+  private o: Required<Omit<OpenCodeOptions, 'minVersion' | 'autoCompact' | 'windowGuard'>> & { minVersion: string; autoCompact?: boolean; windowGuard: number };
   constructor(o: OpenCodeOptions) {
-    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, pinned: o.pinned ?? PINNED_OPENCODE, baseURL: o.baseURL ?? 'http://127.0.0.1:11234/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 0, /* no default: the window must be configured (--context-limit), and the run refuses without it (see windowProblem) */
+    this.o = { bin: o.bin ?? DEFAULT_OPENCODE_BIN, minVersion: o.minVersion ?? OPENCODE_FLOOR, baseURL: o.baseURL ?? 'http://127.0.0.1:11234/v1', modelId: o.modelId, contextLimit: o.contextLimit ?? 0, /* no default: the window must be configured (--context-limit), and the run refuses without it (see windowProblem) */
       outputLimit: o.outputLimit ?? 32768, /* a reasoning model spends output tokens thinking: a 4096 cap truncates the JSON answer */ windowGuard: o.windowGuard ?? 0, maxPromptChars: o.maxPromptChars ?? 60_000, startupMs: o.startupMs ?? 60_000, ...(o.autoCompact === false ? { autoCompact: false } : {}) };
-    this.pinnedVersion = this.o.pinned;
+    this.pinnedVersion = `>=${this.o.minVersion} <${OPENCODE_MAJOR + 1}.0.0`;   // a range now, not one exact version (ADR 0004)
   }
   /** The context window is never guessed and never read from server-specific fields: the OpenAI spec's `/v1/models` carries no window, so it is a required,
    *  configured value (the owner's "follow the published specs" ruling; see docs/research/MODEL-CONNECTIONS.md). A window that is too large overflows; one that
@@ -119,7 +132,8 @@ export class OpenCodeRunner implements AgentRunner {
   async preflight(): Promise<PreflightReport> {
     const failures: string[] = []; const rep: PreflightReport = { ok: false, failures };
     try { rep.harnessVersion = parseVersion(execFileSync(this.o.bin, ['--version'], { encoding: 'utf8', timeout: 10_000 })); } catch { failures.push(`opencode not runnable at ${this.o.bin}`); }
-    if (rep.harnessVersion && rep.harnessVersion !== this.o.pinned) failures.push(`opencode ${rep.harnessVersion} != pinned ${this.o.pinned}`);
+    this.observedVersion = rep.harnessVersion;
+    if (rep.harnessVersion) { const v = openCodeVersionProblem(rep.harnessVersion, this.o.minVersion); if (v) failures.push(v); }
     const st = await containmentSelfTest().catch((e) => ({ ok: false, observed: {}, failures: [String(e)] }));
     if (st.ok) rep.isolation = 'seatbelt'; else failures.push(`containment not verified: ${st.failures.join('; ')}`);
     const w = this.windowProblem(); if (w) failures.push(w);

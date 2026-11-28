@@ -23,7 +23,7 @@ export const DEFAULT_WARDEN = {
   /** What one review shows; the ledger keeps every finding either way. */
   review: { maxPostedFindings: 10, uncertainFindings: 'maintainer-decides' as 'maintainer-decides' | 'drop-below-confidence', minConfidence: 0.5 },
   runtime: {
-    harness: 'opencode', harnessVersion: '2.2.7', modelPool: ['local-default'], provider: 'local', remoteFallback: false, isolation: 'seatbelt',
+    harness: 'opencode', harnessVersion: '2.x', /* the accepted OpenCode range: any 2.x at or above 2.2.7 (ADR 0004); each run records the version it used */ modelPool: ['local-default'], provider: 'local', remoteFallback: false, isolation: 'seatbelt',
     budgets: { maxItems: 10, maxModelTurns: 40, maxToolCalls: 200, wallTimeSeconds: 1800, maxOperationRetries: 5, maxFactoryImplementationPrs: 1 },
   },
   clocks: {
