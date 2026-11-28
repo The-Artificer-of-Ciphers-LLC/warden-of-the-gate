@@ -1,8 +1,8 @@
 # Evidence from tests that predate the change, and differential checks
 
-- **Status:** Decided on 2026-11-26: the older-test rule (provenance, card and gate), where new feature tests go, and opt-in differential checks. One detail remains Proposed: how a redundant added test is shown (open question 3).
+- **Status:** Decided. On 2026-11-26: the older-test rule (provenance, card and gate), where new feature tests go, and opt-in differential checks. On 2026-11-27: a redundant added test is shown on the card only, not as a finding.
 - **Date:** 2026-11-25
-- **Decided by:** @trek-e (2026-11-26); pending for how a redundant added test is shown
+- **Decided by:** @trek-e (2026-11-26; how a redundant added test is shown, 2026-11-27)
 - **Research:** [Sumner, "How to Ship Millions of Lines of Agent-Written Code"](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md), candidates 1 and 2; [follow-up research on feature tests](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#1-tests-for-new-features-without-test-sprawl)
 
 ## Context
@@ -28,13 +28,13 @@ This ADR is adjacent to proposals in open PR #47: frozen acceptance tests (ADR 0
 
 ### Where new feature tests go (decided 2026-11-26, @trek-e)
 
-@trek-e's goal is no test proliferation each time a feature is added, with a new function-level test only for a completely new function, following established practice. The sources (Software Engineering at Google ch. 12; Beck's Test Desiderata; Shi et al., FSE 2014) agree with the goal but warn against growing an existing test case to cover new behavior. They also measure redundancy by what a test catches, not what it runs. Decided, except the last bullet, which is still proposed:
+@trek-e's goal is no test proliferation each time a feature is added, with a new function-level test only for a completely new function, following established practice. The sources (Software Engineering at Google ch. 12; Beck's Test Desiderata; Shi et al., FSE 2014) agree with the goal but warn against growing an existing test case to cover new behavior. They also measure redundancy by what a test catches, not what it runs. Decided (the last bullet on 2026-11-27):
 
 - **New behavior is a new case in the existing suite.** A feature or bug fix on existing code adds new test cases inside the test file or suite that already exercises the unit it extends, reusing that suite's fixtures and helpers. It does not edit existing cases. That stays the blocking condition above.
 - **New test files only for new units.** A new test file, harness or fixture set is created only when the change adds a public unit (function, module or class) with no existing test home.
 - **Provenance records placement.** For each `added` test, record whether it sits in an existing test file or a new one.
 - **Review reports sprawl.** A new test file, harness or fixture set for code that already has a test home is a Review finding, unless the change adds a new unit.
-- **Redundancy is measured (proposed).** Where mutation checks run (PR #47, ADR 0016), the card lists added tests that killed no mutant the pre-existing suite missed.
+- **Redundancy is measured and shown, not blocked.** Where mutation checks run (ADR 0016), the card lists added tests that killed no mutant the pre-existing suite missed. This is shown on the card only: it is not a finding and does not block merge.
 
 ### Differential checks (decided 2026-11-26, @trek-e)
 
@@ -56,7 +56,7 @@ This ADR is adjacent to proposals in open PR #47: frozen acceptance tests (ADR 0
 
 1. ~~Show provenance on the card only, or also gate on it?~~ Decided 2026-11-26 (see Decision).
 2. ~~Adopt `verification.differential` as opt-in, off by default?~~ Decided 2026-11-26: yes.
-3. ~~Adopt the refinement on where new feature tests go?~~ Decided 2026-11-26: yes. Still open: is an added test that kills no new mutant a finding, or shown on the card only?
+3. ~~Adopt the refinement on where new feature tests go?~~ Decided 2026-11-26: yes. ~~Is an added test that kills no new mutant a finding, or shown on the card only?~~ Decided 2026-11-27: shown on the card only.
 
 ## Related
 

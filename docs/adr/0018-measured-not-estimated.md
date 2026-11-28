@@ -1,13 +1,18 @@
 # Measured, not estimated: weighted robust scorecards and untrusted self-assessment
 
-- **Status:** Partly decided. Decided by @trek-e on 2026-11-26:
+- **Status:** Decided, except two proposals. Decided by @trek-e on 2026-11-26:
   - cited rules must resolve;
   - a live rate outside its limits pauses auto-merge for that model;
   - the maintainer lifts the pause after replay passes.
 
-  Proposed, awaiting owner review: the weighted, robust scorecard design (which replaces the earlier run-over-run comparison at the owner's direction), the model scorecard's replay sets, and the treatment of self-assessment and abstentions.
-- **Date:** 2026-11-25 (revised 2026-11-26)
-- **Decided by:** @trek-e for the cited-rule rule, the pause and how it lifts (2026-11-26); pending for the rest
+  Decided by @trek-e on 2026-11-27 ("Yes"):
+  - the weighted, robust scorecard design, which replaces the earlier run-over-run comparison at the owner's direction;
+  - safety metrics weigh more than throughput metrics by default;
+  - the model scorecard's replay sets.
+
+  Still proposed, awaiting owner review: the treatment of self-assessment and abstentions.
+- **Date:** 2026-11-25 (revised 2026-11-26 and 2026-11-27)
+- **Decided by:** @trek-e for the cited-rule rule, the pause and how it lifts (2026-11-26), and for the weighted scorecard, its default weights and the model scorecard (2026-11-27); pending for self-assessment and abstentions
 - **Research:** [Sumner, "How to Ship Millions of Lines of Agent-Written Code"](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md), candidate 4; follow-up research on [model scorecards](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect) and [weighted, robust scorecards](../research/TALK-SUMNER-AGENT-WRITTEN-CODE.md#3-a-weighted-robust-scorecard)
 
 ## Context
@@ -40,7 +45,7 @@ Warden already treats model self-reported success as untrusted (§5 Review). It 
 - **Out of limits pauses auto-merge.** When a model's live rate goes past its control limit, Retro flags it and auto-merge pauses for that model. Its other work continues, but its verdicts cannot make a PR eligible for auto-merge until the pause is lifted.
 - **The maintainer lifts the pause, after replay passes.** Only the maintainer clears a paused model, and only after its regression set passes again on replay. The live rate drifting back inside its limits does not lift it: with auto-merge paused, the live sample is small and no longer reflects auto-merge work.
 
-### Weighted, robust scorecard (proposed 2026-11-26)
+### Weighted, robust scorecard (decided 2026-11-27, @trek-e)
 
 Each part of the design follows one of the sources named above.
 
@@ -61,13 +66,13 @@ Each part of the design follows one of the sources named above.
   - a longer window.
 - **Weights are explicit, owned and tested.**
   - Weights live in `.github/warden.yml`, set by the maintainer, and are shown on the scorecard.
-  - Proposed defaults weight safety metrics (escaped defects, reverted factory merges, maintainer overrides) above throughput metrics.
+  - By default, safety metrics (escaped defects, reverted factory merges, maintainer overrides) weigh more than throughput metrics (decided 2026-11-27).
   - The OECD/JRC handbook treats the choice of weights and aggregation as something to test for robustness. So Retro also reports whether the scorecard's verdict changes under equal weights.
 - **The composite is a summary, never a gate.** The weighted composite is for the trend line. It is always shown broken down into its metrics, so a reader can see what moved it (the OECD/JRC "back to the data" step: composites "should be transparent and fit to be decomposed").
 - **Uncertainty is shown.** Every score carries a standard error and a 95% interval, clustered by repository or PR. Model comparisons use paired differences on the same cases (Anthropic, statistical evals).
 - **The previous run is one column, not the baseline.** The card still shows the last comparable run beside the current one, because a change is easy to see that way (Sumner). Judgement uses the rolling median baseline and limits above.
 
-### Model scorecard (proposed 2026-11-26)
+### Model scorecard (decided 2026-11-27, @trek-e)
 
 These parts follow Anthropic's guidance on agent evals and on eval statistics, and Google's code-review ML acceptance metrics (sources in the research note).
 
@@ -90,7 +95,7 @@ These parts follow Anthropic's guidance on agent evals and on eval statistics, a
   - Retro samples session transcripts each window.
   - Retro flags a regression set that has sat at 100%, so new cases get added.
 
-### Other proposals (2026-11-25)
+### Still proposed (2026-11-25)
 
 - **Self-assessment is a claim, not evidence.** A session's estimates of effort, impact, risk or feasibility, and its "not worth it" or "infeasible" reasons for abstaining, are recorded as model claims on the item. They never satisfy a gate and never close an item on their own.
 - **Abstentions are revisited.** Retro lists abstentions whose stated reason was a model estimate, so the maintainer can see whether the factory is talking itself out of work it could do.
@@ -106,12 +111,12 @@ These parts follow Anthropic's guidance on agent evals and on eval statistics, a
 
 ## Open questions for the owner
 
-1. ~~Adopt the run-over-run scorecard for Retro and scan reports?~~ Replaced 2026-11-26 at the owner's direction by the weighted, robust scorecard. Adopt that design?
+1. ~~Adopt the run-over-run scorecard for Retro and scan reports?~~ Replaced 2026-11-26 at the owner's direction by the weighted, robust scorecard. ~~Adopt that design?~~ Decided 2026-11-27: yes.
 2. ~~Must a cited rule resolve to real ORDERS, config or spec text?~~ Decided 2026-11-26: yes.
-3. Adopt the model scorecard (replay regression and capability sets per model with intervals)?
+3. ~~Adopt the model scorecard (replay regression and capability sets per model with intervals)?~~ Decided 2026-11-27: yes.
 4. ~~When a live rate leaves its control limits, is that a Retro finding only, or does it also pause auto-merge?~~ Decided 2026-11-26: both.
 5. ~~What lifts the pause?~~ Decided 2026-11-26: the maintainer clears it, after the regression set passes again on replay.
-6. Default weights: should safety metrics (escaped defects, reverted merges, overrides) outweigh throughput metrics by default? The rolling baseline length and the low-volume floor are left to build planning.
+6. ~~Default weights: should safety metrics (escaped defects, reverted merges, overrides) outweigh throughput metrics by default?~~ Decided 2026-11-27: yes. The rolling baseline length and the low-volume floor are left to build planning.
 
 ## Related
 
