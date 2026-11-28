@@ -8,6 +8,7 @@ import { setup } from './commands/setup.ts';
 import { configValidate } from './commands/config.ts';
 import { run } from './commands/run.ts';
 import { status } from './commands/status.ts';
+import { metrics } from './commands/metrics.ts';
 import { resume, stop } from './commands/control.ts';
 import { eventHandle, journalReconcile, writerDrain } from './commands/writer.ts';
 import { approvals } from './commands/approvals.ts';
@@ -26,7 +27,8 @@ const HELP = `warden ${CLI_VERSION}  (warden.yml schema v${WARDEN_SCHEMA_VERSION
   setup [--create-config --repo o/n --maintainers a,b] [--create-orders] [--create-labels] [--approve-ceiling]
   config validate [--show-effective]
   run --task <intake|triage|claim|implement|review|rework|sweep|retro> [--dry-run] [--item N]
-  status [--json]
+  status [--json]                           (pilot gate, must-be-zero counters, measured budgets)
+  metrics [--json]                          (the on-demand metrics report: everything else PRD section 11 tracks)
   stop [--global] [--reason text]          resume --confirm [--global]
   writer drain                              (the one serialized effect path; Actions entry point)
   journal reconcile                         (recover durable local submissions; never acts as the writer)
@@ -57,6 +59,7 @@ export async function main(argv: string[], io: { env?: NodeJS.ProcessEnv; cwd?: 
     else if (a === 'config' && b === 'validate') r = await configValidate(c);
     else if (a === 'run') r = await run(c);
     else if (a === 'status') r = await status(c);
+    else if (a === 'metrics') r = await metrics(c);
     else if (a === 'stop') r = await stop(c);
     else if (a === 'resume') r = await resume(c);
     else if (a === 'writer' && b === 'drain') r = await writerDrain(c);
