@@ -65,3 +65,10 @@ State: not qualified. New model, dev half, one run: accepted 17/18, recall 3/6, 
 | 1.12 | closed | n/a | Finding-id prompt rule tried and not adopted |
 
 Everything above ran against the simulated GitHub and scripted models. Nothing was posted to a real repository, no permission or token changed, nothing was published or activated.
+
+## Progress (2026-11-27): Wave 2
+
+| # | State | PR | Notes |
+|---|---|---|---|
+| 2.1 | merged | 141 | Replay: PRD §11 thresholds, critical-case flag, same-file same-hunk matching |
+| 2.2a | in review | see PR | ADR 0014 frozen tests: test session then fix session, freeze record (path, sha256, base commit) in the Implement record, OS write denial and digest re-check, `test-dispute` exit with one re-test round, PR body lists frozen tests separately, `verification.testPaths`. Not done: Rework does not yet keep the freeze (a rework session can still edit tests; gate-weakening detection still applies); the dispute round is decided by the test session, not a maintainer, until the second dispute |
