@@ -53,6 +53,11 @@
         "keepOpen": {
           "type": "string",
           "minLength": 1
+        },
+        "urgent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label a configured maintainer applies to mark work urgent; it only orders the queue."
         }
       }
     },
@@ -70,6 +75,31 @@
         "signature": {
           "type": "string",
           "maxLength": 200
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What one review shows (PRD section 5 Review). The ledger always keeps every finding; these settings only decide what is posted.",
+      "properties": {
+        "maxPostedFindings": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "At most this many findings are shown per review, most severe first."
+        },
+        "uncertainFindings": {
+          "enum": [
+            "maintainer-decides",
+            "drop-below-confidence"
+          ],
+          "description": "maintainer-decides: every finding is shown and the maintainer decides. drop-below-confidence: findings whose reported confidence is below minConfidence are not posted (they stay in the ledger)."
+        },
+        "minConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         }
       }
     },

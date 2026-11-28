@@ -16,8 +16,9 @@ export function reviewRecordIntent(o: { repo: string; item: number; marker: Mark
 const clip = (t: string, n: number) => (t.length <= n ? t : t.slice(0, n - 1) + '\u2026');
 /** The proposal that carries a recorded review to GitHub (`review-post`): the most severe findings first, capped (the ledger keeps the full list), each clipped so the whole intent stays well inside the
  *  intent size limit. `causalAfter` is the `review-record` it must follow. */
-export function reviewPostIntent(o: { repo: string; item: number; marker: Marker; causalAfter?: string; cap?: number; actor?: string }): IntentCore {
-  const m = o.marker; const { shown, omitted } = capFindings(m.findings, o.cap ?? DEFAULT_MAX_POSTED_FINDINGS);
+export function reviewPostIntent(o: { repo: string; item: number; marker: Marker; causalAfter?: string; cap?: number; actor?: string; /** `review.uncertainFindings` and `review.minConfidence`: with drop-below-confidence, a finding that REPORTS a confidence under the minimum is not posted (it stays in the ledger); a finding with no confidence is kept. */ dropBelow?: number }): IntentCore {
+  const m = o.marker; const kept = o.dropBelow === undefined ? m.findings : m.findings.filter((f) => f.confidence === undefined || f.confidence >= o.dropBelow!);
+  const { shown, omitted } = capFindings(kept, o.cap ?? DEFAULT_MAX_POSTED_FINDINGS);
   const findings = shown.map((f) => ({ severity: f.severity, path: f.path, line: f.line, inline: f.inline === true, rationale: clip(f.rationale, 280), correction: clip(f.correction, 200), ...(f.fingerprint ? { fingerprint: f.fingerprint } : {}) }));
   const fp = m.findings.map((f) => f.fingerprint ?? `${f.path}:${f.line}:${f.id}`).sort().join(',');
   return { v: 1, kind: 'review-post', repo: o.repo, item: o.item, itemKind: 'pr', origin: 'ai', actor: o.actor ?? 'warden-review', ...(o.causalAfter ? { causalAfter: o.causalAfter } : {}),

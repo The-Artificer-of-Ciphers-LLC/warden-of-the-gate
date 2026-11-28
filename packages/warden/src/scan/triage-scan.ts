@@ -1,3 +1,4 @@
+import { authorizedUrgent } from './urgency.ts';
 import type { Store } from '../github/store.ts';
 import { readOnly } from '../github/store.ts';
 import type { AgentRunner } from '../runner/agent-runner.ts';
@@ -13,10 +14,10 @@ import { iso } from '../util.ts';
 /** Bounded triage scan (P3): the same discipline as the review scan. Eligible = open ISSUES that Warden already tracks (intake/adopt first), still awaiting
  *  triage, whose current revision has no accepted triage. Deterministic selection, serial, finite item and wall-time budgets, then exit. Shadow only: results
  *  are local draft cards; nothing is posted, labelled or closed. */
-export interface TriageScanOpts { store: Store; runner: AgentRunner; kvFor: (item: number) => TriageKV; cfg: ReviewConfig; caps: SelectCaps; wallTimeMs: number; stopped: () => boolean | Promise<boolean>; signal?: AbortSignal; clock?: () => number; policyDigest?: string; skip?: Set<number>; only?: number[] }
+export interface TriageScanOpts { maintainers?: readonly string[]; urgentLabel?: string; store: Store; runner: AgentRunner; kvFor: (item: number) => TriageKV; cfg: ReviewConfig; caps: SelectCaps; wallTimeMs: number; stopped: () => boolean | Promise<boolean>; signal?: AbortSignal; clock?: () => number; policyDigest?: string; skip?: Set<number>; only?: number[] }
 export interface TriageScanReport { startedAt: string; finishedAt: string; effectiveMode: 'shadow'; completed: Array<{ item: number; outcome: TriageOutcome['kind']; notice: string }>; pending: Array<{ item: number; why: string }>; blocked: Array<{ item: number; why: string }>; skipped: Array<{ item: number; why: string }>; stoppedEarly?: string }
 
-export async function eligibleIssues(store: Store, o: Pick<TriageScanOpts, 'kvFor' | 'cfg' | 'clock' | 'skip' | 'only'>): Promise<{ cands: Candidate[]; skipped: TriageScanReport['skipped'] }> {
+export async function eligibleIssues(store: Store, o: Pick<TriageScanOpts, 'kvFor' | 'cfg' | 'clock' | 'skip' | 'only'> & { maintainers?: readonly string[]; urgentLabel?: string }): Promise<{ cands: Candidate[]; skipped: TriageScanReport['skipped'] }> {
   const ro = readOnly(store); const now = (o.clock ?? Date.now)(); const cands: Candidate[] = []; const skipped: TriageScanReport['skipped'] = [];
   for (const it of (await ro.listIssues({ state: 'open' })).filter((i) => !i.isPr && !o.skip?.has(i.number) && (!o.only || o.only.includes(i.number)))) {
     const comments = await ro.listComments(it.number);
@@ -26,7 +27,7 @@ export async function eligibleIssues(store: Store, o: Pick<TriageScanOpts, 'kvFo
     const rec = o.kvFor(it.number).read(it.number);
     if (rec?.marker && rec.marker.revision === revisionOf(it, comments)) { skipped.push({ item: it.number, why: 'already triaged at this revision' }); continue; }
     const exhausted = (rec?.attempts.used ?? 0) >= o.cfg.maxAttempts;
-    cands.push({ item: it.number, kind: 'issue', ageHours: Math.max(0, (now - Date.parse(it.createdAt)) / 3_600_000), inProgress: (rec?.attempts.used ?? 0) > 0, blockedReason: exhausted ? 'retry budget used up; waits for a maintainer' : undefined });
+    cands.push({ item: it.number, kind: 'issue', urgent: await authorizedUrgent(readOnly(store), it, { label: o.urgentLabel, maintainers: o.maintainers ?? [] }), ageHours: Math.max(0, (now - Date.parse(it.createdAt)) / 3_600_000), inProgress: (rec?.attempts.used ?? 0) > 0, blockedReason: exhausted ? 'retry budget used up; waits for a maintainer' : undefined });
   }
   return { cands, skipped };
 }
