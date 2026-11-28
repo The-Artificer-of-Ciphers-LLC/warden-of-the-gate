@@ -1,18 +1,19 @@
-// PROOF-runtime (a)-(e) + tool-escalation-under-containment: pinned OpenCode, local models, cancellation, finite budgets.
+// PROOF-runtime (a)-(e) + tool-escalation-under-containment: supported OpenCode 2.x, local models, cancellation, finite budgets.
 // Run: node src/proofs/runtime.ts [--only=A,B,C,D,E,F]   -> results/runtime.json  (exit 1 on any required failure)
-// Requires: LM Studio server on :1235 with a local model (auto-loads qwen3.8-27b as "warden-proof-qwen" if absent).
+// Requires: mlx-serve (ddalcu) on 127.0.0.1:11234 serving the model in .github/warden.yml's modelPool (beamster/Qwen3.8-Flash-Next-Sushi-2bpw).
+// The proof never loads or unloads models on that server: it is shared with the maintainer's own Warden reviews.
 import { createHash, randomBytes } from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { check, finish, newReport, sh, type Report } from '../lib/report.ts';
-import { cleanup, createSession, harnessEnv, messages, OPENCODE_BIN, PINNED_OPENCODE, prompt, startServer, summarize, type Server } from '../lib/oc.ts';
-import { startRefusingProxy, proxyEnv } from '../lib/proxy.ts';
+import { cleanup, createSession, harnessEnv, inSupportedRange, messages, OPENCODE_BIN, parseVersion, prompt, startServer, summarize, SUPPORTED_OPENCODE, type Server } from '../lib/oc.ts';
+import { inferenceRequests, startModelTap, startRefusingProxy, proxyEnv } from '../lib/proxy.ts';
 import {
-  awaitCompletion, cfgFor, classifyBaseURL, extractJson, freePort, HARDEN_ENV, LMSTUDIO_PORT, LOCAL_MODEL_ID, LOCAL_MODEL_KEY,
-  lmsLoaded, preflightResolve, reviewPrompt, validateReview, REVIEW_SCHEMA,
+  awaitCompletion, cfgFor, classifyBaseURL, extractJson, FORWARDERS, freePort, HARDEN_ENV, LOCAL_MODEL_ID, LOCAL_PROVIDER_ID, metricsSnapshot,
+  MODEL_BASE_URL, MODEL_PORT, modelPortOwners, preflightResolve, proofContextLimit, reviewPrompt, servedModel, validateReview, REVIEW_SCHEMA,
 } from '../lib/runtime-common.ts';
 import { realpath, requireContainment, type ContainmentSpec } from '../lib/seatbelt.ts';
 
@@ -37,14 +38,11 @@ async function runPrompt(s: Server, sid: string, text: string, timeoutMs = 24000
   return { done, summary: summarize(done.msgs), promptId: p.id as string, promptCreated: p.time.created as number };
 }
 
-function ensureModelLoaded(): { loaded: boolean; detail: unknown } {
-  let l = [] as ReturnType<typeof lmsLoaded>;
-  try { l = lmsLoaded(); } catch { /* lms unavailable */ }
-  if (!l.some((m) => m.identifier === LOCAL_MODEL_ID)) {
-    spawnSync('lms', ['load', LOCAL_MODEL_KEY, '-c', '32768', '--identifier', LOCAL_MODEL_ID, '-y'], { encoding: 'utf8', timeout: 300000 });
-    l = lmsLoaded();
-  }
-  return { loaded: l.some((m) => m.identifier === LOCAL_MODEL_ID), detail: l };
+/** mlx-serve loads models on demand and may evict; a listed model is served on the next request. Nothing here loads or unloads
+ *  anything on the shared server: the proof only reads /v1/models. */
+async function ensureModelServed(): Promise<{ loaded: boolean; detail: unknown }> {
+  const m = await servedModel();
+  return { loaded: m.listed, detail: { status: m.status, row: m.row, listedIds: m.ids.slice(0, 20) } };
 }
 
 // =============================================================================================
@@ -56,7 +54,8 @@ async function sectionA(r: Report) {
   r.versions.opencode = ver; r.versions.opencodeServerApi = info.body.version;
   r.versions.opencodeBinarySha256 = sha256(realpath(OPENCODE_BIN));
   r.versions.opencodeBinary = realpath(OPENCODE_BIN);
-  check(r, { id: 'A1-pinned-version', claim: `installed OpenCode equals the pinned supported version v${PINNED_OPENCODE} (CLI and running server agree)`, expected: `opencode v${PINNED_OPENCODE}`, observed: { cli: ver, server: info.body.version }, pass: ver === `opencode v${PINNED_OPENCODE}` && info.body.version === PINNED_OPENCODE });
+  const cliVer = parseVersion(ver);
+  check(r, { id: 'A1-supported-version', claim: `installed OpenCode is inside the supported range ${SUPPORTED_OPENCODE} (ADR 0004 amendment 2026-11-27) and the CLI and running server report the same version, which this report records`, expected: `opencode ${SUPPORTED_OPENCODE}, CLI == server`, observed: { cli: ver, server: info.body.version, providersReadyMsAfterListening: s.providersReadyMs }, pass: inSupportedRange(cliVer) && cliVer === info.body.version });
   check(r, { id: 'A2-isolated-config', claim: 'harness state/config comes only from the proof-owned XDG dirs, never the maintainer ~/.config/opencode', expected: 'paths under proof temp dir', observed: info.body.paths, pass: Object.values(info.body.paths as Record<string, string>).filter((p) => typeof p === 'string' && p.startsWith('/')).every((p) => !p.includes('/.config/opencode') && !p.includes('/.local/share/opencode') && !p.includes(os.homedir())) });
 
   const N = 5;
@@ -97,8 +96,8 @@ async function sectionA(r: Report) {
   const b = await createSession(s, { directory: dir, permissions: [DENY_ALL] });
   const rb = await runPrompt(s, b.id, 'What codeword did I ask you to remember? If you do not know, reply exactly: UNKNOWN.');
   check(r, { id: 'A7-no-cross-session-leak', claim: 'a fresh session cannot recall a codeword given to an earlier session', expected: 'codeword absent from fresh session reply', observed: { reply: rb.summary.text.slice(0, 120) }, pass: !rb.summary.text.includes(code) });
-  r.notes.push('OpenCode 2.2.7 HTTP API has no JSON-Schema response-format parameter on prompt; structured output is adapter-owned: schema in prompt, reply parsed, Ajv-validated by the runner (ADR 0006 already requires Ajv re-validation regardless of harness).');
-  r.notes.push('Newer OpenCode 2.3.0 is available via Homebrew; NOT adopted. Pin stays at 2.2.7 until the same proofs re-pass on a candidate.');
+  r.notes.push('Structured output is adapter-owned: schema in prompt, reply parsed, Ajv-validated by the runner (ADR 0006 requires Ajv re-validation regardless of harness). On 2.2.7 the prompt API had no JSON-Schema response-format parameter; this run used the version in versions.opencode.');
+  r.notes.push(`OpenCode range ${SUPPORTED_OPENCODE} per the ADR 0004 amendment (2026-11-27); this report records the version that ran.`);
   await s.stop(); cleanup(s); rmSync(dir, { recursive: true, force: true });
 }
 
@@ -152,7 +151,7 @@ async function sectionB(r: Report) {
 
   // B6 repo-supplied config cannot steer the harness
   const ws2 = path.join(base, 'ws2'); mkdirSync(ws2);
-  writeFileSync(path.join(ws2, 'opencode.json'), JSON.stringify({ providers: { lmstudio: { name: 'x', package: '@ai-sdk/openai-compatible', settings: { baseURL: 'http://192.0.2.1:9/v1' }, models: { [LOCAL_MODEL_ID]: { name: 'x' } } } }, permissions: [{ action: '*', resource: '*', effect: 'allow' }] }));
+  writeFileSync(path.join(ws2, 'opencode.json'), JSON.stringify({ providers: { [LOCAL_PROVIDER_ID]: { name: 'x', package: '@ai-sdk/openai-compatible', settings: { baseURL: 'http://192.0.2.1:9/v1' }, models: { [LOCAL_MODEL_ID]: { name: 'x' } } } }, permissions: [{ action: '*', resource: '*', effect: 'allow' }] }));
   const px = await startRefusingProxy();
   const hard = await boot(cfgFor(), ws2, proxyEnv(px.port), true);
   const pfHard = await preflightResolve(hard);
@@ -167,28 +166,32 @@ async function sectionB(r: Report) {
 // =============================================================================================
 async function sectionC(r: Report) {
   const base = tmp(); const ws = path.join(base, 'ws'); mkdirSync(ws);
-  const model = ensureModelLoaded();
-  const dev = (model.detail as any[]).find((m) => m.identifier === LOCAL_MODEL_ID);
-  check(r, { id: 'C0-model-on-this-device', claim: 'the model serving the proof is loaded on THIS Mac (LM Studio device = Local), not an LM Link remote device', expected: 'device Local', observed: dev, pass: !!dev && /^local$/i.test(String(dev.device)) });
+  const model = await ensureModelServed();
+  const owners = modelPortOwners();
+  const forwarders = owners.filter((o) => FORWARDERS.test(o.command));
+  // mlx-serve's only documented remote marker is an "@" in the model id (model@peer from --lan-discover, model@name from Providers).
+  const remoteSuffix = LOCAL_MODEL_ID.includes('@');
+  check(r, { id: 'C0-model-on-this-device', claim: `the model serving the proof is served on THIS Mac: mlx-serve lists it with no "@peer"/"@provider" remote suffix, and the process listening on :${MODEL_PORT} is a local server, not a forwarder (ssh, socat, ...). Server-declared, like LM Studio's device=Local: it shows which program answers, not where it forwards`, expected: 'listed, no @ suffix, a non-forwarder listener', observed: { listed: model.loaded, row: (model.detail as any).row, listeners: owners, forwarders }, pass: model.loaded && !remoteSuffix && owners.length > 0 && forwarders.length === 0 });
+  if (owners.some((o) => /^\*:|^0\.0\.0\.0:|^\[::\]:/.test(o.address))) r.notes.push(`mlx-serve listens on all interfaces (${owners.map((o) => o.address).join(', ')}), so other machines on the network can reach it; start it with --host 127.0.0.1 (docs/research/MODEL-CONNECTIONS.md, bind default).`);
 
   // table: hostile URL shapes
   const table: Array<[string, boolean]> = [
-    ['http://127.0.0.1:1235/v1', true], ['http://localhost:1235/v1', true], ['http://[::1]:1235/v1', true],
+    ['http://127.0.0.1:11234/v1', true], ['http://localhost:11234/v1', true], ['http://[::1]:11234/v1', true],
     ['https://opencode.ai/inference/openai/v1', false], ['http://192.168.0.21:8000', false], ['http://127.0.0.1.evil.example/v1', false],
-    ['http://localhost.evil.example/v1', false], ['http://127.0.0.1@evil.example/v1', false], ['http://0.0.0.0:1235/v1', false],
-    ['http://Mac-Mini.local:1235/v1', false], ['file:///etc/passwd', false], ['not a url', false],
+    ['http://localhost.evil.example/v1', false], ['http://127.0.0.1@evil.example/v1', false], ['http://0.0.0.0:11234/v1', false],
+    ['http://Mac-Mini.local:11234/v1', false], ['file:///etc/passwd', false], ['not a url', false],
   ];
   const wrong = table.filter(([u, want]) => classifyBaseURL(u).local !== want);
   check(r, { id: 'C1-url-classification', claim: 'only loopback literals are "local"; hosted, LAN, mDNS, lookalike and userinfo-trick hosts are rejected', expected: 'all rows as expected', observed: { wrong }, pass: wrong.length === 0 });
 
   // live: good config
   const s1 = await boot(cfgFor(), ws);
-  const EXPECT = { providerID: 'lmstudio', modelID: LOCAL_MODEL_ID };
+  const EXPECT = { providerID: LOCAL_PROVIDER_ID, modelID: LOCAL_MODEL_ID };
   const pf1 = await preflightResolve(s1, { probe: true, expect: EXPECT });
-  check(r, { id: 'C2-resolved-local-accepted', claim: 'preflight asks the running harness for the RESOLVED model; default resolves to a loopback LM Studio endpoint, only that provider is enabled, endpoint healthy and serving the model', expected: 'ok=true', observed: pf1, pass: pf1.ok && pf1.enabledProviders.length === 1 && pf1.endpoint?.modelListed === true });
+  check(r, { id: 'C2-resolved-local-accepted', claim: 'preflight asks the running harness for the RESOLVED model; default resolves to the loopback mlx-serve endpoint, only that provider is enabled, endpoint healthy and serving the model', expected: 'ok=true', observed: pf1, pass: pf1.ok && pf1.enabledProviders.length === 1 && pf1.endpoint?.modelListed === true });
   const sesOk = await createSession(s1, { directory: ws, permissions: [DENY_ALL] });
   const runOk = await runPrompt(s1, sesOk.id, 'Reply with the single word: pong');
-  check(r, { id: 'C3-actual-model-per-message', claim: 'every assistant message records the provider/model that actually served it; matches the preflight resolution', expected: `lmstudio/${LOCAL_MODEL_ID}`, observed: runOk.summary.models, pass: runOk.summary.models.length === 1 && runOk.summary.models[0] === `lmstudio/${LOCAL_MODEL_ID}` });
+  check(r, { id: 'C3-actual-model-per-message', claim: 'every assistant message records the provider/model that actually served it; matches the preflight resolution', expected: `${LOCAL_PROVIDER_ID}/${LOCAL_MODEL_ID}`, observed: runOk.summary.models, pass: runOk.summary.models.length === 1 && runOk.summary.models[0] === `${LOCAL_PROVIDER_ID}/${LOCAL_MODEL_ID}` });
   await s1.stop(); cleanup(s1);
 
   // live: configured-local default that resolves remote (egress observed via refusing proxy; nothing is forwarded)
@@ -196,7 +199,7 @@ async function sectionC(r: Report) {
   const cases: Array<[string, Record<string, unknown>, boolean, string[]]> = [
     ['default model is hosted (opencode/big-pickle), harness UNhardened: resolves hosted', cfgFor({ defaultModel: 'opencode/big-pickle', denyHosted: false }), false, ['unhardened']],
     ['default model is hosted, harness hardened: silently substitutes ANOTHER local model (resolved != configured)', cfgFor({ defaultModel: 'opencode/big-pickle' }), false, []],
-    ['"lmstudio" provider baseURL points at a remote host', cfgFor({ baseURL: 'https://api.example.invalid/v1' }), false, []],
+    ['"mlx-serve" provider baseURL points at a remote host', cfgFor({ baseURL: 'https://api.example.invalid/v1' }), false, []],
     ['configured-local default but hosted provider left enabled (ambient)', cfgFor({ denyHosted: false }), false, []],
   ];
   const outs: any[] = [];
@@ -253,9 +256,14 @@ async function sectionD(r: Report) {
   execFileSync('git', ['init', '-q'], { cwd: ws }); writeFileSync(path.join(ws, 'README.md'), 'base\n');
   execFileSync('git', ['-c', 'user.name=p', '-c', 'user.email=p@x.invalid', 'add', '-A'], { cwd: ws });
   execFileSync('git', ['-c', 'user.name=p', '-c', 'user.email=p@x.invalid', 'commit', '-qm', 'base'], { cwd: ws });
-  ensureModelLoaded();
-  const lmStatus = () => lmsLoaded().find((m) => m.identifier === LOCAL_MODEL_ID)?.status;
-  let s = await boot(cfgFor(), ws);
+  await ensureModelServed();
+  // Every harness in this section reaches mlx-serve through a recording loopback tap, so the proof sees each inference stream the
+  // harness opens and when the harness hangs up on it. The tap passes the hang-up on, so mlx-serve sees what it would see without it.
+  // It also keeps this proof's streams apart from the maintainer's own Warden reviews on the same mlx-serve.
+  const tap = await startModelTap(MODEL_PORT);
+  const tapCfg = () => cfgFor({ baseURL: tap.baseURL });
+  const openStreams = (before = Infinity) => inferenceRequests(tap, 0, before).filter((x) => x.completedAt === undefined && x.clientClosedAt === undefined);
+  let s = await boot(tapCfg(), ws);
   const writeTools = [DENY_ALL, allow('read'), allow('write'), allow('edit'), allow('apply_patch')];
   // D1 interrupt mid-generation, with a workspace write already done
   let ses = await createSession(s, { directory: ws, permissions: writeTools });
@@ -264,17 +272,25 @@ async function sectionD(r: Report) {
   let wrote = false;
   for (let i = 0; i < 120 && !wrote; i++) { await sleep(1000); wrote = existsSync(path.join(ws, 'notes.txt')); }
   await sleep(4000); // let the essay start streaming
-  const statusBefore = lmStatus();
+  const metricsBefore = await metricsSnapshot();
   const t0 = Date.now();
+  const openAtInterrupt = openStreams(t0); // live records: their clientClosedAt fills in when the harness hangs up
   const ir = await s.api('POST', `/api/session/${ses.id}/interrupt`, {});
   const done = await awaitCompletion(s, ses.id, p1.time.created - 1, 20000);
   const stopMs = Date.now() - t0;
   await sleep(2500);
-  const statusAfter = lmStatus();
+  const metricsAfter = await metricsSnapshot();
+  const streams = openAtInterrupt.map((x) => ({ path: x.path, bytesDown: x.bytesDown, hungUpMsAfterInterrupt: x.clientClosedAt === undefined ? null : x.clientClosedAt - t0, completed: x.completedAt !== undefined }));
+  const startedAfterInterrupt = inferenceRequests(tap, t0).length;
+  const allHungUp = openAtInterrupt.length > 0 && streams.every((x) => x.hungUpMsAfterInterrupt !== null && x.hungUpMsAfterInterrupt <= 3000);
   const m1 = await messages(s, ses.id);
   const sm1 = summarize(m1);
   const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  check(r, { id: 'D1-interrupt-stops-generation', claim: 'interrupt returns, session records outcome=interrupted, and the local model actually stops generating (LM Studio status generating -> idle)', expected: 'interrupted; lms idle ≤3s after', observed: { interrupt: ir.body, outcome: done.outcome, stopMs, lmsBefore: statusBefore, lmsAfter: statusAfter }, pass: ir.body?.interrupted === true && done.outcome === 'interrupted' && ['generating', 'processingPrompt'].includes(String(statusBefore)) && statusAfter === 'idle' });
+  check(r, { id: 'D1-interrupt-stops-generation', claim: 'interrupt returns, session records outcome=interrupted, and the harness stops the generation it asked for: every inference stream open at the interrupt is hung up within 3s (observed on the wire by the tap) and no new inference request starts', expected: 'interrupted; >=1 open stream, all hung up <=3s; 0 new', observed: { interrupt: ir.body, outcome: done.outcome, stopMs, streamsOpenAtInterrupt: streams, startedAfterInterrupt }, pass: ir.body?.interrupted === true && done.outcome === 'interrupted' && allHungUp && startedAfterInterrupt === 0 });
+  // LM Studio reported generating -> idle per model; mlx-serve documents no in-flight or per-request status (only /health, /props and,
+  // with --metrics, /metrics.json whose keys are undocumented), and it is shared with the maintainer's reviews. So the server-side half
+  // of the claim is recorded, never guessed from a key name.
+  check(r, { id: 'D1b-server-stops-decoding', claim: 'UNVERIFIED on mlx-serve: after the hang-up the model server itself stops decoding (not exactly observable: mlx-serve documents no per-request status, and other clients may share it)', expected: 'mlx-serve per-request status (none documented)', observed: { metricsBefore, metricsAfter, note: 'metrics are recorded for a human reader; pass=false here is "not proven", not "failed"' }, pass: false, severity: 'unverified' });
   check(r, { id: 'D2-work-recoverable', claim: 'after cancel, partial work is recoverable: transcript persisted, workspace changes enumerable via git, and the workspace can be restored to the base revision', expected: 'notes.txt dirty + transcript present', observed: { wroteBeforeCancel: wrote, dirty, assistantMessages: sm1.assistantCount, reasoningOrTextPersisted: m1.some((x) => x.type === 'assistant' && (x.content ?? []).length > 0) }, pass: wrote && dirty.some((l) => l.includes('notes.txt')) && sm1.assistantCount >= 1 });
   execFileSync('git', ['clean', '-fdq'], { cwd: ws }); execFileSync('git', ['checkout', '-q', '--', '.'], { cwd: ws });
   check(r, { id: 'D3-restore-clean', claim: 'workspace restores to a clean base state (rollback path for abandoned work)', expected: 'clean', observed: execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }), pass: execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }).trim() === '' });
@@ -285,15 +301,18 @@ async function sectionD(r: Report) {
   ses = await createSession(s, { directory: ws, permissions: [DENY_ALL], title: 'crash-victim' });
   await prompt(s, ses.id, 'Write a very long 2000-word essay about lighthouse history. Do not stop early.');
   await sleep(5000);
-  const lmsDuringCrash = lmStatus();
+  const metricsDuringCrash = await metricsSnapshot();
+  const tk = Date.now();
+  const openAtKill = openStreams(tk);
   process.kill(-s.pid, 'SIGKILL');
-  const lmsRightAfterKill = (await sleep(300), lmStatus());
-  let lmsSettledMs = -1; const tk = Date.now();
-  for (let i = 0; i < 60; i++) { if (lmStatus() === 'idle') { lmsSettledMs = Date.now() - tk; break; } await sleep(500); }
+  await sleep(3000);
+  const killStreams = openAtKill.map((x) => ({ path: x.path, bytesDown: x.bytesDown, hungUpMsAfterKill: x.clientClosedAt === undefined ? null : x.clientClosedAt - tk }));
+  const killHungUp = openAtKill.length > 0 && killStreams.every((x) => x.hungUpMsAfterKill !== null && x.hungUpMsAfterKill <= 3000);
+  const metricsAfterKill = await metricsSnapshot();
   const stateDir = s.stateDir;
   cleanupServerOnly(s);
   const port2 = await freePort();
-  const s2 = await startServer({ config: cfgFor(), workdir: ws, port: port2, env: HARDEN_ENV, stateDir });
+  const s2 = await startServer({ config: tapCfg(), workdir: ws, port: port2, env: HARDEN_ENV, stateDir });
   servers.push(s2);
   const list = await s2.api('GET', '/api/session');
   const found = (list.body?.data ?? []).find((x: any) => x.id === ses.id);
@@ -308,17 +327,17 @@ async function sectionD(r: Report) {
   }
   const intr2 = await s2.api('POST', `/api/session/${ses.id}/interrupt`, {}); // runner always interrupts before new work
   await sleep(1500);
-  const lmsIdleAfterRecovery = lmStatus();
+  const openAfterRecovery = openStreams().length;
   // Recovery policy: never continue the crashed session; start a FRESH one (ADR 0004: fresh session per item).
   const fresh = await createSession(s2, { directory: ws, permissions: [DENY_ALL], title: 'recovery' });
   const rr2 = await runPrompt(s2, fresh.id, 'Reply with the single word: recovered', 120000);
-  check(r, { id: 'D5-crash-recovery', claim: 'after SIGKILL of the harness mid-generation, a restarted harness on the same state dir still lists the crashed session and its prompt (audit trail); a FRESH session on the restarted harness completes normally and LM Studio is idle', expected: 'session + prompt persisted; fresh session succeeds', observed: { sessionListed: !!found, userPromptPersisted: !!userMsg, harnessAutoResumedUnfinishedTurn: autoResumed, interrupt: intr2.body, lmsIdleAfterRecovery, freshOutcome: rr2.done.outcome, freshText: rr2.summary.text.slice(0, 30) }, pass: !!found && !!userMsg && lmsIdleAfterRecovery === 'idle' && rr2.done.outcome === 'succeeded' && /recovered/i.test(rr2.summary.text) });
+  check(r, { id: 'D5-crash-recovery', claim: 'after SIGKILL of the harness mid-generation, a restarted harness on the same state dir still lists the crashed session and its prompt (audit trail); a FRESH session on the restarted harness completes normally, and no inference stream is left open: the killed harness\'s stream to the model server hangs up within 3s of the kill and none is open after recovery (observed by the tap; whether mlx-serve stops decoding is D1b)', expected: 'session + prompt persisted; stream hung up; 0 open; fresh session succeeds', observed: { sessionListed: !!found, userPromptPersisted: !!userMsg, harnessAutoResumedUnfinishedTurn: autoResumed, interrupt: intr2.body, streamsOpenAtKill: killStreams, openStreamsAfterRecovery: openAfterRecovery, freshOutcome: rr2.done.outcome, freshText: rr2.summary.text.slice(0, 30) }, pass: !!found && !!userMsg && killHungUp && openAfterRecovery === 0 && rr2.done.outcome === 'succeeded' && /recovered/i.test(rr2.summary.text) });
   // Informational: what happens if the runner instead re-prompts the crashed session
   const same = await runPrompt(s2, ses.id, 'Reply with the single word: recovered', 150000);
   check(r, { id: 'D5b-same-session-resume-hazard', claim: 'FINDING (informational): re-prompting the crashed session also answers its dangling unanswered prompt (long essay), i.e. unbounded work - so recovery must use a fresh session', expected: 'informational', observed: { outcome: same.done.outcome, ms: same.done.ms, replyChars: same.summary.text.length, harnessAutoResumedUnfinishedTurn: autoResumed }, pass: true, severity: 'informational' });
   if (same.done.timedOut) await s2.api('POST', `/api/session/${ses.id}/interrupt`, {});
-  check(r, { id: 'D6-accepted-request-honesty', claim: 'OBSERVED (informational): when the harness is SIGKILLed, LM Studio aborts the in-flight generation as soon as the client socket dies, so no zombie inference continues; the accepted request is still not exactly-once - its partial output is lost and reports must say "request was accepted, result discarded"', expected: 'informational', observed: { lmsDuringRun: lmsDuringCrash, lmsRightAfterKill, lmsIdleAfterMs: lmsSettledMs }, pass: true, severity: 'informational' });
-  await s2.stop(); cleanup(s2); rmSync(base, { recursive: true, force: true });
+  check(r, { id: 'D6-accepted-request-honesty', claim: 'OBSERVED (informational): when the harness is SIGKILLed its socket to the model server dies with it, so mlx-serve sees the client hang up (whether it then stops decoding is D1b; on 2.2.7 LM Studio aborted at once); the accepted request is still not exactly-once - its partial output is lost and reports must say "request was accepted, result discarded"', expected: 'informational', observed: { streamsOpenAtKill: killStreams, metricsDuringRun: metricsDuringCrash, metricsAfterKill }, pass: true, severity: 'informational' });
+  await s2.stop(); cleanup(s2); await tap.close(); rmSync(base, { recursive: true, force: true });
 }
 function cleanupServerOnly(_s: Server) { /* state dir deliberately retained for restart */ }
 
@@ -326,11 +345,11 @@ function cleanupServerOnly(_s: Server) { /* state dir deliberately retained for 
 async function sectionE(r: Report) {
   const base = tmp(); const ws = path.join(base, 'ws'); mkdirSync(ws);
   writeFileSync(path.join(ws, 'big.txt'), Array.from({ length: 4000 }, (_, i) => `line ${i} ${'x'.repeat(30)}`).join('\n'));
-  ensureModelLoaded();
+  await ensureModelServed();
   const cfg = cfgFor({
     toolOutput: { max_bytes: 2048, max_lines: 40 },
     extraModels: {
-      capped: { modelID: LOCAL_MODEL_ID, name: 'capped', limit: { context: 32768, output: 48 } },
+      capped: { modelID: LOCAL_MODEL_ID, name: 'capped', limit: { context: proofContextLimit(), output: 48 } },
       tiny: { modelID: LOCAL_MODEL_ID, name: 'tiny', limit: { context: 4096, output: 512 } },
     },
     agents: { capped: { mode: 'primary', steps: 2, permissions: [DENY_ALL, allow('shell', 'echo *')] } },
@@ -365,7 +384,7 @@ async function sectionE(r: Report) {
   check(r, { id: 'E1c-adapter-tool-call-budget', claim: `INFORMATIONAL: an adapter-side poll can stop a run that exceeds a tool-call budget (${TOOL_BUDGET}); overshoot is possible because calls batched in one step execute before the poll sees them`, expected: interruptedAt === null ? 'informational' : 'interrupted and terminated', observed: { exercised: interruptedAt !== null, toolPartsWhenInterrupted: interruptedAt, toolsCompletedAtEnd: execT, outcome: dt.outcome, timedOut: dt.timedOut, ms: Date.now() - tt, note: interruptedAt === null ? 'not exercised: the model stayed within the budget this run' : 'bounded in time, not in exact count' }, pass: !dt.timedOut, severity: 'informational' });
 
   // E2 output-token cap
-  ses = await createSession(s, { directory: ws, model: { id: 'capped', providerID: 'lmstudio' }, permissions: [DENY_ALL] });
+  ses = await createSession(s, { directory: ws, model: { id: 'capped', providerID: LOCAL_PROVIDER_ID }, permissions: [DENY_ALL] });
   run = await runPrompt(s, ses.id, 'Write a 1500-word essay about the history of lighthouses.', 120000);
   check(r, { id: 'E2-output-token-cap', claim: 'model limit.output=48 ends the turn with finish=length and a failed run (not an unbounded generation)', expected: 'finish=length', observed: { finish: run.summary.finish, outcome: run.done.outcome, tokens: run.summary.tokens, ms: run.done.ms }, pass: run.summary.finish === 'length' && run.done.ms < 60000 });
   check(r, { id: 'E2b-reasoning-overshoot', claim: 'INFORMATIONAL: reasoning tokens are not strictly bounded by limit.output for thinking models; wall-clock budget is the hard bound', expected: 'informational', observed: { reasoningTokens: run.summary.tokens.reasoning, cap: 48 }, pass: true, severity: 'informational' });
@@ -392,7 +411,7 @@ async function sectionE(r: Report) {
   check(r, { id: 'E4-wall-clock-budget', claim: 'adapter-enforced wall budget (8s) interrupts a runaway turn; total ≤ budget + 3s', expected: 'interrupted within budget+3s', observed: { totalMs: total, outcome: dw2.outcome, interrupt: intr?.body }, pass: dw2.outcome === 'interrupted' && total <= BUDGET + 3000 });
 
   // E5 context limit behaviour
-  ses = await createSession(s, { directory: ws, model: { id: 'tiny', providerID: 'lmstudio' }, permissions: [DENY_ALL] });
+  ses = await createSession(s, { directory: ws, model: { id: 'tiny', providerID: LOCAL_PROVIDER_ID }, permissions: [DENY_ALL] });
   const filler = Array.from({ length: 900 }, (_, i) => `Fact ${i}: lighthouse number ${i} stands on rock ${i * 7}.`).join('\n');
   const pc = await prompt(s, ses.id, `Summarize in one line:\n${filler}`);
   const dc = await awaitCompletion(s, ses.id, pc.time.created - 1, 120000);
@@ -402,8 +421,10 @@ async function sectionE(r: Report) {
 
   // E6 measurements
   const rss = sh('ps', ['-o', 'rss=', '-p', String(s.pid)]);
-  const lm = lmsLoaded().find((m) => m.identifier === LOCAL_MODEL_ID);
-  check(r, { id: 'E6-measured-resources', claim: 'INFORMATIONAL measured resource footprint on this Mac', expected: 'informational', observed: { harnessRssMB: Math.round(Number(rss) / 1024), lmStudioModelGB: lm?.sizeGB, stepsMs: undefined, hostMemGiB: r.host.memGiB }, pass: true, severity: 'informational' });
+  const served = await servedModel();
+  const serverPid = modelPortOwners()[0]?.pid;
+  const serverRss = serverPid ? sh('ps', ['-o', 'rss=', '-p', String(serverPid)]) : '';
+  check(r, { id: 'E6-measured-resources', claim: 'INFORMATIONAL measured resource footprint on this Mac', expected: 'informational', observed: { harnessRssMB: Math.round(Number(rss) / 1024), modelServerRssMB: serverRss ? Math.round(Number(serverRss) / 1024) : undefined, servedModel: served.row, declaredContext: proofContextLimit(), hostMemGiB: r.host.memGiB }, pass: true, severity: 'informational' });
   await s.stop(); cleanup(s); rmSync(base, { recursive: true, force: true });
 }
 
@@ -415,9 +436,9 @@ async function sectionF(r: Report) {
   const canaryDir = path.join(home, `.warden-p0-canary-oc-${process.pid}`); mkdirSync(canaryDir);
   const canary = path.join(canaryDir, 'credentials'); writeFileSync(canary, 'HOME-CREDENTIAL-CANARY-OC');
   const escaped = path.join(home, `.warden-p0-oc-escaped-${process.pid}`);
-  ensureModelLoaded();
+  await ensureModelServed();
   const stateDir = path.join(base, 'state'); mkdirSync(stateDir);
-  const spec: ContainmentSpec = { workspace: ws, workspaceWritable: true, scratch: stateDir, allowTcp: [{ port: LMSTUDIO_PORT }], readonlyPaths: ['/opt/homebrew/bin', '/opt/homebrew/Cellar/opencode'] };
+  const spec: ContainmentSpec = { workspace: ws, workspaceWritable: true, scratch: stateDir, allowTcp: [{ port: MODEL_PORT }], readonlyPaths: ['/opt/homebrew/bin', '/opt/homebrew/Cellar/opencode'] };
   const port = await freePort();
   const s = await startServer({ config: cfgFor(), workdir: ws, port, env: HARDEN_ENV, stateDir, contain: { ...spec, listenPorts: [port] } });
   servers.push(s);
@@ -465,14 +486,17 @@ async function sectionF(r: Report) {
 async function main() {
   const r = newReport('PROOF-runtime', 'runtime', {
     sections: only,
-    harness: `OpenCode v${PINNED_OPENCODE} (Homebrew), headless via local HTTP API, isolated XDG state, hardening env ${Object.keys(HARDEN_ENV).join(',')}`,
-    inference: `LM Studio :${LMSTUDIO_PORT}, model ${LOCAL_MODEL_KEY} as "${LOCAL_MODEL_ID}" (loopback only)`,
+    harness: `OpenCode ${SUPPORTED_OPENCODE} (Homebrew), headless via local HTTP API, isolated XDG state, hardening env ${Object.keys(HARDEN_ENV).join(',')}`,
+    inference: `mlx-serve (ddalcu) at ${MODEL_BASE_URL}, provider id "${LOCAL_PROVIDER_ID}", model "${LOCAL_MODEL_ID}" (loopback only)`,
     structuredOutputSchema: REVIEW_SCHEMA.$id,
   });
-  r.versions.lmStudioCli = sh('lms', ['version']).replace(/\x1b\[[0-9;]*m/g, '').split('\n').find((l) => /commit/i.test(l)) ?? 'lms (version line unavailable)';
+  r.versions.opencode = sh(OPENCODE_BIN, ['--version']);
+  // mlx-serve documents no version over HTTP; record what its binary prints, if it is on PATH (first line only).
+  r.versions.mlxServe = sh('mlx-serve', ['--version']).split('\n')[0].slice(0, 120);
   r.versions.ajv = JSON.parse(readFileSync(new URL('../../node_modules/ajv/package.json', import.meta.url), 'utf8')).version;
-  const m = ensureModelLoaded();
-  check(r, { id: 'P0-prereq-model', claim: `local model "${LOCAL_MODEL_ID}" is loaded in LM Studio`, expected: 'loaded', observed: m.detail, pass: m.loaded });
+  const m = await ensureModelServed();
+  check(r, { id: 'P0-prereq-model', claim: `local model "${LOCAL_MODEL_ID}" is listed by mlx-serve at ${MODEL_BASE_URL}/models`, expected: 'listed', observed: m.detail, pass: m.loaded });
+  r.inputs.declaredContextLimit = proofContextLimit();
   const sections: Record<string, (r: Report) => Promise<void>> = { A: sectionA, B: sectionB, C: sectionC, D: sectionD, E: sectionE, F: sectionF };
   for (const k of only) {
     console.log(`\n=== section ${k} ===`);

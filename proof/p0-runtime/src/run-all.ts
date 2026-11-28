@@ -1,6 +1,6 @@
 // Runs every runtime/isolation/lookup proof and prints a one-screen summary. Exit 1 if any required check fails.
 //   node src/run-all.ts            # full set (≈20-30 min: local-model sessions dominate)
-//   node src/run-all.ts --fast     # isolation + lookup only (no model needed, ≈10 s)
+//   node src/run-all.ts --fast     # isolation + lookup only (no model calls, ≈10 s)
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,7 +17,9 @@ for (const [name, file] of steps) {
 console.log('\n================ SUMMARY ================');
 for (const [name] of steps) {
   const j = JSON.parse(readFileSync(path.join(RESULTS_DIR, `${name}.json`), 'utf8'));
-  const req = j.checks.filter((c: any) => c.severity !== 'informational');
-  console.log(`${j.verdict.padEnd(5)} ${name.padEnd(10)} ${req.filter((c: any) => c.pass).length}/${req.length} required  (+${j.checks.length - req.length} informational)  ${j.startedAt}`);
+  const req = j.checks.filter((c: any) => (c.severity ?? 'required') === 'required');
+  const unv = j.checks.filter((c: any) => c.severity === 'unverified');
+  const inf = j.checks.length - req.length - unv.length;
+  console.log(`${j.verdict.padEnd(5)} ${name.padEnd(10)} ${req.filter((c: any) => c.pass).length}/${req.length} required  (+${inf} informational${unv.length ? `, ${unv.length} unverified: ${unv.map((c: any) => c.id).join(' ')}` : ''})  ${j.startedAt}`);
 }
 process.exit(bad ? 1 : 0);

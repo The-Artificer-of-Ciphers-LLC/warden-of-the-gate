@@ -5,9 +5,21 @@ import net from 'node:net';
 import { Ajv } from 'ajv';
 import type { Server } from './oc.ts';
 
-export const LMSTUDIO_PORT = 1235;
-export const LOCAL_MODEL_ID = 'warden-proof-qwen'; // identifier given to the loaded LM Studio model
-export const LOCAL_MODEL_KEY = 'qwen3.8-27b';
+/** The MVP model server is mlx-serve (ddalcu) on loopback (owner rulings 2026-11-24 and 2026-11-28: "we are only using mlx-serve").
+ *  Port and model match .github/warden.yml's modelPool; override with WARDEN_PROOF_MODEL_PORT / WARDEN_PROOF_MODEL. */
+export const MODEL_PORT = Number(process.env.WARDEN_PROOF_MODEL_PORT ?? 11234);
+export const MODEL_BASE_URL = `http://127.0.0.1:${MODEL_PORT}/v1`;
+export const LOCAL_MODEL_ID = process.env.WARDEN_PROOF_MODEL ?? 'beamster/Qwen3.8-Flash-Next-Sushi-2bpw';
+/** Provider id Warden registers the local endpoint under (same as packages/warden/src/runner/opencode.ts, PR #148). Not "lmstudio":
+ *  OpenCode merges a config provider into a built-in provider of the same id, and its built-in lmstudio plugin probes its own path. */
+export const LOCAL_PROVIDER_ID = 'mlx-serve';
+export const LOCAL_PROVIDER_NAME = 'mlx-serve (local)';
+/** OpenCode's built-in local provider plugins; denied so they can never become an enabled provider beside Warden's own. */
+export const BUILTIN_LOCAL_PROVIDERS = ['lmstudio', 'ollama'] as const;
+/** Context window the proof declares to OpenCode: 32768, or the window mlx-serve reports for the model if that is smaller
+ *  (mlx-serve pins the real window at model load). Set by servedModel() before any session is created. */
+let servedContext = 32768;
+export const proofContextLimit = () => servedContext;
 
 /** Env flags that stop the harness from phoning home / enabling hosted free models / reading repo config. */
 export const HARDEN_ENV: Record<string, string> = {
@@ -38,21 +50,22 @@ export interface CfgOpts {
 
 export function cfgFor(o: CfgOpts = {}): Record<string, unknown> {
   return {
-    model: o.defaultModel ?? `lmstudio/${LOCAL_MODEL_ID}`,
+    model: o.defaultModel ?? `${LOCAL_PROVIDER_ID}/${LOCAL_MODEL_ID}`,
     providers: {
-      lmstudio: {
-        name: 'LM Studio (local)',
+      [LOCAL_PROVIDER_ID]: {
+        name: LOCAL_PROVIDER_NAME,
         package: '@ai-sdk/openai-compatible',
-        settings: { baseURL: o.baseURL ?? `http://127.0.0.1:${LMSTUDIO_PORT}/v1` },
+        settings: { baseURL: o.baseURL ?? MODEL_BASE_URL },
         models: {
-          [LOCAL_MODEL_ID]: { name: LOCAL_MODEL_ID, limit: { context: o.contextLimit ?? 32768, output: o.outputLimit ?? 4096 } },
+          [LOCAL_MODEL_ID]: { name: LOCAL_MODEL_ID, limit: { context: o.contextLimit ?? servedContext, output: o.outputLimit ?? 4096 } },
           ...(o.extraModels ?? {}),
         },
       },
     },
     update: 'disable',
     share: 'disabled',
-    ...(o.denyHosted === false ? {} : { policies: [{ action: 'provider.use', resource: 'opencode', effect: 'deny' }] }),
+    // Built-in local plugins are always denied (as in the Warden adapter); denyHosted:false only re-enables the hosted "opencode" provider.
+    policies: [...(o.denyHosted === false ? [] : ['opencode']), ...BUILTIN_LOCAL_PROVIDERS].map((resource) => ({ action: 'provider.use', resource, effect: 'deny' })),
     ...(o.agents ? { agents: o.agents } : {}),
     ...(o.toolOutput ? { tool_output: o.toolOutput } : {}),
   };
@@ -80,8 +93,16 @@ export interface Preflight { ok: boolean; reasons: string[]; resolved?: Resolved
  */
 export async function preflightResolve(s: Server, opts: { probe?: boolean; expect?: { providerID: string; modelID: string } } = {}): Promise<Preflight> {
   const reasons: string[] = [];
-  const prov = await s.api('GET', '/api/provider');
-  const def = await s.api('GET', '/api/model/default');
+  let prov = await s.api('GET', '/api/provider');
+  let def = await s.api('GET', '/api/model/default');
+  // OpenCode 2.4.x answers 200 with no providers and no default for a few seconds after "listening". Keep asking while that is
+  // all it says (the adapter's judgeRouting `loading` state); anything else is judged at once.
+  for (let t0 = Date.now(); Date.now() - t0 < 30000; ) {
+    const loading = prov.status === 200 && def.status === 200 && !def.body?.data && !((prov.body?.data ?? []) as any[]).some((p) => p.activation === 'enabled');
+    if (!loading) break;
+    await new Promise((r) => setTimeout(r, 250));
+    [prov, def] = await Promise.all([s.api('GET', '/api/provider'), s.api('GET', '/api/model/default')]);
+  }
   const enabledProviders = ((prov.body?.data ?? []) as any[])
     .filter((p) => p.activation === 'enabled')
     .map((p) => ({ id: p.id as string, baseURL: String(p.settings?.baseURL ?? '') }));
@@ -118,10 +139,55 @@ export async function preflightResolve(s: Server, opts: { probe?: boolean; expec
   return { ok: reasons.length === 0, reasons, resolved, enabledProviders, endpoint };
 }
 
-export interface LmsModel { identifier: string; status: string; device: string; sizeGB: number }
-export function lmsLoaded(): LmsModel[] {
-  const j = JSON.parse(execFileSync('lms', ['ps', '--json'], { encoding: 'utf8' })) as any[];
-  return j.map((m) => ({ identifier: m.identifier, status: m.status, device: m.deviceIdentifier ?? m.device ?? 'Local', sizeGB: Math.round((m.sizeBytes ?? 0) / 1e8) / 10 }));
+// ---------------- mlx-serve (ddalcu) facts ----------------
+/** The /v1/models row for the proof model, straight from mlx-serve (OpenAI-compatible list). */
+export interface ServedModel { listed: boolean; status: number | string; row?: { id: string; context_length?: number; max_model_len?: number; owned_by?: string }; ids: string[] }
+export async function servedModel(): Promise<ServedModel> {
+  try {
+    const r = await fetch(`${MODEL_BASE_URL}/models`, { signal: AbortSignal.timeout(5000) });
+    const j: any = await r.json().catch(() => ({}));
+    const rows = (Array.isArray(j.data) ? j.data : []) as any[];
+    const m = rows.find((x) => x.id === LOCAL_MODEL_ID);
+    const row = m ? { id: m.id, context_length: m.context_length ?? m.meta?.context_length, max_model_len: m.max_model_len, owned_by: m.owned_by } : undefined;
+    const win = Number(row?.context_length ?? row?.max_model_len);
+    if (Number.isFinite(win) && win > 0 && win < servedContext) servedContext = win;
+    return { listed: !!m, status: r.status, row, ids: rows.map((x) => String(x.id)) };
+  } catch (e) { return { listed: false, status: (e as Error).name, ids: [] }; }
+}
+
+/** Who owns the model port on THIS Mac: lsof's listener rows (command, pid, bound address). A forwarder (ssh, socat, ...) owning the
+ *  port would mean the "local" endpoint is a tunnel. Server-declared, like LM Studio's device field was: it shows which program
+ *  answers, not where that program forwards (docs/research/MODEL-CONNECTIONS.md, "A loopback URL proves the first hop"). */
+export const FORWARDERS = /^(ssh|autossh|socat|nc|ncat|netcat|kubectl|cloudflared|ngrok|tailscaled?|frpc|chisel|gost)$/i;
+export interface PortOwner { command: string; pid: number; address: string }
+export function modelPortOwners(): PortOwner[] {
+  let out = '';
+  try { out = execFileSync('/usr/sbin/lsof', ['-nP', `-iTCP:${MODEL_PORT}`, '-sTCP:LISTEN', '-Fpcn'], { encoding: 'utf8' }); } catch { return []; }
+  const rows: PortOwner[] = []; let pid = 0; let command = '';
+  for (const line of out.split('\n')) {
+    if (line.startsWith('p')) pid = Number(line.slice(1));
+    else if (line.startsWith('c')) command = line.slice(1);
+    else if (line.startsWith('n')) rows.push({ command, pid, address: line.slice(1) });
+  }
+  return rows;
+}
+
+/** Best-effort numeric snapshot of mlx-serve's /metrics.json (only served with `--metrics`; its keys are not documented).
+ *  Recorded as evidence for a reader; no check passes or fails on a guessed key name. */
+export async function metricsSnapshot(): Promise<{ status: number | string; numbers?: Record<string, number> }> {
+  try {
+    const r = await fetch(`http://127.0.0.1:${MODEL_PORT}/metrics.json`, { signal: AbortSignal.timeout(3000) });
+    if (r.status !== 200) return { status: r.status };
+    const j: any = await r.json().catch(() => undefined);
+    const numbers: Record<string, number> = {};
+    const walk = (v: any, k: string, depth: number) => {
+      if (Object.keys(numbers).length >= 80 || depth > 4) return;
+      if (typeof v === 'number' && Number.isFinite(v)) numbers[k] = v;
+      else if (v && typeof v === 'object' && !Array.isArray(v)) for (const [kk, vv] of Object.entries(v)) walk(vv, k ? `${k}.${kk}` : kk, depth + 1);
+    };
+    walk(j, '', 0);
+    return { status: 200, numbers };
+  } catch (e) { return { status: (e as Error).name }; }
 }
 
 // ---------------- structured output ----------------
