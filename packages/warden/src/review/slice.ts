@@ -7,6 +7,7 @@ import type { AgentRunner, Budgets, PreflightReport } from '../runner/agent-runn
 import { iso } from '../util.ts';
 import { reviewResultSchema } from './schema.ts';
 import { buildReviewPrompt } from './prompt.ts';
+import { annotate } from './findings.ts';
 import type { Finding, ReviewOutput } from './schema.ts';
 import { DEFAULT_CONTEXT_CHARS, renderContext, summarize, unavailable } from './context.ts';
 import type { ContextPack, ContextSummary } from './context.ts';
@@ -128,9 +129,10 @@ export async function runReview(o: ReviewOpts): Promise<ReviewOutcome> {
   try { after = await store.getPull(o.item); } catch { return fail('The pull request could not be re-read to confirm the head. Rejected.', 'head-unconfirmed'); }
   if (after.head !== pull.head) return fail(`The contributor pushed ${after.head.slice(0, 8)} while the review ran on ${pull.head.slice(0, 8)}. A review is bound to the code it saw, so it is rejected as stale.`, 'head-moved');
 
-  const open = output.findings.length;
-  rec.marker = { head: pull.head, base: pull.base, verdict: output.verdict, findings: output.findings, ci: after.ci, acceptedAt: iso(now()), policyDigest: o.policyDigest, ...(ctx ? { context: ctx } : {}) };
-  rec.card = { text: `${open ? `Recommend: request changes (${output.findings.filter((f) => f.severity === 'blocker').length} blocker(s), ${open} finding(s)).` : 'Recommend: no review findings. Merge still needs checks and authority.'}${ctx && ctx.status !== 'complete' ? ` Repository context: ${ctx.status}${ctx.reason ? ` (${ctx.reason})` : ''}.` : ''}`, posted: false, head: pull.head };
+  const findings = annotate(output.findings, pull.files);   // fingerprints, inline flags and repeated findings collapsed; the ledger keeps this full list
+  const open = findings.length;
+  rec.marker = { head: pull.head, base: pull.base, verdict: output.verdict, findings, ci: after.ci, acceptedAt: iso(now()), policyDigest: o.policyDigest, ...(ctx ? { context: ctx } : {}) };
+  rec.card = { text: `${open ? `Recommend: request changes (${findings.filter((f) => f.severity === 'blocker').length} blocker(s), ${open} finding(s)).` : 'Recommend: no review findings. Merge still needs checks and authority.'}${ctx && ctx.status !== 'complete' ? ` Repository context: ${ctx.status}${ctx.reason ? ` (${ctx.reason})` : ''}.` : ''}`, posted: false, head: pull.head };
   rec.attempts.used = 0;
   const prior = m ? m.findings.length : 0;
   const stillOpen = (output.revalidated ?? []).filter((r) => r.status === 'open').length;

@@ -2,7 +2,7 @@
  *  separately by warden-core (validity is necessary, never sufficient). */
 export const SEVERITIES = ['blocker', 'major', 'minor', 'nit'] as const;
 export type Severity = (typeof SEVERITIES)[number];
-export interface Finding { id: string; severity: Severity; path: string; line: number; rationale: string; correction: string }
+export interface Finding { id: string; severity: Severity; path: string; line: number; rationale: string; correction: string; /** Set by warden-core after validation, never by the model (the result schema forbids extra fields). */ fingerprint?: string; inline?: boolean }
 export interface ReviewOutput { verdict: 'no findings' | 'changes needed'; findings: Finding[]; revalidated?: Array<{ id: string; status: 'open' | 'resolved' }> }
 
 export const reviewResultSchema = {
