@@ -261,7 +261,7 @@ test('rework: no change, failing checks and weakened gates are completed-without
   const noop = await rw(reworkModel(() => undefined, [])); assert.equal(noop.kind, 'no-progress'); assert.equal((await ledgerOf(s.r, pr.number)).attempts.reworkCycles, 1);
   const lead = async () => { const cm = (await s.r.world.view('x').listComments(pr.number)).find((c) => c.body.startsWith(LEDGER_MARK))!; const led = parseLedger(cm.body)!; led.state = 'needs-rework'; await s.r.world.view(WRITER).updateComment(cm.id, encodeLedger(led)); };
   await lead(); const broken = await rw(reworkModel((ws) => writeFileSync(join(ws, 'sum.js'), 'exports.sumTo = () => 999;\n'), ['f1'])); assert.equal(broken.kind, 'no-progress'); assert.equal(broken.reason, 'checks-failed');
-  await lead(); const weak = await rw(reworkModel((ws) => { REWORK_FIX(ws); writeFileSync(join(ws, 'test/sum.test.js'), TEST.replace('test(', 'test.skip(')); }, ['f1'])); assert.equal(weak.kind, 'rejected'); assert.equal(weak.reason, 'gate-weakening');
+  await lead(); const weak = await rw(reworkModel((ws) => { REWORK_FIX(ws); writeFileSync(join(ws, 'test/sum.test.js'), TEST.replace('test(', 'test.skip(')); }, ['f1'])); assert.equal(weak.kind, 'rejected'); assert.equal(weak.reason, 'frozen-test-modified', 'a skip added to a frozen test is now refused as a change to a frozen test, before weakening is even looked at');
   const l = await ledgerOf(s.r, pr.number); assert.equal(l.attempts.reworkCycles, 3); assert.equal(l.state, 'needs-decision', 'unresolved after the last cycle escalates, never retried automatically');
   assert.equal(git(s.bare, ['rev-parse', `refs/heads/warden/bug-${s.n}`]).trim(), before, 'nothing was pushed by the failed cycles');
   await lead(); const again = await rw(reworkModel(REWORK_FIX, ['f1'])); assert.equal(again.kind, 'blocked'); assert.equal(again.reason, 'cycles-exhausted');
@@ -281,4 +281,25 @@ test('rework refuses: not factory-owned, not a factory branch, stale review, not
   const led = newLedger(REPO, n2, 'pr'); led.state = 'needs-rework'; await c.r.world.view(WRITER).createComment(n2, encodeLedger(led));
   const out = await runRework({ store: c.r.world.view('operator'), item: n2, policy: c.r.policy, cfg: { ...c.cfg, reworkCycles: 3 }, runner: reworkModel(REWORK_FIX, []), kv: { read: () => null, write: () => undefined }, reviews: { read: () => null, write: () => undefined }, publisher: publisherOf(c), intents: intentsOf(c), stopped: () => false });
   assert.equal(out.reason, 'not-factory-owned');
+});
+
+test('ADR 0014 rework keeps the freeze: the PR ledger carries it from the open; the session cannot write the frozen tests, and changing, deleting or disputing one consumes a cycle and pushes nothing; a drifted branch blocks before any session', async (t) => {
+  const { s, pr, rw } = await openedPr(t); const led = await ledgerOf(s.r, pr.number);
+  assert.deepEqual(led.frozen?.files.map((f) => f.path), ['test/sum.test.js']); assert.equal(led.frozen?.baseCommit, s.cfg.baseSha); assert.match(led.frozen!.files[0].sha256, /^[0-9a-f]{64}$/);
+  const before = git(s.bare, ['rev-parse', `refs/heads/warden/bug-${s.n}`]).trim();
+  const c = await openedPr(t); const ok = reworkModel(REWORK_FIX, ['f1']); const done = await c.rw(ok); assert.equal(done.kind, 'reworked', JSON.stringify(done));   // an untampered rework still works, on its own PR
+  assert.ok(ok.sessions[0].deny!.includes('test/sum.test.js'), 'the OS write denial covers the frozen test'); assert.match(ok.sessions[0].prompt, /FROZEN[^\n]*test\/sum\.test\.js/);
+  const lead = async () => { const cm = (await s.r.world.view('x').listComments(pr.number)).find((c) => c.body.startsWith(LEDGER_MARK))!; const l = parseLedger(cm.body)!; l.state = 'needs-rework'; await s.r.world.view(WRITER).updateComment(cm.id, encodeLedger(l)); };
+  const mid = before;
+  for (const [name, tamper] of [['modified', (ws: string) => writeFileSync(join(ws, 'test/sum.test.js'), TEST.replace('6', '10'))], ['deleted', (ws: string) => rmSync(join(ws, 'test/sum.test.js'))]] as const) {
+    await lead(); const bad = await rw(reworkModel((ws) => { REWORK_FIX(ws); tamper(ws); }, ['f1'])); assert.equal(bad.kind, 'rejected', name); assert.equal(bad.reason, 'frozen-test-modified', name); assert.match(bad.notice, /test\/sum\.test\.js/, name);
+  }
+  assert.equal(git(s.bare, ['rev-parse', `refs/heads/warden/bug-${s.n}`]).trim(), mid, 'nothing was pushed by the refused cycles'); assert.equal((await ledgerOf(s.r, pr.number)).attempts.reworkCycles, 2, 'each refused attempt consumed a cycle');
+});
+
+test('ADR 0014 rework: a dispute of a frozen test is reported, consumes a cycle and pushes nothing; a branch whose frozen test no longer matches the record blocks with no session and no cycle spent', async (t) => {
+  const a = await openedPr(t); const dispute = reworkModel(() => undefined, []); dispute.result = { summary: 'the test is wrong', addressed: [], testDispute: { path: 'test/sum.test.js', reason: 'expects 6 but the issue says 5' } };
+  const o = await a.rw(dispute); assert.equal(o.kind, 'rejected'); assert.equal(o.reason, 'test-dispute'); assert.match(o.notice, /expects 6 but the issue says 5/); assert.equal((await ledgerOf(a.s.r, a.pr.number)).attempts.reworkCycles, 1);
+  const b = await openedPr(t); const cm = (await b.s.r.world.view('x').listComments(b.pr.number)).find((c) => c.body.startsWith(LEDGER_MARK))!; const l = parseLedger(cm.body)!; l.frozen!.files[0].sha256 = 'f'.repeat(64); await b.s.r.world.view(WRITER).updateComment(cm.id, encodeLedger(l));
+  const m = reworkModel(REWORK_FIX, ['f1']); const blocked = await b.rw(m); assert.equal(blocked.kind, 'blocked'); assert.equal(blocked.reason, 'frozen-drift'); assert.equal(m.calls, 0, 'no session started'); assert.equal((await ledgerOf(b.s.r, b.pr.number)).attempts.reworkCycles, 0);
 });

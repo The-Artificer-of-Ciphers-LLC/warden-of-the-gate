@@ -1,3 +1,4 @@
+import { cleanFrozen } from '../verify/frozen.ts';
 import { cleanProvenance, provenanceText } from '../runner/provenance.ts';
 import type { Provenance } from '../runner/provenance.ts';
 import type { Effect, Ledger, Obligation, WorkflowState } from '../state/model.ts';
@@ -325,8 +326,6 @@ function forceReview(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (l.kind !== 'pr') return rej('force-review-on-issue', 'A full review applies to pull requests only.');
   return { accept: true, plan: [note(`Full review requested by ${i.actor}. The next review run reviews this head again, whether or not it changed.`)], apply: (led) => { led.forceReview = { by: i.actor, at: iso(c.now) }; } };
 }
-/** `/warden dismiss <fingerprint> [reason]`: a maintainer dismisses ONE finding. It stays dismissed while its code is unchanged (the fingerprint includes the anchor line's text) and is removed from the
- *  recorded severities, so it no longer gates a merge. */
 /** `/warden clear-mutant <id> <reason>`: a maintainer clears ONE surviving mutant as equivalent. Warden never marks a mutant equivalent itself. */
 function clearMutant(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!c.sourceVerified) return rej('unverified-source', 'Clearance rejected: the GitHub source could not be verified.');
@@ -336,6 +335,8 @@ function clearMutant(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (l.mutantClearances?.[id]) return rej('already-cleared', `Mutant ${id} is already cleared.`);
   return { accept: true, plan: [note(`Mutant ${id} cleared by ${i.actor} as equivalent (${reason.slice(0, 200)}). The clearance lapses when that code changes.`)], apply: (led) => { led.mutantClearances = { ...(led.mutantClearances ?? {}), [id]: { by: i.actor, at: iso(c.now), reason: reason.slice(0, 200) } }; } };
 }
+/** `/warden dismiss <fingerprint> [reason]`: a maintainer dismisses ONE finding. It stays dismissed while its code is unchanged (the fingerprint includes the anchor line's text) and is removed from the
+ *  recorded severities, so it no longer gates a merge. */
 function dismissFinding(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!c.sourceVerified) return rej('unverified-source', 'Dismissal rejected: the GitHub source could not be verified.');
   if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Dismissal by ${i.actor} rejected: not an authorized maintainer.`);
@@ -472,6 +473,6 @@ function linkPr(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   }
   if (!Number.isInteger(pl.issue)) return silent('link-needs-issue');
   if (l.linked.includes(pl.issue as number)) return silent('already-linked');
-  const factory = (i.payload as { factory?: boolean }).factory === true;
-  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; } };
+  const factory = (i.payload as { factory?: boolean }).factory === true; const frozen = factory && !l.frozen ? cleanFrozen((i.payload as { frozen?: unknown }).frozen) : null;
+  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; if (frozen) led.frozen = frozen; } };
 }

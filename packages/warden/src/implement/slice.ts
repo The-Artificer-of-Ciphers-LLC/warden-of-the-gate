@@ -23,7 +23,7 @@ import { assertFactoryBranch, creditTrailers } from '../factory/takeover.ts';
 import type { PullCommit } from '../github/store.ts';
 import type { Weakening } from '../verify/executor.ts';
 import { iso } from '../util.ts';
-import { DEFAULT_TEST_PATHS, freezeTests, isGuardedPath, isTestPath, nonTestChanges, verifyFrozen } from '../verify/frozen.ts';
+import { DEFAULT_TEST_PATHS, freezeTests, isGuardedPath, isTestPath, nonTestChanges, frozenViolations, MAX_FROZEN_FILES } from '../verify/frozen.ts';
 import type { FrozenSet } from '../verify/frozen.ts';
 import { boundaryClassesOf, boundaryHits } from '../verify/boundary.ts';
 import { DEFAULT_MUTATION, runMutation } from '../verify/mutation.ts';
@@ -167,6 +167,7 @@ export async function runImplement(o: ImplementOpts): Promise<ImplOutcome> {
       const notTests = nonTestChanges(tch, globs); if (notTests.length) return fail('rejected', `The test session changed files that are not tests (${notTests.slice(0, 5).join(', ')}): only test files may change before the freeze.`, 'test-session-touched-code');
       pre = await runChecks({ workspace: ws, revision: 'base+frozen-tests', checks: c.checks, readonlyPaths: c.readonlyPaths, now });
       if (kind === 'bug' && pre.filter((r) => testIds.includes(r.id)).every((r) => r.code === 0)) return fail('rejected', 'The new tests pass on the unchanged base, so they do not reproduce the bug.', 'tests-pass-on-base');
+      if (tch.filter((x) => x.status !== 'D').length > MAX_FROZEN_FILES) return fail('rejected', `The test session wrote more than ${MAX_FROZEN_FILES} test files: the freeze record cannot carry them, so split the work.`, 'too-many-frozen-tests');
       frozen = freezeTests(ws, tch.filter((x) => x.status !== 'D').map((x) => x.path), c.baseSha); rec.frozen = frozen; note('tests-frozen', `${frozen.files.length} file(s) at ${c.baseSha.slice(0, 12)}`);
       const tracked = git(ws, ['ls-files']).split('\n').filter(Boolean); const deny = [...new Set([...frozen.files.map((f) => f.path), ...tracked.filter((p) => isGuardedPath(p, globs))])]; denied = deny;
       const fr = await session('fix', { deny, frozen: frozen.files.map((f) => f.path) }); if (!fr.accepted) return dead(fr);
@@ -187,7 +188,7 @@ export async function runImplement(o: ImplementOpts): Promise<ImplOutcome> {
     for (;;) {
       if (!model.approach || !model.danger) return fail('rejected', 'The fix session returned no approach or no danger assessment.', 'incomplete-result');
       ch = changes(ws, c.baseSha);
-      const bad = [...verifyFrozen(ws, frozen).map((v) => `${v.path} (${v.kind})`), ...ch.filter((x) => isGuardedPath(x.path, globs) && !fp.has(x.path) && (x.status !== 'A' || !isTestPath(x.path, globs))).map((x) => x.path)];
+      const bad = frozenViolations(ws, frozen, ch, globs);
       if (bad.length) return fail('rejected', `The fix session changed tests or test configuration that were frozen (${bad.slice(0, 6).join(', ')}).`, 'frozen-test-modified');
       if (!ch.some((x) => !isTestPath(x.path, globs))) return fail('rejected', 'The fix session changed no code.', 'no-change');
       const vet = vetted(ch); if (!vet.ok) return vetFail(vet);
@@ -220,7 +221,7 @@ export async function runImplement(o: ImplementOpts): Promise<ImplOutcome> {
     const sha = commitAll(ws, `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${fin.summary}`, c.factoryAuthor, credited);
     const pr = await o.publisher.open({ branch, sha, title: `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${it.title.slice(0, 80)}`, body, workspace: ws, baseSha: c.baseSha }); if (pr.number === null) { note('prepared', pr.url); return out('prepared', `Prepared branch ${branch} (${door.door} door) locally at ${pr.url}. Nothing was published: opening a PR needs write credentials the current ceiling does not grant.`, { pr, evidence: ev }); }
     rec.pr = pr.number;
-    for (const i of [{ kind: 'intake', item: pr.number, itemKind: 'pr', payload: { expect: 'needs-review' } }, { kind: 'link-pr', item: o.item, itemKind: 'issue', payload: { pr: pr.number } }, { kind: 'link-pr', item: pr.number, itemKind: 'pr', payload: { issue: o.item, factory: true } }] as const)
+    for (const i of [{ kind: 'intake', item: pr.number, itemKind: 'pr', payload: { expect: 'needs-review' } }, { kind: 'link-pr', item: o.item, itemKind: 'issue', payload: { pr: pr.number } }, { kind: 'link-pr', item: pr.number, itemKind: 'pr', payload: { issue: o.item, factory: true, frozen } }] as const)
       await o.intents.submit({ v: 1, kind: i.kind, repo: c.repository, item: i.item, itemKind: i.itemKind, origin: 'deterministic', source: { kind: 'implement', id: `${i.kind}:${o.item}:${pr.number}:${i.item}`, observedAt: iso(now()) }, actor: c.factoryLogins[0], payload: i.payload });
     note('opened', `#${pr.number}`); return out('opened', `Opened PR #${pr.number} on ${branch} (${door.door} door). It still needs Review and the merge gates: Implement claims neither.`, { pr, evidence: ev });
   } finally { rmSync(work, { recursive: true, force: true }); }

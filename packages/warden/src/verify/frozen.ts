@@ -37,3 +37,17 @@ export function verifyFrozen(workspace: string, frozen: FrozenSet): FrozenViolat
   for (const f of frozen.files) { const d = digest(join(workspace, f.path)); if (d === null) out.push({ path: f.path, kind: 'deleted' }); else if (d !== f.sha256) out.push({ path: f.path, kind: 'modified' }); }
   return out;
 }
+
+/** Everything a fix or rework session may not have changed: a frozen file that is modified, deleted or renamed, any existing test or test configuration that is not part of the freeze, and a test-runner configuration it added. */
+export function frozenViolations(workspace: string, frozen: FrozenSet, changes: ReadonlyArray<{ path: string; status: string }>, globs: readonly string[] = DEFAULT_TEST_PATHS): string[] {
+  const fp = new Set(frozen.files.map((f) => f.path));
+  return [...verifyFrozen(workspace, frozen).map((v) => `${v.path} (${v.kind})`), ...changes.filter((x) => isGuardedPath(x.path, globs) && !fp.has(x.path) && (x.status !== 'A' || !isTestPath(x.path, globs))).map((x) => x.path)];
+}
+/** The freeze record as it travels in an intent payload and sits in the ledger: bounded and exact, or null. */
+export const MAX_FROZEN_FILES = 25;
+export function cleanFrozen(x: unknown): FrozenSet | null {
+  if (!x || typeof x !== 'object') return null; const f = x as { baseCommit?: unknown; files?: unknown };
+  if (typeof f.baseCommit !== 'string' || !/^[0-9a-f]{7,64}$/.test(f.baseCommit) || !Array.isArray(f.files) || f.files.length > MAX_FROZEN_FILES) return null;
+  const files: FrozenSet['files'] = []; for (const e of f.files as Array<{ path?: unknown; sha256?: unknown }>) { if (!e || typeof e.path !== 'string' || !e.path || e.path.length > 120 || e.path.startsWith('/') || e.path.split('/').includes('..') || typeof e.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(e.sha256)) return null; files.push({ path: e.path, sha256: e.sha256 }); }
+  return { baseCommit: f.baseCommit, files };
+}
