@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { rig, REPO, WRITER } from './helpers.ts';
+import { rig, REPO, WRITER, OPERATOR } from './helpers.ts';
 import type { Rig } from './helpers.ts';
 import { newLedger } from '../src/state/model.ts';
 import type { Ledger } from '../src/state/model.ts';
@@ -196,6 +196,22 @@ test('ADR 0016 verify-and-continue: failing checks go back to a fresh fix sessio
   const o3 = await one.run(single, { cfg: { ...one.cfg, loopTurns: 1 } }); assert.equal(o3.kind, 'insufficient-evidence'); assert.equal(single.calls, 2, 'loopTurns 1 is the old single-shot behaviour');
   const f = await setup(); t.after(f.cleanup); let n = 0; const cheat = new Model((ws, ph) => { if (ph === 'test') goodEdit(ws, ph); else if (++n === 1) writeFileSync(join(ws, 'sum.js'), WRONG); else writeFileSync(join(ws, 'test/sum.test.js'), "const { test } = require('node:test'); test('x', () => {});\n"); });
   const o4 = await f.run(cheat); assert.equal(o4.kind, 'rejected'); assert.equal(o4.reason, 'frozen-test-modified'); assert.equal(cheat.calls, 3, 'ended on the turn that changed the frozen test'); assert.equal(f.published.length, 0);
+});
+
+/** A scripted mutation tool: it runs in the executor's boundary like Stryker would and writes a mutation-testing-elements report with ONE mutant on sum.js line 1. */
+const TOOL = (status: string | null) => ({ command: process.execPath, args: ['-e', status === null ? 'process.exit(0)' : `const fs=require('fs');fs.mkdirSync('reports/mutation',{recursive:true});fs.writeFileSync('reports/mutation/mutation.json',JSON.stringify({schemaVersion:'2',files:{'sum.js':{language:'javascript',mutants:[{id:'1',mutatorName:'ArithmeticOperator',replacement:'t - i',status:'${status}',location:{start:{line:1,column:1},end:{line:1,column:9}}}]}}}));`, '{mutate}'], reportPath: 'reports/mutation/mutation.json', timeoutMs: 60_000 });
+
+test('ADR 0016 mutation: no tool is unsupported (never a pass); a killed mutant is shown; a survivor blocks and names its id; a failed tool run blocks; only a maintainer\'s named clearance lifts a survivor, once', async (t) => {
+  const none = await setup(); t.after(none.cleanup); assert.equal((await none.run(new Model(goodEdit))).kind, 'opened'); assert.match(none.published[0].body, /mutation testing: no mutation tool is configured[^\n]*unsupported is not a pass/);
+  const ok = await setup(); t.after(ok.cleanup); const o = await ok.run(new Model(goodEdit), { cfg: { ...ok.cfg, mutation: TOOL('Killed') } }); assert.equal(o.kind, 'opened', JSON.stringify(o)); assert.match(ok.published[0].body, /mutation testing on changed lines: 1 of 1 mutant\(s\) on changed lines detected, score 100%, 0 surviving/);
+  const bad = await setup(); t.after(bad.cleanup); const o2 = await bad.run(new Model(goodEdit), { cfg: { ...bad.cfg, mutation: TOOL('Survived') } });
+  assert.equal(o2.kind, 'insufficient-evidence'); assert.equal(o2.reason, 'surviving-mutants'); assert.equal(bad.published.length, 0); const id = o2.notice.match(/([0-9a-f]{12}) sum\.js:1 ArithmeticOperator -> t - i \(Survived\)/)?.[1]; assert.ok(id, o2.notice); assert.match(o2.notice, /\/warden clear-mutant <id> <reason>/);
+  const noRun = await setup(); t.after(noRun.cleanup); const o3 = await noRun.run(new Model(goodEdit), { cfg: { ...noRun.cfg, mutation: TOOL(null) } }); assert.equal(o3.reason, 'mutation-run-failed'); assert.match(o3.notice, /wrote no report/);
+  // the maintainer clears exactly that mutant on the issue; the next attempt on the same code opens, and says so
+  const cid = await bad.r.comment(OPERATOR, bad.n, `/warden clear-mutant ${id} t - i and t + i give the same sum here`);
+  await bad.r.send({ kind: 'clear-mutant', item: bad.n, itemKind: 'issue', origin: 'maintainer', actor: OPERATOR, payload: { mutant: id, reason: 't - i and t + i give the same sum here' }, source: { kind: 'gh-comment', id: String(cid), observedAt: new Date(bad.r.world.now()).toISOString() } }); await bad.r.writer({ assignable: () => true }).drain();
+  assert.ok((await ledgerOf(bad.r, bad.n)).mutantClearances?.[id!]);
+  const again = await bad.run(new Model(goodEdit), { cfg: { ...bad.cfg, mutation: TOOL('Survived') } }); assert.equal(again.kind, 'opened', JSON.stringify(again)); assert.match(bad.published[0].body, new RegExp(`1 cleared by a maintainer as equivalent \\(${id}\\)`));
 });
 
 test('takeover: abandoned contributor work is read as DATA on top of the trusted base, ported work is credited, the factory branch is separate and the contributor branch is never touched', async (t) => {
