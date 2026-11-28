@@ -20,6 +20,13 @@ const HARDEN_ENV: Record<string, string> = {
   OPENCODE_DISABLE_MODELS_FETCH: '1', OPENCODE_DISABLE_FREE_MODELS: '1', OPENCODE_DISABLE_AUTOUPDATE: '1', OPENCODE_DISABLE_PROJECT_CONFIG: '1', OPENCODE_FILEWATCHER_DISABLE: '1',
 };
 const DENY_ALL = { action: '*', resource: '*', effect: 'deny' as const };
+/** The id Warden registers its one configured model server under. It must not be an id OpenCode already knows: OpenCode merges a config provider into a
+ *  built-in one of the same id, so the old id `lmstudio` pulled OpenCode's LM Studio catalogue models in beside the configured one. mlx-serve is the MVP
+ *  server (owner, 2026-11-28: "we are only using mlx-serve"), but the provider is the plain OpenAI-compatible endpoint at `baseURL`, whatever serves it. */
+export const LOCAL_PROVIDER_ID = 'mlx-serve';
+export const LOCAL_PROVIDER_NAME = 'mlx-serve (local)';
+/** OpenCode's built-in local providers, which discover models on their own default ports. Denied by policy so the configured model is the only one registered. */
+export const BUILTIN_LOCAL_PROVIDERS = ['lmstudio', 'ollama'] as const;
 
 export interface OpenCodeOptions { bin?: string; /** lowest accepted 2.x version; defaults to OPENCODE_FLOOR. */ minVersion?: string; baseURL?: string; modelId: string; contextLimit?: number; outputLimit?: number; /** false turns OpenCode's automatic compaction off (an experiment switch; default is OpenCode's own). */ autoCompact?: boolean; /** share of the loaded window (0..1) at which a session is told to answer now; 0 disables. */ windowGuard?: number; maxPromptChars?: number; startupMs?: number }
 
@@ -55,6 +62,25 @@ const freePort = () => new Promise<number>((resolve) => { const s = net.createSe
 
 interface Server { base: string; child: ChildProcess; stateDir: string; pid: number; logs: () => string; api: (method: string, p: string, body?: unknown, signal?: AbortSignal) => Promise<{ status: number; body: any }>; stop: () => Promise<void> }
 
+type ApiReply = { status: number; body: any };
+/** Judges one reading of GET /api/provider and GET /api/model/default (same shape in OpenCode 2.2.7 and 2.4.x: `{ data }`). `loading` is true only while
+ *  OpenCode answers 200 with no default model yet and no non-local provider; nothing is wrong yet and the caller asks again. */
+export function judgeRouting(prov: ApiReply, def: ApiReply, expectedModel: string): { loading: boolean; resolvedModel?: string; reasons: string[] } {
+  const reasons: string[] = []; const providers = (Array.isArray(prov.body?.data) ? prov.body.data : []) as any[];
+  for (const p of providers.filter((x) => x.activation === 'enabled')) {
+    const c = classifyBaseURL(String(p.settings?.baseURL ?? '')); if (!c.local) reasons.push(`enabled provider "${p.id}" is non-local (${c.reason})`);
+  }
+  if (def.status !== 200 || !def.body?.data) {
+    const loading = prov.status === 200 && def.status === 200 && reasons.length === 0;   // providers or models may still be loading
+    return { loading, reasons: [...reasons, `no resolved default model (status ${def.status})`] };
+  }
+  const d = def.body.data; const resolvedModel = String(d.modelID ?? d.id); const c = classifyBaseURL(String(d.settings?.baseURL ?? ''));
+  if (!c.local) reasons.push(`resolved model ${d.providerID}/${resolvedModel} routes to a non-local endpoint: ${c.reason}`);
+  if (resolvedModel !== expectedModel) reasons.push(`resolved model ${resolvedModel} != expected ${expectedModel} (silent substitution)`);
+  if (d.providerID !== undefined && d.providerID !== LOCAL_PROVIDER_ID) reasons.push(`resolved model comes from provider "${d.providerID}", not Warden's "${LOCAL_PROVIDER_ID}" (silent substitution)`);
+  return { loading: false, resolvedModel, reasons };
+}
+
 export class OpenCodeRunner implements AgentRunner {
   readonly name = 'opencode'; readonly pinnedVersion: string;
   /** The version `opencode --version` reported at the last preflight: what this run actually used. */
@@ -78,11 +104,11 @@ export class OpenCodeRunner implements AgentRunner {
   }
 
   private config(): Record<string, unknown> {
-    return { model: `lmstudio/${this.o.modelId}`,
-      providers: { lmstudio: { name: 'Local model server', package: '@ai-sdk/openai-compatible', settings: { baseURL: this.o.baseURL },
+    return { model: `${LOCAL_PROVIDER_ID}/${this.o.modelId}`,
+      providers: { [LOCAL_PROVIDER_ID]: { name: LOCAL_PROVIDER_NAME, package: '@ai-sdk/openai-compatible', settings: { baseURL: this.o.baseURL },
         models: { [this.o.modelId]: { name: this.o.modelId, limit: { context: this.o.contextLimit, output: this.o.outputLimit } } } } },
       ...(this.o.autoCompact === false ? { compaction: { auto: false } } : {}),
-      update: 'disable', share: 'disabled', policies: [{ action: 'provider.use', resource: 'opencode', effect: 'deny' }] };
+      update: 'disable', share: 'disabled', policies: ['opencode', ...BUILTIN_LOCAL_PROVIDERS].map((resource) => ({ action: 'provider.use', resource, effect: 'deny' as const })) };
   }
 
   private async start(workspace: string, signal?: AbortSignal, writable = false, denyWrite: string[] = []): Promise<Server> {
@@ -112,21 +138,18 @@ export class OpenCodeRunner implements AgentRunner {
   }
 
   /** Resolved (not merely configured) routing, read from the live server: every enabled provider and the default model must be loopback, and the
-   *  default must be the configured pool member (OpenCode silently substitutes when its default is unavailable). */
-  private async resolve(s: Server): Promise<{ ok: boolean; resolvedModel?: string; reasons: string[] }> {
-    const reasons: string[] = [];
-    const prov = await s.api('GET', '/api/provider'); const def = await s.api('GET', '/api/model/default');
-    for (const p of ((prov.body?.data ?? []) as any[]).filter((x) => x.activation === 'enabled')) {
-      const c = classifyBaseURL(String(p.settings?.baseURL ?? '')); if (!c.local) reasons.push(`enabled provider "${p.id}" is non-local (${c.reason})`);
+   *  default must be the configured pool member (OpenCode silently substitutes when its default is unavailable). OpenCode 2.4.x prints "listening"
+   *  before its providers have loaded, so a null default with nothing non-local means "not loaded yet" and is asked again, up to startupMs.
+   *  Anything else is judged at once: a wrong or non-local answer is never waited out. */
+  private async resolve(s: Server, signal?: AbortSignal): Promise<{ ok: boolean; resolvedModel?: string; reasons: string[] }> {
+    const t0 = Date.now();
+    for (;;) {
+      const prov = await s.api('GET', '/api/provider', undefined, signal); const def = await s.api('GET', '/api/model/default', undefined, signal);
+      const j = judgeRouting(prov, def, this.o.modelId);
+      if (!j.loading) return { ok: j.reasons.length === 0, resolvedModel: j.resolvedModel, reasons: j.reasons };
+      if (Date.now() - t0 >= this.o.startupMs || signal?.aborted) return { ok: false, reasons: [...j.reasons, `OpenCode had not loaded its providers after ${Math.round((Date.now() - t0) / 1000)}s`] };
+      await new Promise((r) => setTimeout(r, 250));
     }
-    let resolvedModel: string | undefined;
-    if (def.status !== 200 || !def.body?.data) reasons.push(`no resolved default model (status ${def.status})`);
-    else {
-      const d = def.body.data; resolvedModel = String(d.modelID ?? d.id); const c = classifyBaseURL(String(d.settings?.baseURL ?? ''));
-      if (!c.local) reasons.push(`resolved model ${d.providerID}/${resolvedModel} routes to a non-local endpoint: ${c.reason}`);
-      if (resolvedModel !== this.o.modelId) reasons.push(`resolved model ${resolvedModel} != expected ${this.o.modelId} (silent substitution)`);
-    }
-    return { ok: reasons.length === 0, resolvedModel, reasons };
   }
 
   async preflight(): Promise<PreflightReport> {
@@ -170,8 +193,8 @@ export class OpenCodeRunner implements AgentRunner {
       const w = this.windowProblem(); if (w) return { outcome: 'failed', reason: w, usage: usage() };
       if (process.env.WARDEN_RUNNER_DEBUG) process.stderr.write(`runner-debug-ctx ${JSON.stringify({ contextLimit: this.o.contextLimit, outputLimit: this.o.outputLimit, windowGuard: this.o.windowGuard })}\n`);
       s = await this.start(wsDir, signal, writable, req.workspace?.denyWrite ?? []);
-      const re = await this.resolve(s); if (!re.ok) return { outcome: 'failed', reason: `routing re-check failed at execution time: ${re.reasons.join('; ')}`, usage: usage() };
-      const ses = await s.api('POST', '/api/session', { title: 'warden-review', model: { id: this.o.modelId, providerID: 'lmstudio' }, location: { directory: wsDir }, permissions: [DENY_ALL, ...req.tools.allow.map((a) => ({ action: a, resource: '*', effect: 'allow' as const }))] });
+      const re = await this.resolve(s, signal); if (!re.ok) return { outcome: 'failed', reason: `routing re-check failed at execution time: ${re.reasons.join('; ')}`, usage: usage() };
+      const ses = await s.api('POST', '/api/session', { title: 'warden-review', model: { id: this.o.modelId, providerID: LOCAL_PROVIDER_ID }, location: { directory: wsDir }, permissions: [DENY_ALL, ...req.tools.allow.map((a) => ({ action: a, resource: '*', effect: 'allow' as const }))] });
       if (ses.status !== 200) return { outcome: 'failed', reason: `create session ${ses.status}`, usage: usage() };
       const sid = ses.body.data.id as string;
       const p = await s.api('POST', `/api/session/${sid}/prompt`, { text: built.text }); if (p.status !== 200) return { outcome: 'failed', reason: `prompt ${p.status}`, usage: usage() };

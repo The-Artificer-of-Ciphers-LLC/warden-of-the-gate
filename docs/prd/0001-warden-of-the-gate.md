@@ -40,7 +40,7 @@ Required outcomes:
 All eight tasks are required: **Intake, Triage, Claim, Implement, Review, Rework, Sweep, Retro**. The first release is narrow in deployment and throughput, not a review-only substitute for the factory.
 
 - One repository per instance; instances may share a host and local model service but not authority or mutable item state.
-- Maintainer-operated Mac, OpenCode adapter first, LM Studio/local OpenAI-compatible inference. API compatibility does not mean requests go to OpenAI's cloud.
+- Maintainer-operated Mac, OpenCode adapter first, local OpenAI-compatible inference (mlx-serve for the MVP). API compatibility does not mean requests go to OpenAI's cloud.
 - Local-only inference, checking the actual resolved provider/model, not merely a configured default. No silent remote fallback.
 - Manually triggered AI scans only: bounded queue snapshot, serial items, fresh sessions, report and exit. Do not wait inside a session for CI or a human.
 - An initial configurable limit of one open factory implementation PR. Serial review/triage of other items remains possible.
