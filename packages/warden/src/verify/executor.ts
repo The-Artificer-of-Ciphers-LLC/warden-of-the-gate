@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { requireContainment, runContained } from '../runner/seatbelt.ts';
 import type { ContainmentSpec } from '../runner/seatbelt.ts';
 import { iso } from '../util.ts';
+import { DEFAULT_TEST_PATHS, isGuardedPath, isTestPath } from './frozen.ts';
 
 /** P3 trusted verification executor. The executor, never the model, runs the repository's checks inside the OS boundary and records what happened:
  *  the exact command, the workspace revision, status, bounded output and a digest. Candidate and baseline are run separately so a failure that already
@@ -42,12 +43,16 @@ export function compare(base: CheckResult[], cand: CheckResult[]): Array<{ id: s
 }
 
 export interface PatchFile { path: string; patch: string }
-export interface Weakening { path: string; kind: 'skipped-test' | 'removed-assertions' | 'suppression-added' | 'lint-rule-disabled' | 'check-script-changed' | 'ci-changed' | 'strictness-lowered' | 'threshold-lowered' | 'test-removed'; detail: string }
+export interface Weakening { path: string; kind: 'skipped-test' | 'removed-assertions' | 'suppression-added' | 'lint-rule-disabled' | 'check-script-changed' | 'ci-changed' | 'strictness-lowered' | 'threshold-lowered' | 'test-removed' | 'focused-test' | 'tolerance-widened' | 'timeout-raised' | 'snapshot-changed' | 'test-config-changed' | 'test-moved'; detail: string }
 const isTest = (p: string) => /(^|\/)(test|tests|__tests__|spec)\//.test(p) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(p);
 const ASSERT = /\b(assert(\.\w+)?|expect|should|t\.(is|equal|deepEqual|ok|truthy))\s*\(/;
 /** Heuristic, line-based, over the PATCH text. It cannot prove a check was weakened and cannot prove one was not: a finding means "a human or the review must look". */
-export function detectWeakening(files: PatchFile[], deleted: string[] = []): Weakening[] {
+const firstNumber = (l: string): number | null => { const m = l.match(/(\d+(?:\.\d+)?(?:e-?\d+)?)/i); return m ? Number(m[1]) : null; };
+/** A changed line pair (removed, added) that mentions `word` and whose first number went UP. */
+const raised = (del: string[], add: string[], word: RegExp): string | null => { for (const a of add) { if (!word.test(a)) continue; const n = firstNumber(a.replace(/^\+/, '')); for (const d of del) { if (!word.test(d)) continue; const m = firstNumber(d.replace(/^-/, '')); if (n !== null && m !== null && n > m) return `${d.slice(1).trim()} -> ${a.slice(1).trim()}`.slice(0, 120); } } return null; };
+export function detectWeakening(files: PatchFile[], deleted: string[] = [], testGlobs: readonly string[] = DEFAULT_TEST_PATHS): Weakening[] {
   const out: Weakening[] = [];
+  for (const p of deleted) if (isTestPath(p, testGlobs)) { const base = p.split('/').pop(); const moved = files.find((f) => f.path.split('/').pop() === base && !isTestPath(f.path, testGlobs)); if (moved) out.push({ path: p, kind: 'test-moved', detail: `a test file now lives outside the configured test paths: ${moved.path}` }); }
   for (const p of deleted) if (isTest(p)) out.push({ path: p, kind: 'test-removed', detail: 'a test file was deleted' });
   for (const f of files) {
     const lines = f.patch.split('\n'); const add = lines.filter((l) => l.startsWith('+') && !l.startsWith('+++')); const del = lines.filter((l) => l.startsWith('-') && !l.startsWith('---'));
@@ -55,7 +60,12 @@ export function detectWeakening(files: PatchFile[], deleted: string[] = []): Wea
       const skip = add.find((l) => /\b(it|test|describe)\.(skip|todo)\b|\bx(it|describe)\s*\(|\bskip\s*:\s*true/.test(l)); if (skip) out.push({ path: f.path, kind: 'skipped-test', detail: skip.slice(1).trim().slice(0, 120) });
       const removed = del.filter((l) => ASSERT.test(l)).length; const added = add.filter((l) => ASSERT.test(l)).length;
       if (removed > added) out.push({ path: f.path, kind: 'removed-assertions', detail: `${removed} assertion line(s) removed, ${added} added` });
+      const only = add.find((l) => /\b(it|test|describe|context)\.only\b|\b(fit|fdescribe)\s*\(/.test(l)); if (only) out.push({ path: f.path, kind: 'focused-test', detail: only.slice(1).trim().slice(0, 120) });
+      const tol = raised(del, add, /tolerance|delta|epsilon|closeTo|precision|approx/i); if (tol) out.push({ path: f.path, kind: 'tolerance-widened', detail: tol });
     }
+    if (isTest(f.path) || /(^|\/)(jest|vitest|playwright|mocha|ava|karma)[^/]*$|\.mocharc/.test(f.path)) { const to = raised(del, add, /timeout|retries|retry|retryTimes/i); if (to) out.push({ path: f.path, kind: 'timeout-raised', detail: to }); }
+    if (/\.snap$/.test(f.path) || /(^|\/)__snapshots__\//.test(f.path)) { if (del.length > 0 || add.length > 50) out.push({ path: f.path, kind: 'snapshot-changed', detail: `${del.length} snapshot line(s) removed, ${add.length} added: an existing snapshot was changed or bulk-regenerated` }); }
+    if (!isTest(f.path) && isGuardedPath(f.path, testGlobs)) { const cfg = add.concat(del).find((l) => /include|exclude|testMatch|testRegex|testPathIgnore|ignore|mutate|\bfiles\b|\bspec\b/i.test(l)); if (cfg) out.push({ path: f.path, kind: 'test-config-changed', detail: cfg.slice(1).trim().slice(0, 120) }); }
     const sup = add.find((l) => /eslint-disable|@ts-ignore|@ts-expect-error|\/\/\s*nolint|noqa|#\s*type:\s*ignore/.test(l)); if (sup) out.push({ path: f.path, kind: 'suppression-added', detail: sup.slice(1).trim().slice(0, 120) });
     if (/(^|\/)(\.eslintrc[^/]*|eslint\.config\.[cm]?[jt]s|biome\.jsonc?|\.oxlintrc[^/]*)$/.test(f.path)) { const off = add.find((l) => /["']?(off|0)["']?\s*[,}]|"ignorePatterns"|ignores\s*:/.test(l)); if (off) out.push({ path: f.path, kind: 'lint-rule-disabled', detail: off.slice(1).trim().slice(0, 120) }); }
     if (/(^|\/)tsconfig[^/]*\.json$/.test(f.path)) { const lo = add.find((l) => /"(strict|noImplicitAny|strictNullChecks|noUncheckedIndexedAccess)"\s*:\s*false/.test(l)); if (lo) out.push({ path: f.path, kind: 'strictness-lowered', detail: lo.slice(1).trim().slice(0, 120) }); }

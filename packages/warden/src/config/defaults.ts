@@ -34,7 +34,7 @@ export const DEFAULT_WARDEN = {
   /** The repository's own checks, run by the trusted executor inside the boundary. Taken from the DEFAULT-BRANCH config only. Empty => Implement refuses (no evidence is possible). */
   verify: { checks: [] as Array<{ id: string; kind: 'lint' | 'typecheck' | 'test' | 'build'; command: string; args: string[]; timeoutMs?: number }> },
   /** ADR 0014: which paths are tests. The test session may change only these; after it they are frozen. Taken from the DEFAULT-BRANCH config only. */
-  verification: { testPaths: [...DEFAULT_TEST_PATHS] as string[] },
+  verification: { testPaths: [...DEFAULT_TEST_PATHS] as string[], loopTurns: 3 },
   /** Merge facts the writer cannot read from GitHub: identities by LOGIN (never label), and how many independent GitHub approvals the branch rules require. */
   merge: { automationLogins: [] as string[], factoryLogins: [] as string[], requiredApprovals: 0 },
   gates: { blocker: true, major: true, minor: true, nit: true },

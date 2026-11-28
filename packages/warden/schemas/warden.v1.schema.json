@@ -483,6 +483,11 @@
             "minLength": 1,
             "maxLength": 120
           }
+        },
+        "loopTurns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
         }
       }
     }

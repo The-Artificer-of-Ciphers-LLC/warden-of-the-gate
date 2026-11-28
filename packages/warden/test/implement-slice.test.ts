@@ -181,6 +181,21 @@ test('ADR 0014 test-dispute: a frozen test the fix session judges wrong is repor
   const o2 = await r.run(m2); assert.equal(o2.kind, 'opened', JSON.stringify(o2)); assert.equal(m2.calls, 4); assert.match(git(r.bare, ['show', `refs/heads/${r.published[0].branch}:test/sum.test.js`]), /strictEqual\(sumTo\(4\), 6\)/);
 });
 
+test('ADR 0016 verify-and-continue: failing checks go back to a fresh fix session as the executor\'s own output; turns are bounded; a frozen-test change on any turn ends the attempt', async (t) => {
+  const WRONG = 'exports.sumTo = () => 999;\n';
+  const s = await setup(); t.after(s.cleanup); let fixes = 0;
+  const m = new Model((ws, ph) => { if (ph === 'test') goodEdit(ws, ph); else { fixes++; writeFileSync(join(ws, 'sum.js'), fixes === 1 ? WRONG : FIXED); } });
+  const o = await s.run(m); assert.equal(o.kind, 'opened', JSON.stringify(o)); assert.equal(m.calls, 3, 'test, fix, fix again after the executor saw a failure');
+  assert.match(m.sessions[2].prompt, /trusted checks were run on your previous change and failed/); assert.match(m.sessions[2].prompt, /check unit: .*--test test\/sum\.test\.js \(exit 1\)/, 'the executor\'s own command and exit status, not model prose'); assert.deepEqual(m.sessions[2].deny, m.sessions[1].deny, 'the same frozen inputs and write denial on every turn');
+  assert.match(s.published[0].body, /fix sessions used: 2 of 3/); assert.match(s.published[0].body, /frozen tests on the unchanged base, check unit: exit 1/); assert.match(s.published[0].body, /executor unit: `[^`]*--test test\/sum\.test\.js` exit 0/); assert.match(s.rec()!.log.map((x) => x.event).join(','), /loop-turn/);
+  const e = await setup(); t.after(e.cleanup); const stuck = new Model((ws, ph) => { if (ph === 'test') goodEdit(ws, ph); else writeFileSync(join(ws, 'sum.js'), WRONG); });
+  const o2 = await e.run(stuck); assert.equal(o2.kind, 'insufficient-evidence'); assert.equal(stuck.calls, 4, 'one test session and exactly loopTurns (3) fix sessions'); assert.match(o2.notice, /loop limit is 3/); assert.equal(e.published.length, 0); assert.equal(e.rec()!.attempts.completed, 1, 'loop turns are part of one attempt');
+  const one = await setup(); t.after(one.cleanup); const single = new Model((ws, ph) => { if (ph === 'test') goodEdit(ws, ph); else writeFileSync(join(ws, 'sum.js'), WRONG); });
+  const o3 = await one.run(single, { cfg: { ...one.cfg, loopTurns: 1 } }); assert.equal(o3.kind, 'insufficient-evidence'); assert.equal(single.calls, 2, 'loopTurns 1 is the old single-shot behaviour');
+  const f = await setup(); t.after(f.cleanup); let n = 0; const cheat = new Model((ws, ph) => { if (ph === 'test') goodEdit(ws, ph); else if (++n === 1) writeFileSync(join(ws, 'sum.js'), WRONG); else writeFileSync(join(ws, 'test/sum.test.js'), "const { test } = require('node:test'); test('x', () => {});\n"); });
+  const o4 = await f.run(cheat); assert.equal(o4.kind, 'rejected'); assert.equal(o4.reason, 'frozen-test-modified'); assert.equal(cheat.calls, 3, 'ended on the turn that changed the frozen test'); assert.equal(f.published.length, 0);
+});
+
 test('takeover: abandoned contributor work is read as DATA on top of the trusted base, ported work is credited, the factory branch is separate and the contributor branch is never touched', async (t) => {
   let abandoned = 0;
   const s = await setup({ ledger: () => undefined }); t.after(s.cleanup);
