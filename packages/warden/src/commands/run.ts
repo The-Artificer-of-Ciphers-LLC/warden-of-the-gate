@@ -1,3 +1,4 @@
+import { acquireScanLock, ScanLocked } from '../storage/scan-lock.ts';
 import { lastSweepRecord } from '../sweep/last.ts';
 import { mustReviewAgain } from '../review/force.ts';
 import { reviewPostIntent, reviewRecordIntent } from '../review/record.ts';
@@ -52,6 +53,9 @@ export async function run(c: Ctx): Promise<Result> {
   if (ctl.stopped) return { code: 4, data: { task, outcome: 'blocked', reason: ctl.unknown ? 'control state unknown (fail closed)' : 'shared stop in force', reasons: ctl.reasons }, text: `run blocked: ${ctl.unknown ? 'control state unknown => treated as stopped' : 'shared stop in force'}\n${ctl.reasons.join('\n')}` };
   // register active run so `warden stop` can request cancellation
   const marker = st.path('active-run.json'); st.writeJson(marker, { pid: process.pid, task, startedAt: new Date(c.now()).toISOString() });
+  const modelTask = ['triage', 'review', 'implement', 'rework', 'retro'].includes(task) && !c.flags['dry-run'];
+  let releaseLock: (() => void) | undefined;
+  if (modelTask) { try { releaseLock = acquireScanLock(st.path('scan.lock'), { pid: process.pid, task, now: new Date(c.now()).toISOString() }); } catch (e) { if (e instanceof ScanLocked) return { code: 4, data: { task, outcome: 'blocked', reason: 'scan-already-running', holder: e.holder }, text: `run --task ${task} blocked: ${e.message}. One scan at a time per instance; wait for it to finish or stop it with \`warden stop\`.` }; throw e; } }
   const abort = new AbortController(); const onTerm = () => abort.abort(); process.once('SIGTERM', onTerm);
   try {
     const skip = new Set<number>([cfg.inbox.inboxIssue, cfg.inbox.controlIssue, ...(cfg.inbox.globalControl?.repository === cfg.repository ? [cfg.inbox.globalControl.issue] : [])]);
@@ -73,10 +77,12 @@ export async function run(c: Ctx): Promise<Result> {
         return { code: 0, data: { task, outcome: 'submitted', ...r, aborted: abort.signal.aborted }, text: `task intake: ${r.submitted.length} submitted, ${r.skipped.length} skipped${r.skipped.map((x) => ` (#${x.item}: ${x.why})`).join('')}; run \`warden writer drain\` to apply` };
       }
       const findings = await planSweep(store, cfg, { now, skip });
-      const sw = await submitSweep(findings, { ...base, repo: cfg.repository });
+      const today = new Date(now).toISOString().slice(0, 10); const cl = st.readJson<{ day: string; count: number }>(st.path('closures.json')); const usedToday = cl?.day === today ? cl.count : 0;   // per-day allowance, kept on this host
+      const sw = await submitSweep(findings, { ...base, repo: cfg.repository, caps: { perRun: cfg.sweep.maxClosuresPerRun, remainingToday: Math.max(0, cfg.sweep.maxClosuresPerDay - usedToday) } });
+      if (sw.closures) { mkdirSync(st.path('.'), { recursive: true, mode: 0o700 }); st.writeJson(st.path('closures.json'), { day: today, count: usedToday + sw.closures }); }
       const rec = await submitReconcile(await planReconcile(store, cfg, { skip }), { ...base, repo: cfg.repository });
       const last = lastSweepRecord({ now, clockActions: sw.submitted.length, deferred: sw.skipped.length, reconciles: rec.length, aborted: abort.signal.aborted }); if (last) { mkdirSync(st.path('.'), { recursive: true, mode: 0o700 }); st.writeJson(st.path('last-sweep.json'), last); }   // status reports it
-      return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred; run \`warden writer drain\` to apply` };
+      return { code: 0, data: { task, outcome: 'submitted', sweep: sw, reconcile: rec, aborted: abort.signal.aborted }, text: `task sweep: ${sw.submitted.length} clock action(s) and ${rec.length} reconcile(s) submitted, ${sw.skipped.length} deferred${sw.deferredClosures.length ? `, ${sw.deferredClosures.length} closure(s) deferred by the closure cap (${sw.deferredClosures.map((n) => '#' + n).join(', ')}; they are still due and are picked up by a later sweep)` : ''}; run \`warden writer drain\` to apply` };
     }
     const makeSink = (): IntentSink => {
       const sub = be.open('submit'); let journal: Journal | null = null; try { journal = new Journal(st.journalPath); } catch { /* none */ }
@@ -219,6 +225,6 @@ export async function run(c: Ctx): Promise<Result> {
         + `\nmutation protection: read-only store enforced; global dry-run control: ${protection.globalDryRun}; backend ${be.name}`
       : `task ${out.task}: ${out.outcome.toUpperCase()}: ${'reason' in out ? out.reason : ''}`;
     return { code, data: { ...out, protection, aborted: abort.signal.aborted }, text };
-  } finally { process.removeListener('SIGTERM', onTerm); try { if (existsSync(marker) && JSON.parse(readFileSync(marker, 'utf8')).pid === process.pid) unlinkSync(marker); } catch { /* ignore */ } }
+  } finally { releaseLock?.(); process.removeListener('SIGTERM', onTerm); try { if (existsSync(marker) && JSON.parse(readFileSync(marker, 'utf8')).pid === process.pid) unlinkSync(marker); } catch { /* ignore */ } }
 }
 void writeFileSync; void LEDGER_MARK; void parseLedger;

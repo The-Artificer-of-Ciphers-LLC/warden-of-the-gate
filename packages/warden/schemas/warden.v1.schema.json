@@ -103,6 +103,23 @@
         }
       }
     },
+    "sweep": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Limits on what one sweep may close (PRD section 6): a defect in clock logic cannot mass-close the backlog. Excess eligible closures are deferred and reported.",
+      "properties": {
+        "maxClosuresPerRun": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maxClosuresPerDay": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
