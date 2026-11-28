@@ -73,7 +73,50 @@ Only the selected items get Warden state. Existing owners are kept, new clocks s
 Review the example workflows in `packages/warden/templates/workflows/` (`warden-events`, `warden-writer`, `warden-sweep`). They are inert `.example` files. Copy them into `.github/workflows/` only after you have read them: they check out the default branch only, run no lifecycle scripts, and give the writer its own identity and a single-flight concurrency group **[verified: parse and safety invariants]**.
 
 - `issues` / `pull_request` events become intake intents; a draft PR is closed by policy; a blocking review starts the author's 48-hour fix window; a `/warden claim` comment becomes a verified claim for that commenter only; `/warden release`, `/warden hold <reason>`, `/warden release-hold`, `/warden approve|deny`, `/warden override` and `/warden resume-scope` are the maintainer commands **[verified against the simulated GitHub]**.
-- **Scheduling is not validated.** The `schedule` trigger in the sweep example is commented out on purpose: no native scheduled run has ever been observed in the disposable sandbox repositories (see `docs/handoff`). Run `warden run --task sweep` by hand or by `workflow_dispatch`, and enable a schedule only after you have seen a real scheduled run in your own repository. Scheduling is best effort and never an exact-deadline guarantee.
+- **The sweep is started from outside GitHub's schedule service.** GitHub runs `schedule` triggers on a best-effort basis: they can be hours late, and under load some are dropped. So the sweep example's primary trigger is `workflow_dispatch`, started on a timer by a scheduler you run; its `schedule` trigger is commented out and is only an optional backup ([ADR 0025](adr/0025-external-dispatch-for-sweep.md)). Sweeps are idempotent: a late run does the overdue work, a dropped run is covered by the next one and a duplicate run changes nothing **[verified against the simulated GitHub]**. `warden status` shows the last completed sweep. Run it by hand with `warden run --task sweep`, or set up the timer below. Scheduling is never an exact-deadline guarantee.
+- **Timer on the Mac (launchd).** A LaunchAgent runs `gh workflow run` with your own GitHub CLI login, which needs write access to the repository; Warden adds no token or App permission for it. Find the full path of `gh` (launchd does not use your shell's `PATH`):
+
+  ```zsh
+  command -v gh
+  ```
+
+  Save this as `~/Library/LaunchAgents/org.taoc.warden-sweep.plist`, with that path in place of `/opt/homebrew/bin/gh` and your repository in place of `OWNER/REPO`. It asks for a sweep at minute 17 of every fourth hour, local time, matching the commented backup schedule:
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <dict>
+    <key>Label</key><string>org.taoc.warden-sweep</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/opt/homebrew/bin/gh</string><string>workflow</string><string>run</string>
+      <string>warden-sweep.yml</string><string>--repo</string><string>OWNER/REPO</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <array>
+      <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>17</integer></dict>
+      <dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>17</integer></dict>
+      <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>17</integer></dict>
+      <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>17</integer></dict>
+      <dict><key>Hour</key><integer>16</integer><key>Minute</key><integer>17</integer></dict>
+      <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>17</integer></dict>
+    </array>
+    <key>StandardOutPath</key><string>/tmp/warden-sweep.log</string>
+    <key>StandardErrorPath</key><string>/tmp/warden-sweep.log</string>
+  </dict>
+  </plist>
+  ```
+
+  Load it, start one sweep now to check it works, and look for the run:
+
+  ```zsh
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.taoc.warden-sweep.plist
+  launchctl kickstart gui/$(id -u)/org.taoc.warden-sweep
+  gh run list --workflow warden-sweep.yml --repo OWNER/REPO --limit 3
+  ```
+
+  `launchctl bootout gui/$(id -u)/org.taoc.warden-sweep` removes it. If the Mac is asleep at a scheduled time, launchd starts the job when it wakes, coalescing missed times into one run; if the Mac is off, the job waits for its next time ([Apple, Scheduling Timed Jobs](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/ScheduledJobs.html)). For sweeps while the Mac is off, run the same `gh workflow run` call from an always-on host, or turn on the backup `schedule` (off the top of the hour, and never relied on) **[documented; not yet run against a live repository]**.
 
 - **Discord cards** (notifications only): `warden discord sync --channel ID [--dry-run]` posts one card per pending approval and edits it in place when the approval resolves on GitHub. A card shows the exact `/warden approve ...` command and a link button; it has no approve or deny control, mentions are disabled, and nothing done in Discord can record a decision, because decisions are accepted only from a verified maintainer comment on GitHub. The bot token comes from `WARDEN_DISCORD_TOKEN` and is never printed or stored **[verified against a fake gateway and a stubbed REST client, and once live on 2026-11-18: one card posted to a private channel and edited in place, turning green, when its approval resolved]** **[owner: create the Discord application, channel and token]**.
 
@@ -121,4 +164,4 @@ Scopes are explicit; credentials are never exported; decisions are kept until yo
 
 ## What this release does not include
 
-Discord live operation (the owner creates the Discord application and channel and supplies a bot token; the cards themselves are built, see section 6); a published package; a live GitHub publisher for factory PRs (the publisher is built and tested against the simulation, but needs an owner-granted contents and pull-request write permission and a publish credential, neither of which exists here); live activation (never implied; a separate explicit owner step) and a maintainer-curated qualification set (P7: the replay framework exists, see below, but the curated set of at least 20 PRs and 20 issues is the owner's to supply); Linux or Windows hosts; non-TypeScript lookup. See `docs/handoff/2026-11-18-p3-progress.md` for the current state and the P1 gate.
+Discord live operation (the owner creates the Discord application and channel and supplies a bot token; the cards themselves are built, see section 6); a published package; a live GitHub publisher for factory PRs (the publisher is built and tested against the simulation, but needs an owner-granted contents and pull-request write permission and a publish credential, neither of which exists here); live activation (never implied; a separate explicit owner step) and a maintainer-curated qualification set (P7: the replay framework exists, see below, but the curated set of at least 20 PRs and 20 issues is the owner's to supply); Linux or Windows hosts; non-TypeScript lookup. See `docs/handoff/2026-11-18-p3-progress.md` for the current state; the P1 scheduling gate was changed on 2026-11-28 ([ADR 0025](adr/0025-external-dispatch-for-sweep.md)).

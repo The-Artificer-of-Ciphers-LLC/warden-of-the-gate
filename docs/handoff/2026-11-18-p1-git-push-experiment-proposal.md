@@ -1,5 +1,7 @@
 # Proposal: controlled git-push comparison for the P1 scheduling gate
 
+> **Superseded 2026-11-28.** The comparison ran on 2026-11-18 (handoff addendum 7, negative), GitHub Support later confirmed the commit method makes no difference, and the owner changed the gate to external `workflow_dispatch` ([ADR 0025](../adr/0025-external-dispatch-for-sweep.md)). Kept as a historical record.
+
 **Status: PROPOSED, NOT APPROVED, NOT RUN.** Nothing in this document has been executed. The owner must approve the specifics below (or change them) before the agent builds or runs anything live. Written 2026-11-18 while GitHub Support case #5025247 has no reply.
 
 ## Why this experiment

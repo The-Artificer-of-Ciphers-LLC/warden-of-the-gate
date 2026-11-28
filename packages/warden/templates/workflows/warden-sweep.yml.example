@@ -1,11 +1,13 @@
-# EXAMPLE, NOT INSTALLED, AND NOT VALIDATED: the P1 scheduling gate is OPEN. No native `event: schedule` run has ever been observed in the disposable
-# sandbox repositories (three bounded experiments and a support case, see docs/handoff). Until genuine scheduled runs are shown to work for your
-# repository, run the sweep by hand (`warden run --task sweep`) or with `workflow_dispatch`. Scheduling is best effort and never an exact-deadline guarantee.
+# EXAMPLE, NOT INSTALLED: copy into .github/workflows/ only after reading it. Scheduling follows ADR 0025: GitHub runs `schedule` triggers
+# best effort (they can be hours late, and under load some are dropped), so the primary trigger is `workflow_dispatch`, started on a
+# timer by an external scheduler (for the MVP a launchd LaunchAgent running `gh workflow run warden-sweep.yml`; see docs/quickstart.md).
+# Sweeps are idempotent, so a late, dropped or duplicate run does no harm and the next run catches up. Never an exact-deadline guarantee.
 name: warden-sweep
 on:
   workflow_dispatch:
+  # Optional backup only, off by default. Nothing relies on when or whether it fires; keep it infrequent and off the top of the hour.
   # schedule:
-  #   - cron: '17 */4 * * *'   # enable ONLY after you have observed a real scheduled run in your repository
+  #   - cron: '17 */4 * * *'
 permissions: { contents: read, issues: write }
 concurrency: { group: warden-sweep, cancel-in-progress: false }
 jobs:

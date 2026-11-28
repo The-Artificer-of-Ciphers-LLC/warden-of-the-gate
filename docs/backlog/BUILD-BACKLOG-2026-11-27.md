@@ -41,7 +41,7 @@ Built after the owner decides; each is a question to the owner, not a guess.
 
 ## Wave 3: owner or GitHub gated (not executed)
 
-P1 scheduling gate and Support case 5025247; adoption command syntax; App Contents and Pull requests write for live Implement publishing, protected ceiling and any token; Discord application, channel, token and user-ID mappings; npm scope, package name and any publication or tag; curated replay set (at least 20 PRs and 20 issues) and the label-derived triage review; activation of live scope; the workflow-run approval capability proof; clean-up of the sandbox's leftover PR, issue and branches.
+P1 scheduling gate and Support case 5025247 (changed 2026-11-28 to external `workflow_dispatch`, [ADR 0025](../adr/0025-external-dispatch-for-sweep.md); no longer gated); adoption command syntax; App Contents and Pull requests write for live Implement publishing, protected ceiling and any token; Discord application, channel, token and user-ID mappings; npm scope, package name and any publication or tag; curated replay set (at least 20 PRs and 20 issues) and the label-derived triage review; activation of live scope; the workflow-run approval capability proof; clean-up of the sandbox's leftover PR, issue and branches.
 
 ## P7 measurement track (runs alongside)
 
