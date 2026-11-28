@@ -39,3 +39,15 @@ test('classes are configurable: a repository can name shared components and drop
   assert.deepEqual(classes([f('src/shared/ui/Button.tsx')], { 'shared-component': ['src/shared/'] }), ['shared-component']);
   assert.deepEqual(classes([f('migrations/001.sql')], { 'shared-component': ['src/shared/'] }), [], 'a configured set replaces the defaults, it does not extend them');
 });
+
+test('other ecosystems: go.mod, requirements.txt, Cargo.toml and Gemfile new and major-version changes count; minor bumps and non-dependency lines do not; an unparsed configured manifest counts on any change', () => {
+  const p = (del: string[], add: string[]) => ['@@', ...del.map((l) => '-' + l), ...add.map((l) => '+' + l)].join('\n');
+  assert.deepEqual(dependencyChanges(p([], ['\tgithub.com/x/y v1.2.3']), 'go.mod'), ['new dependency github.com/x/y v1.2.3']);
+  assert.deepEqual(dependencyChanges(p(['\tgithub.com/x/y v1.2.3'], ['\tgithub.com/x/y v2.0.0']), 'go.mod'), ['major-version change of github.com/x/y: v1.2.3 -> v2.0.0']);
+  assert.deepEqual(dependencyChanges(p(['\tgithub.com/x/y v1.2.3'], ['\tgithub.com/x/y v1.9.0']), 'go.mod'), []); assert.deepEqual(dependencyChanges(p(['go 1.21'], ['go 1.22']), 'go.mod'), []); assert.deepEqual(dependencyChanges(p(['module example.com/m v1'], ['module example.com/m v2']), 'go.mod'), []);
+  assert.deepEqual(dependencyChanges(p(['flask==2.3.1'], ['flask==3.0.0']), 'requirements.txt'), ['major-version change of flask: 2.3.1 -> 3.0.0']); assert.deepEqual(dependencyChanges(p([], ['requests>=2.31']), 'requirements-dev.txt'), ['new dependency requests 2.31']); assert.deepEqual(dependencyChanges(p(['flask==2.3.1'], ['flask==2.3.2']), 'requirements.txt'), []);
+  assert.deepEqual(dependencyChanges(p([], ['serde = "1.0"', 'tokio = { version = "1.2", features = ["full"] }']), 'Cargo.toml'), ['new dependency serde 1.0', 'new dependency tokio 1.2']); assert.deepEqual(dependencyChanges(p(['version = "0.1.0"', 'edition = "2018"'], ['version = "0.2.0"', 'edition = "2021"']), 'Cargo.toml'), []);
+  assert.deepEqual(dependencyChanges(p(["gem 'rails', '~> 6.1'"], ["gem 'rails', '~> 7.0'"]), 'Gemfile'), ['major-version change of rails: 6.1 -> 7.0']);
+  assert.deepEqual(classes([f('services/core/go.mod', 'modified', p([], ['\tgithub.com/x/y v1.2.3']))]), ['dependency']); assert.deepEqual(classes([f('go.sum', 'modified', p([], ['x']))]), []);
+  assert.deepEqual(classes([f('pyproject.toml', 'modified', p([], ['x']))], { dependency: ['pyproject.toml'] }), ['dependency'], 'a configured manifest that is not parsed counts on any change');
+});
