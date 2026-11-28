@@ -8,7 +8,7 @@ import { DEFAULT_WARDEN } from '../src/config/defaults.ts';
 import { loadOrders, loadWarden } from '../src/config/load.ts';
 import { evaluate, validateEffective } from '../src/config/policy.ts';
 import { canOverride, canTransition, newLedger, ISSUE_OPEN_STATES } from '../src/state/model.ts';
-import { BudgetMonitor, NotReadyRunner, runValidated } from '../src/runner/agent-runner.ts';
+import { BudgetMonitor, NotReadyRunner, harnessLabel, runValidated } from '../src/runner/agent-runner.ts';
 import type { AgentRunner, SessionRequest } from '../src/runner/agent-runner.ts';
 import { InstanceMismatch, InstanceStorage, instanceIdFor } from '../src/storage/instance.ts';
 import { HttpStore } from '../src/github/http.ts';
@@ -110,6 +110,10 @@ test('redelivery older than the dedupe horizon is rejected by the age rule', asy
   for (let k = 0; k < 20; k++) { await r.send({ kind: 'note', item: n, payload: { text: 'n' + k } }); } await r.writer({ maxCreatesPerRun: 1000 }).drain();
   r.world.clock = r.world.now() + 3 * 3600_000; await submit(r.submitStore, r.inbox, old, null); const rep = await r.writer({ maxCreatesPerRun: 1000 }).drain();
   assert.equal(rep.processed.at(-1)!.reason, 'beyond-dedupe-horizon');
+});
+test('runner: the recorded harness label carries the observed version, which replaces any configured one', () => {
+  assert.equal(harnessLabel('opencode', '2.4.1'), 'opencode 2.4.1'); assert.equal(harnessLabel('opencode 2.2.7', '2.4.1'), 'opencode 2.4.1');
+  assert.equal(harnessLabel('opencode'), 'opencode', 'nothing observed: nothing is invented');
 });
 test('runner: tool-call budget (not just steps), wall clock, stop, Ajv rejection, not-ready adapter never fabricates', async () => {
   const schema = { type: 'object', additionalProperties: false, required: ['verdict'], properties: { verdict: { enum: ['ok', 'bad'] } } };

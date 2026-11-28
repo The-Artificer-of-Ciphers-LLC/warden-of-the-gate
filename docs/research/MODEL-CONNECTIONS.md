@@ -153,7 +153,7 @@ These decisions belong to the owner (the endpoints design, the remote service's 
 | OpenAI side: Chat Completions or Open Responses as the conformance target? | Chat Completions for the MVP; move to Open Responses once OpenCode and the pilot servers pass its compliance tool |
 | Which `anthropic-version` to send? | `2023-06-01`, with no sampling parameters, so requests are also valid under `2026-10-21` |
 | API style and identity of the remote Nemotron/Gemma service | **Ruled 2026-11-25** (see Owner rulings): OpenAI Chat Completions; HTTPS to the exact registered hostname with normal certificate verification and an API key from an environment variable; no SPKI pin or mTLS |
-| Upgrade OpenCode past 2.2.7? | Move to at least 2.3.1 for the reasoning-field replay fix and `settings.tls`, after re-running the preflight proofs |
+| Upgrade OpenCode past 2.2.7? | **Ruled 2026-11-27** (ADR 0004 amendment): Warden accepts any 2.x from 2.2.7 up, so 2.3.1 and later run. The preflight proofs are still to be re-run on the version in use |
 | Consent and budget for remote and frontier tiers | Per run, or a standing grant scoped to repository classification, endpoint id and monthly budget; any change voids the grant |
 | Per-repository data classification | Required field; Warden refuses when it exceeds the endpoint's ceiling |
 

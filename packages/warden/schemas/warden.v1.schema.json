@@ -131,7 +131,8 @@
         },
         "harnessVersion": {
           "type": "string",
-          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          "description": "Informational record of the OpenCode range in use (default 2.x). The adapter itself enforces >=2.2.7 <3.0.0 at preflight (ADR 0004) and each run records the version it observed; an exact version written by an older Warden stays valid here.",
+          "pattern": "^(\\d+\\.x|\\d+\\.\\d+\\.\\d+)$"
         },
         "modelPool": {
           "type": "array",
