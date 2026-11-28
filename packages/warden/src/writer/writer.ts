@@ -1,3 +1,4 @@
+import { voiced } from './voice.ts';
 import { authorActivity, type SweepObs } from '../sweep/derive.ts';
 import type { Comment, Store } from '../github/store.ts';
 import { Anomaly, Crash, Faults, Fenced, NetworkError, Stopped, canonical, sleep } from '../util.ts';
@@ -350,10 +351,11 @@ export class Writer {
         if (!(await this.store.listCheckRuns(e.headSha)).some((x) => x.externalId === marker)) { await this.store.createCheckRun({ name: 'Warden review', headSha: e.headSha, conclusion: e.conclusion, title: e.title, summary: e.summary, externalId: marker }); if (this.faults.take('effect-reply-lost:check-run')) throw new NetworkError('reply lost after effect check run'); }
       }
     } else {
-      const why = checkOutgoingText(e.text, this.outgoingRules()); if (why) throw new OutgoingBlocked(why);
+      const text = voiced(e.text, i.origin, this.cfg.policy.voice);   // header (deterministic or AI-assisted) and signature, then checked as posted
+      const why = checkOutgoingText(text, this.outgoingRules()); if (why) throw new OutgoingBlocked(why);
       const tag = `<!-- ${EFFECT_MARK}:${i.opid}:${idx} -->`;
       const cs = await this.store.listComments(i.item);
-      if (!cs.some((x) => x.body.includes(tag))) { await this.create(i.item, `${tag}\n${e.text}`); if (this.faults.take('effect-reply-lost:comment')) throw new NetworkError('reply lost after effect comment'); }
+      if (!cs.some((x) => x.body.includes(tag))) { await this.create(i.item, `${tag}\n${text}`); if (this.faults.take('effect-reply-lost:comment')) throw new NetworkError('reply lost after effect comment'); }
     }
   }
 
