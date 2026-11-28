@@ -11,7 +11,12 @@ export interface AuditEntry { at: string; event: string; operation: string; repo
 
 const lvl = (p?: PermLevel) => (p === 'write' ? 2 : p === 'read' ? 1 : 0);
 const keyOf = (r: { operation: Operation; repository: string }) => `${r.operation}@${r.repository}`;
+/** Permissions Warden never requests, whatever the ceiling says. `workflows` lets a token change `.github/workflows/`, which would let Warden rewrite
+ *  the workflows that constrain it (PRD §3 Actions hardening, confirmed by the owner on 2026-11-27). */
+export const NEVER_REQUESTED = ['workflows'];
 export function credentialDenial(ceiling: AuthorityCeiling, r: CredentialRequest): string | null {
+  const never = Object.keys(r.permissions).filter((k) => NEVER_REQUESTED.includes(k));
+  if (never.length) return `permission ${never.join(', ')} is never requested: Warden does not change its own workflows`;
   if (r.operation === 'read-control' && ceiling.controlRepositories?.includes(r.repository)) {
     return Object.entries(r.permissions).every(([k, v]) => ['issues', 'metadata'].includes(k) && v === 'read') ? null : 'control repository grants read access only';
   }

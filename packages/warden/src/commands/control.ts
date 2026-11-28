@@ -5,8 +5,8 @@ import { buildPolicy } from '../config/snapshot.ts';
 import { loadConfigs, openBackend, openStorage, str } from './common.ts';
 import type { Ctx, Result } from './common.ts';
 
-function ctx(c: Ctx) {
-  const cfgs = loadConfigs(c); if (!('warden' in cfgs)) return { err: { code: 1, data: { errors: cfgs.errors }, text: 'configuration invalid:\n' + cfgs.errors.join('\n') } as Result };
+function ctx(c: Ctx, stopping = false) {
+  const cfgs = loadConfigs(c, { stopping }); if (!('warden' in cfgs)) return { err: { code: 1, data: { errors: cfgs.errors }, text: 'configuration invalid:\n' + cfgs.errors.join('\n') } as Result };
   const cfg = cfgs.warden; const st = openStorage(c, cfg.repository, false); const be = openBackend(c, cfg); const pol = buildPolicy(cfg, cfgs.orders);
   const global = !!c.flags.global;
   let target: ControlTarget | null = null; let note = be.unavailable;
@@ -18,7 +18,7 @@ function ctx(c: Ctx) {
 }
 /** `warden stop`: local first, then shared; reports local vs remotely confirmed; unconfirmed propagation is never reported as success. */
 export async function stop(c: Ctx): Promise<Result> {
-  const x = ctx(c); if ('err' in x && x.err) return x.err;
+  const x = ctx(c, true); if ('err' in x && x.err) return x.err;
   const { cfg, st, pol, target, note, actor } = x as Exclude<typeof x, { err: Result }>;
   // cancel an in-flight local run (new model/verification work is blocked by the local stop file immediately)
   let cancelled: string | null = null; const ar = st.readJson<{ pid: number; task: string }>(st.path('active-run.json'));

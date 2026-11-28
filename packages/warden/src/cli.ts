@@ -40,7 +40,7 @@ const HELP = `warden ${CLI_VERSION}  (warden.yml schema v${WARDEN_SCHEMA_VERSION
   approvals request|list|check --item N ...
   credentials configure --confirm --app-id N --installation-id N --app-login LOGIN [--key-path FILE] [--approve-control-read] [--replace]
   credentials status | ack-revocation --confirm
-common flags: --repo-dir DIR --home DIR --backend github|sim:FILE --json
+common flags: --repo-dir DIR --trusted-ref REF --home DIR --backend github|sim:FILE --json
 explicit live sources: --operator-auth gh | --writer-auth actions | --submit-auth actions-secret | --control-auth actions-secret
 exit codes: 0 ok | 1 invalid/refused | 2 usage or unconfirmed | 3 unsupported task | 4 blocked | 5 writer halted`;
 

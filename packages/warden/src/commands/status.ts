@@ -17,6 +17,7 @@ export async function status(c: Ctx): Promise<Result> {
   const cfg = cfgs.warden; const now = c.now();
   let st; try { st = openStorage(c, cfg.repository); } catch (e) { return { code: 1, data: { error: String(e) }, text: `status: ${(e as Error).message}` }; }
   const out: Record<string, unknown> = { cliVersion: CLI_VERSION, repository: cfg.repository, instance: st.id, mode: cfg.mode };
+  out.policySource = cfgs.trusted;   // PRD §3 trusted base: where the policy in force came from, and policy files whose working-tree copy is NOT in force
   const local = readLocalStop(st); out.localStop = local;
   out.credentials = { automation: cfg.credentials.automation, controller: readPersistedCredentialStatus(st.credentialsDir, now), ceiling: existsSync(st.path('ceiling.json')) ? 'present' : 'absent' };
   const j = existsSync(st.journalPath) ? new Journal(st.journalPath) : null;
@@ -60,6 +61,7 @@ export async function status(c: Ctx): Promise<Result> {
   } catch (e) { out.remote = { reachable: false, reason: redact(String((e as Error).message)).slice(0, 160) }; }
   const cs = (out.credentials as { controller: { operation: string; state: string }[] }).controller;
   const text = [`warden ${CLI_VERSION} status for ${cfg.repository} (instance ${st.id}, mode ${cfg.mode})`,
+    `policy: ${cfgs.trusted.note}${cfgs.trusted.drift.length ? `; NOT in force (working tree differs from the trusted base): ${cfgs.trusted.drift.join(', ')}` : ''}`,
     `local stop: ${local.stopped ? `STOPPED since ${local.at} by ${local.by}` : 'running'}`,
     `credentials: automation ${cfg.credentials.automation}; ${cs.length ? cs.map((x) => `${x.operation}=${x.state}`).join(', ') : 'none issued yet'}; ceiling ${(out.credentials as { ceiling: string }).ceiling}`,
     `journal: ${(out.journal as { unacked: unknown[] }).unacked.length} unacknowledged local operation(s)`, `decisions recorded locally: ${out.decisionsRecorded}`,

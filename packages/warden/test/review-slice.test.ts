@@ -177,3 +177,44 @@ test('accepted findings carry a fingerprint and an inline flag; a position outsi
   assert.equal(fs[1].id, 'far'); assert.equal(fs[1].inline, false); assert.match(fs[0].fingerprint!, /^[0-9a-f]{16}$/);
   assert.match(o.card!.text, /1 blocker\(s\), 2 finding\(s\)/);
 });
+
+/** W-20 (issue #81), PRD §3 trusted base, confirmed by the owner on 2026-11-27: a pull request that changes policy, workflow or rule files gets a full
+ *  review and a maintainer decision, never a delta review. */
+test('a new head that changes ORDERS.yaml or a workflow gets a full review (earlier findings still re-checked) and the card asks for a maintainer decision', async (t) => {
+  const r = rig(); t.after(r.cleanup);
+  const prompts: string[] = [];
+  const runner = new FakeRunner(GOOD, (req, _s, _m, n) => { prompts.push(readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'));
+    return done(n === 1 ? BLOCKER : { verdict: 'no findings', findings: [], revalidated: [{ id: 'f1', status: 'resolved' }] }); });
+  assert.equal((await r.scan(runner)).kind, 'accepted');
+  r.push('ffee00ffee00'); r.pull.pull!.files.push({ path: '.github/ORDERS.yaml', status: 'modified', patch: '@@ -1 +1 @@\n-programs: []\n+programs: [{name: x, tasks: [merge], decision: allow}]' },
+    { path: '.github/workflows/ci.yml', status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b' });
+  const plan = await slice.planReview(r.world.view('operator'), r.n, r.kv, 3);
+  assert.equal(plan.action, 'full'); assert.match(plan.why, /\.github\/ORDERS\.yaml/);
+  const o = await r.scan(runner);
+  assert.equal(o.kind, 'accepted'); assert.equal(o.mode, 'full', 'never a delta review');
+  assert.deepEqual(o.trustedInputs, ['.github/ORDERS.yaml', '.github/workflows/ci.yml']); assert.deepEqual(o.marker?.trustedInputs, o.trustedInputs);
+  assert.match(prompts[1], /FULL review of every changed line, not a delta/); assert.doesNotMatch(prompts[1], /DELTA review/);
+  assert.match(prompts[1], /"revalidated"/, 'a full review still re-checks the earlier finding');
+  assert.match(o.card!.text, /Maintainer decision required.*\.github\/ORDERS\.yaml/); assert.equal(o.card!.posted, false);
+});
+
+test('a full review of a trusted-input change that skips an earlier finding is rejected whole, like a delta review', async (t) => {
+  const r = rig(); t.after(r.cleanup);
+  const runner = new FakeRunner(GOOD, (_q, _s, _m, n) => done(n === 1 ? BLOCKER : CLEAN));
+  await r.scan(runner);
+  r.push('ffee00ffee01'); r.pull.pull!.files.push({ path: '.github/warden.yml', status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b' });
+  const o = await r.scan(runner); assert.equal(o.kind, 'rejected'); assert.equal(o.reason, 'revalidation-incomplete'); assert.equal(o.mode, 'full');
+});
+
+test('a new head that touches only ordinary code is still a delta review, and its card asks for no special decision', async (t) => {
+  const r = rig(); t.after(r.cleanup);
+  const runner = new FakeRunner(GOOD, () => done(CLEAN));
+  await r.scan(runner); r.push('ffee00ffee02');
+  const o = await r.scan(runner); assert.equal(o.mode, 'delta'); assert.equal(o.trustedInputs, undefined); assert.doesNotMatch(o.card!.text, /Maintainer decision required/);
+});
+
+test('a first review of a pull request that changes CODEOWNERS is full and its card asks for a maintainer decision', async (t) => {
+  const r = rig(); t.after(r.cleanup); r.pull.pull!.files.push({ path: 'CODEOWNERS', status: 'modified', patch: '@@ -1 +1 @@\n-* @a\n+* @b' });
+  const o = await r.scan(new FakeRunner(GOOD, () => done(CLEAN)));
+  assert.equal(o.mode, 'full'); assert.deepEqual(o.trustedInputs, ['CODEOWNERS']); assert.match(o.card!.text, /Maintainer decision required/);
+});
