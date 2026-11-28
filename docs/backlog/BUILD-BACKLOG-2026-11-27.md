@@ -30,12 +30,14 @@ Derived from [the implementation plan](../prd/0001-warden-of-the-gate.implementa
 
 Built after the owner decides; each is a question to the owner, not a guess.
 
-- Replay and qualification thresholds versus the PRD's 90% agreement bar (B1): which governs, and the matching rule (line range or function/hunk).
-- ADRs 0014 to 0016 (frozen tests, contract gate, verification loop, mutation): accept, and the build order. Then ADR 0017 and 0024 rules (test provenance, differential checks, preserve/change/fix facet), 0018 measurements, 0020 to 0023.
-- Remote or frontier models for reviewer-family diversity (B8) versus loopback-only.
-- ADR 0015 one-way-door detection by configured boundary class (B9).
-- Discord: buttons and a Gateway helper versus link-only cards (B12).
-- Status metrics and measured budgets (P6 and P7): which numbers the status report must show.
+**Decided 2026-11-27 by @trek-e.** Each ruling is recorded in the PRD's [owner decisions](../prd/0001-warden-of-the-gate.md#owner-decisions-from-the-research-reconciliation) table (2026-11-27, Wave 2) and the sections named there. The answers are his words.
+
+- Replay and qualification thresholds versus the PRD's 90% agreement bar (B1): **DECIDED** ("Yes to both"). PRD §11 governs: raise `replay/replay.ts` `DEFAULT_THRESHOLDS` to the §11 bar (90% agreement separately on blocking findings and triage, each denominator reported; at least 10 blocking findings assessed; every curated critical case detected) and add a critical-case flag to curated cases. A finding matches a known defect by same file and same changed diff hunk, not an exact line range.
+- ADRs 0014 to 0016 (frozen tests, contract gate, verification loop, mutation): **DECIDED** ("Accept, in that order"). All three accepted; build order 0014 (frozen tests), then 0016 (verification loop), then 0015 (contract review). Still open: ADR 0017 and 0024 details (test provenance display, differential checks, preserve/change/fix facet), 0018 measurements, 0020 to 0023.
+- Remote or frontier models for reviewer-family diversity (B8) versus loopback-only: **PARTLY DECIDED.** The owner ruled 2026-11-24 that Warden is never local-only ("Local models are not what auto merge verdict rests on"), and on 2026-11-27 ("Yes, that works") that any registered endpoint tier he approves for the auto-merge gate may give a verdict, with tier, endpoint and exact model id recorded in every verdict's provenance ([MODEL-CONNECTIONS](../research/MODEL-CONNECTIONS.md)). Still open: consent and budget for remote and frontier tiers, and reconciling ADR 0007, PRD §2 "Local-only inference" and `config/policy.ts` ("MVP inference is local-only") with these rulings.
+- ADR 0015 one-way-door detection by configured boundary class (B9): **already decided 2026-11-26** (PRD §12, 2026-11-26 table; ADR 0015 Decision). A change is a one-way door exactly when it touches a configured boundary class; external effects (publishing, releases, deploys) are a default class; every one-way door comes to the maintainer as a decision card.
+- Discord: buttons and a Gateway helper versus link-only cards (B12): **DECIDED** ("Link-only for MVP"). Keep the current link-only cards (`discord/cards.ts`); every decision is a verified GitHub comment. Buttons and the Gateway helper are deferred to after the pilot (PRD §8, plan P5).
+- Status metrics and measured budgets (P6 and P7): **DECIDED** ("Yes, that works"). `warden status` shows the pilot gate (blocking-finding and triage agreement, each with its denominator; blocking findings assessed; critical cases detected; qualification verdict), the must-be-zero counters (unauthorized effects, duplicate accepted reviews, lost-state recovery failures) and measured budgets (tokens, wall time, memory per task, by model). The rest of the PRD §11 tracking list goes in a separate on-demand metrics report (PRD §10, §11; plan P7).
 
 ## Wave 3: owner or GitHub gated (not executed)
 
