@@ -10,7 +10,8 @@ import { iso } from '../util.ts';
 import { reviewResultSchema } from './schema.ts';
 import { buildReviewPrompt } from './prompt.ts';
 import { annotate } from './findings.ts';
-import { isScanFinding, scanFindings } from './test-scan.ts';
+import { isScanFinding, MUTATION_PREFIX, scanFindings } from './test-scan.ts';
+import type { MutationResult } from '../verify/mutation.ts';
 import type { Finding, ReviewOutput } from './schema.ts';
 import { DEFAULT_CONTEXT_CHARS, renderContext, summarize, unavailable } from './context.ts';
 import { trustedInputsTouched } from '../config/trusted.ts';
@@ -31,7 +32,7 @@ export interface ReviewKV { read(item: number): ReviewRecord | null; write(item:
 /** `maxPatchChars`: a diff larger than the local reviewer can read whole is refused BEFORE any attempt is spent ("split into smaller PRs"), never silently truncated. */
 /** `context`: the repository lookup (src/review/context.ts) for the pull request head, given a character budget. Absent means the review runs on the patch
  *  alone, as before; present but failing means it runs labeled `context: unavailable`, never as "no references". */
-export interface ReviewConfig { /** `verification.testPaths`: which paths are tests, for the test-diff scan (defaults when unset). */ testPaths?: string[]; maxAttempts: number; budgets: Budgets; localModels: string[]; expectedModel: string; packetRoot: string; maxPatchChars?: number;
+export interface ReviewConfig { /** ADR 0016 on contributor PRs, opt-in: runs the mutation tool on the PR head inside the execution boundary and reports the result. Absent => not run. */ mutationCheck?: (pull: PullInfo) => Promise<MutationResult>; /** `verification.testPaths`: which paths are tests, for the test-diff scan (defaults when unset). */ testPaths?: string[]; maxAttempts: number; budgets: Budgets; localModels: string[]; expectedModel: string; packetRoot: string; maxPatchChars?: number;
   context?: (pull: PullInfo, budgetChars: number) => Promise<ContextPack>; maxContextChars?: number; maxPromptChars?: number }
 export interface ReviewOpts {
   store: Store; item: number; runner: AgentRunner; kv: ReviewKV; cfg: ReviewConfig;
@@ -142,11 +143,19 @@ export async function runReview(o: ReviewOpts): Promise<ReviewOutcome> {
   if (after.head !== pull.head) return fail(`The contributor pushed ${after.head.slice(0, 8)} while the review ran on ${pull.head.slice(0, 8)}. A review is bound to the code it saw, so it is rejected as stale.`, 'head-moved');
 
   const scan = scanFindings(pull.files, o.cfg.testPaths);   // ADR 0015: deterministic findings from the test diff, major, recomputed every review
-  const verdict: ReviewOutput['verdict'] = scan.length ? 'changes needed' : output.verdict;
-  const findings = annotate([...output.findings, ...scan], pull.files);   // fingerprints, inline flags and repeated findings collapsed; the ledger keeps this full list
+  // ADR 0016 mutation evidence on a contributor PR (opt-in): a surviving mutant on a changed line is a major finding with its location; unsupported or failed runs are said on the card, never passed silently.
+  let mutNote = ''; const mut: Finding[] = [];
+  if (o.cfg.mutationCheck) {
+    const r = await o.cfg.mutationCheck(pull).catch((e): MutationResult => ({ status: 'failed-to-run', note: String((e as Error).message).slice(0, 160) }));
+    if (r.status === 'ok') { mutNote = r.note + (r.cleared.length ? `, ${r.cleared.length} cleared by a maintainer` : ''); for (const s of r.survivors.slice(0, 20)) mut.push({ id: `${MUTATION_PREFIX}${s.id}`, severity: 'major', path: s.path, line: s.line, rationale: `Mutation testing: a mutant (${s.mutator}${s.replacement ? ` -> ${s.replacement}` : ''}, ${s.status}) survives on this changed line, so the tests do not catch it. Mutant ${s.id}.`.slice(0, 280), correction: 'Add or strengthen a test that fails for this change; a maintainer clears an equivalent mutant with /warden clear-mutant <id> <reason>.' }); }
+    else mutNote = r.note;
+    note('mutation', mutNote.slice(0, 200));
+  }
+  const verdict: ReviewOutput['verdict'] = scan.length || mut.length ? 'changes needed' : output.verdict;
+  const findings = annotate([...output.findings, ...scan, ...mut], pull.files);   // fingerprints, inline flags and repeated findings collapsed; the ledger keeps this full list
   const open = findings.length;
   rec.marker = { head: pull.head, base: pull.base, verdict, findings, ci: after.ci, acceptedAt: iso(now()), policyDigest: o.policyDigest, provenance: provenanceOf(pf, o.runner.name), ...(ctx ? { context: ctx } : {}), ...(trusted.length ? { trustedInputs: trusted } : {}) };
-  rec.card = { text: `${open ? `Recommend: request changes (${findings.filter((f) => f.severity === 'blocker').length} blocker(s), ${open} finding(s)).` : 'Recommend: no review findings. Merge still needs checks and authority.'}${ctx && ctx.status !== 'complete' ? ` Repository context: ${ctx.status}${ctx.reason ? ` (${ctx.reason})` : ''}.` : ''}${trusted.length ? ` Maintainer decision required: this pull request changes trusted policy, workflow or rule files (${trusted.join(', ')}). It was reviewed in full under the base branch's rules, and no standing order can merge it.` : ''}`, posted: false, head: pull.head };
+  rec.card = { text: `${open ? `Recommend: request changes (${findings.filter((f) => f.severity === 'blocker').length} blocker(s), ${open} finding(s)).` : 'Recommend: no review findings. Merge still needs checks and authority.'}${mutNote ? ` Mutation testing: ${mutNote}.` : ''}${ctx && ctx.status !== 'complete' ? ` Repository context: ${ctx.status}${ctx.reason ? ` (${ctx.reason})` : ''}.` : ''}${trusted.length ? ` Maintainer decision required: this pull request changes trusted policy, workflow or rule files (${trusted.join(', ')}). It was reviewed in full under the base branch's rules, and no standing order can merge it.` : ''}`, posted: false, head: pull.head };
   rec.attempts.used = 0;
   const prior = m ? priorModel.length : 0;
   const stillOpen = (output.revalidated ?? []).filter((r) => r.status === 'open').length;

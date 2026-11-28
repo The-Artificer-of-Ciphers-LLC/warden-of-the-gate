@@ -10,7 +10,9 @@ import { DEFAULT_TEST_PATHS } from '../verify/frozen.ts';
 /** The detector's kinds that belong to ADR 0015's test-diff list; authority-path, lint, type and CI changes are other gates' business. */
 const SCAN_KINDS = new Set(['skipped-test', 'removed-assertions', 'test-removed', 'focused-test', 'tolerance-widened', 'timeout-raised', 'snapshot-changed', 'test-config-changed', 'test-moved', 'threshold-lowered']);
 export const SCAN_PREFIX = 'test-scan-';
-export const isScanFinding = (f: Pick<Finding, 'id'>): boolean => f.id.startsWith(SCAN_PREFIX);
+export const MUTATION_PREFIX = 'mutation-';
+/** Deterministic findings Warden computes itself (the test-diff scan and surviving mutants): recomputed every review, never asked of the model, never counted in replay's model metrics. */
+export const isScanFinding = (f: Pick<Finding, 'id'>): boolean => f.id.startsWith(SCAN_PREFIX) || f.id.startsWith(MUTATION_PREFIX);
 export function scanFindings(files: readonly PullFile[], testGlobs: readonly string[] = DEFAULT_TEST_PATHS): Finding[] {
   const removed = files.filter((f) => f.status === 'removed' || f.status === 'D' || f.status === 'deleted').map((f) => f.path);
   const live = files.filter((f) => !removed.includes(f.path));
