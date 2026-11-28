@@ -84,6 +84,8 @@ export interface Ledger {
   /** Findings a maintainer dismissed (`/warden dismiss <fingerprint>`); a dismissed finding stays dismissed while its code is unchanged (the fingerprint includes the anchor text). */
   dismissed?: Record<string, { by: string; at: string; reason?: string }>;
   /** ADR 0016: surviving mutants a maintainer cleared as equivalent (`/warden clear-mutant <id> <reason>`). The id includes the mutated line's text, so a clearance lapses when that code changes. */
+  /** ADR 0014: the acceptance tests frozen when a factory PR was opened (path, sha256, base commit); Rework keeps them. Set once, by the PR's link, never replaced. */
+  frozen?: { baseCommit: string; files: Array<{ path: string; sha256: string }> };
   mutantClearances?: Record<string, { by: string; at: string; reason: string }>;
   /** The review last posted to GitHub for this PR (head and the fingerprints it contained): the same review is never posted twice. */
   reviewPosted?: { head: string; fingerprints: string[]; at: string };

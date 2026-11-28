@@ -11,7 +11,8 @@ import type { Finding } from '../review/schema.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
 import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
 import type { Ledger } from '../state/model.ts';
-import { changes, cloneBase, commitAll } from '../git/workspace.ts';
+import { changes, cloneBase, commitAll, git } from '../git/workspace.ts';
+import { DEFAULT_TEST_PATHS, frozenViolations, isGuardedPath, verifyFrozen } from '../verify/frozen.ts';
 import { runChecks } from '../verify/executor.ts';
 import { vetChanges } from '../factory/vet.ts';
 import { assertFactoryBranch } from '../factory/takeover.ts';
@@ -23,16 +24,18 @@ import { iso } from '../util.ts';
  *  executor, push, and return to Review. Cycle accounting lives on the ledger (writer-owned): a completed attempt consumes a cycle even with no progress,
  *  a failed launch uses its own budget, and a replacement PR inherits the counts. Nothing here merges anything or advances the review marker. */
 export const reworkResultSchema = { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', additionalProperties: false, required: ['summary', 'addressed'],
-  properties: { summary: { type: 'string', minLength: 1, maxLength: 300 }, addressed: { type: 'array', maxItems: 50, items: { type: 'string', maxLength: 60 } } } } as const;
+  properties: { summary: { type: 'string', minLength: 1, maxLength: 300 }, addressed: { type: 'array', maxItems: 50, items: { type: 'string', maxLength: 60 } },
+    /** ADR 0014 `test-dispute`: a frozen test judged wrong is reported, never edited around. */ testDispute: { type: 'object', additionalProperties: false, required: ['path', 'reason'], properties: { path: { type: 'string', minLength: 1, maxLength: 300 }, reason: { type: 'string', minLength: 1, maxLength: 800 } } } } } as const;
 export interface ReworkRecord { v: 1; item: number; started: number; log: Array<{ at: string; event: string; detail?: string }> }
 export interface ReworkKV { read(item: number): ReworkRecord | null; write(item: number, r: ReworkRecord): void }
 export interface ReworkOpts { store: Store; item: number; policy: PolicySnapshot; cfg: ImplConfig & { reworkCycles: number }; runner: AgentRunner; kv: ReworkKV; reviews: ReviewKV; publisher: PrPublisher; intents: IntentSink; stopped: () => boolean | Promise<boolean>; signal?: AbortSignal; clock?: () => number }
 export type ReworkKind = 'reworked' | 'no-progress' | 'blocked' | 'rejected' | 'interrupted';
 export interface ReworkOutcome { kind: ReworkKind; notice: string; reason?: string; open?: number; cycles?: { used: number; max: number } }
 
-export function buildReworkPrompt(pull: PullInfo, findings: Finding[]): string {
+export function buildReworkPrompt(pull: PullInfo, findings: Finding[], frozen: string[] = []): string {
   return ['You are fixing a factory pull request using only your file tools. Address ONLY the named review findings below, in the checked-out branch. Do not refactor, do not touch anything else.',
     'Do not edit CI definitions, workflow files, access or ORDERS/warden configuration, package manifest scripts, lint or type-check settings, and never skip, delete or weaken tests. You have no shell; the checks are run for you.',
+    ...(frozen.length ? [`Acceptance tests for this change are FROZEN and so are all existing tests and test configuration: you cannot change them. Frozen acceptance tests: ${frozen.join(', ')}. If a frozen test is wrong, do NOT work around it: reply with "testDispute":{"path","reason"} and change nothing else.`] : []),
     'When done reply with a single JSON object: {"summary","addressed":[finding ids you fixed]}. List an id only if you changed code to fix it.',
     `PULL REQUEST #${pull.number}: ${pull.title}`, `FINDINGS (data): ${JSON.stringify(findings.map((f) => ({ id: f.id, severity: f.severity, path: f.path, line: f.line, rationale: f.rationale, correction: f.correction })))}`].join('\n');
 }
@@ -64,11 +67,19 @@ export async function runRework(o: ReworkOpts): Promise<ReworkOutcome> {
   const root = c.workRoot ?? tmpdir(); mkdirSync(root, { recursive: true }); const work = mkdtempSync(join(root, `warden-rework-${o.item}-`)); const ws = join(work, 'cand'); const packet = join(work, 'packet'); mkdirSync(packet);
   const cycleId = `completed:${o.item}:${l.attempts.reworkCycles}`;
   try {
-    cloneBase(c.source, ws, pull.head); writeFileSync(join(packet, 'prompt.txt'), buildReworkPrompt(pull, findings));
-    const res = await runValidated(o.runner, { task: 'rework', item: o.item, packetDir: packet, workspace: { dir: ws, writable: true }, tools: { allow: IMPL_TOOLS }, resultSchema: reworkResultSchema, budgets: c.budgets, expectedModel: c.localModels[0] }, { stopped: () => false, signal: o.signal, clock: o.clock });
+    cloneBase(c.source, ws, pull.head);
+    // ADR 0014: Rework keeps the freeze recorded on the PR's ledger when the factory opened it. A head whose frozen tests no longer match was changed outside Warden: no session starts and no cycle is spent.
+    const globs = c.testPaths?.length ? c.testPaths : DEFAULT_TEST_PATHS; const fz = l.frozen ?? { baseCommit: pull.head, files: [] };
+    const drift = verifyFrozen(ws, fz); if (drift.length) { rec.started--; return blocked(`The frozen acceptance tests on this branch no longer match the freeze recorded when it was opened (${drift.slice(0, 4).map((d) => `${d.path} ${d.kind}`).join(', ')}): the branch was changed outside Warden, so a maintainer decides. No session was started.`, 'frozen-drift'); }
+    const deny = [...new Set([...fz.files.map((f) => f.path), ...git(ws, ['ls-files']).split('\n').filter((p) => p && isGuardedPath(p, globs))])];
+    writeFileSync(join(packet, 'prompt.txt'), buildReworkPrompt(pull, findings, fz.files.map((f) => f.path)));
+    const res = await runValidated(o.runner, { task: 'rework', item: o.item, packetDir: packet, workspace: { dir: ws, writable: true, denyWrite: deny }, tools: { allow: IMPL_TOOLS }, resultSchema: reworkResultSchema, budgets: c.budgets, expectedModel: c.localModels[0] }, { stopped: () => false, signal: o.signal, clock: o.clock });
     if (!res.accepted) { if (o.signal?.aborted || res.result?.outcome === 'interrupted') { note('interrupted', res.reason); return { kind: 'interrupted', notice: 'The rework session was cancelled and checkpointed; nothing was pushed.', reason: res.reason }; }
       await send('rework-attempt', { outcome: 'completed', openFindings: findings.length }, cycleId); return { kind: 'no-progress', notice: `The session did not complete (${res.reason}); this consumes a rework cycle.`, reason: res.reason, open: findings.length }; }
-    const out = res.output as { summary: string; addressed: string[] }; const ch = changes(ws, pull.head);
+    const out = res.output as { summary: string; addressed: string[]; testDispute?: { path: string; reason: string } }; const ch = changes(ws, pull.head);
+    if (out.testDispute) { note('test-dispute', `${out.testDispute.path}: ${out.testDispute.reason}`.slice(0, 300)); await send('rework-attempt', { outcome: 'completed', openFindings: findings.length }, cycleId); return { kind: 'rejected', notice: `The rework session disputes a frozen test (${out.testDispute.path}: ${out.testDispute.reason.slice(0, 200)}). Nothing was pushed, this consumes a rework cycle, and a maintainer decides which is right.`, reason: 'test-dispute', open: findings.length }; }
+    const bad = frozenViolations(ws, fz, ch, globs);
+    if (bad.length) { note('frozen-test-modified', bad.slice(0, 6).join(', ')); await send('rework-attempt', { outcome: 'completed', openFindings: findings.length }, cycleId); return { kind: 'rejected', notice: `The rework session changed tests or test configuration that were frozen (${bad.slice(0, 6).join(', ')}). Nothing was pushed and this consumes a rework cycle.`, reason: 'frozen-test-modified', open: findings.length }; }
     const vet = vetChanges({ changes: ch, policy: o.policy, task: 'rework', kind: String(l.facets.workKind ?? 'bug'), risk: l.facets.risk, maxFiles: c.maxFiles, maxPatchChars: c.maxPatchChars });
     if (!vet.ok) { note(vet.reason, vet.notice); await send('rework-attempt', { outcome: 'completed', openFindings: findings.length }, cycleId); return { kind: vet.reason === 'no-change' ? 'no-progress' : 'rejected', notice: `${vet.notice} This consumes a rework cycle: nothing was pushed.`, reason: vet.reason, open: findings.length }; }
     const cand = await runChecks({ workspace: ws, revision: 'rework-candidate', checks: c.checks, readonlyPaths: c.readonlyPaths, now });
