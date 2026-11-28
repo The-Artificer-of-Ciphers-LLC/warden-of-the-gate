@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { loadOrders, loadWarden } from '../config/load.ts';
+import { ORDERS_FILE, WARDEN_FILE, loadOrders, loadWarden, workingTree } from '../config/load.ts';
+import { trustedSource, workingTreeDrift } from '../config/trusted.ts';
 import type { Orders, WardenConfig } from '../config/load.ts';
 import { InstanceStorage, wardenHome } from '../storage/instance.ts';
 import { openSim } from '../github/filesim.ts';
@@ -39,12 +40,23 @@ export const SUBMIT_LOGIN = 'warden-submit'; export const WRITER_LOGIN = 'warden
 export const repoDir = (c: Ctx) => resolve(c.cwd, str(c.flags, 'repo-dir') ?? '.');
 export const homeDir = (c: Ctx) => resolve(c.cwd, str(c.flags, 'home') ?? wardenHome(c.env));
 
-export interface Loaded { warden: WardenConfig; orders: Orders | null; errors: string[] }
-export function loadConfigs(c: Ctx): Loaded | { errors: string[] } {
-  const w = loadWarden(repoDir(c)); const o = loadOrders(repoDir(c));
+export interface Loaded { warden: WardenConfig; orders: Orders | null; errors: string[];
+  /** Where the policy in force was read from (PRD §3 trusted base), and which policy files in the working tree differ from it (not in force). */
+  trusted: { kind: 'revision' | 'directory'; ref?: string; revision?: string; note: string; drift: string[] } }
+/** The policy that acts: read from the trusted base revision when `--repo-dir` is a git checkout (`--trusted-ref` / WARDEN_TRUSTED_REF, else
+ *  origin's default branch), never from the working tree, so a checked-out pull request cannot change the rules that judge it. Authoring commands
+ *  (`setup`, `config validate`, `upgrade`) read the working tree on purpose, to check an edit before it is committed. */
+/** `stopping`: only `warden stop` passes it. A stop can never widen authority, so when no trusted base resolves it still reads the working tree to find
+ *  the control issue, rather than leave the operator unable to stop. Everything else, `resume` included, fails closed. */
+export function loadConfigs(c: Ctx, opts: { stopping?: boolean } = {}): Loaded | { errors: string[] } {
+  let t = trustedSource(repoDir(c), str(c.flags, 'trusted-ref') ?? (c.env.WARDEN_TRUSTED_REF || undefined));
+  if (!t.ok && opts.stopping) t = { ok: true, value: { source: workingTree(repoDir(c)), kind: 'directory', note: `stop only: ${t.error}; the working tree was read to find the control issue` } };
+  if (!t.ok) return { errors: [t.error] };
+  const w = loadWarden(t.value.source); const o = loadOrders(t.value.source);
   const errors = [...w.errors, ...(o.present ? o.errors : [])];
   if (!w.ok || (o.present && !o.ok)) return { errors };
-  return { warden: w.value!, orders: o.present ? o.value! : null, errors: [] };
+  const v = t.value;
+  return { warden: w.value!, orders: o.present ? o.value! : null, errors: [], trusted: { kind: v.kind, ref: v.ref, revision: v.revision, note: v.note, drift: workingTreeDrift(repoDir(c), v, [WARDEN_FILE, ORDERS_FILE]) } };
 }
 
 export type Role = 'operator' | 'submit' | 'writer';

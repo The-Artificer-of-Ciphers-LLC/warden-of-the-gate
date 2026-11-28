@@ -18,9 +18,16 @@ export interface Loaded<T> { ok: boolean; value?: T; raw?: unknown; errors: stri
 export const WARDEN_FILE = '.github/warden.yml';
 export const ORDERS_FILE = '.github/ORDERS.yaml';
 
-function readYaml(path: string): { present: boolean; raw?: unknown; error?: string } {
-  if (!existsSync(path)) return { present: false };
-  try { return { present: true, raw: parse(readFileSync(path, 'utf8'), { uniqueKeys: true, maxAliasCount: 20 }) }; }
+/** Where configuration text comes from: the working tree of a directory, or one git revision (config/trusted.ts). `read` returns null when the file is absent. */
+export interface ConfigSource { describe(rel: string): string; read(rel: string): string | null }
+export const workingTree = (root: string): ConfigSource => ({
+  describe: (rel) => join(root, rel),
+  read: (rel) => { const p = join(root, rel); return existsSync(p) ? readFileSync(p, 'utf8') : null; },
+});
+const sourceOf = (root: string | ConfigSource): ConfigSource => (typeof root === 'string' ? workingTree(root) : root);
+
+function readYaml(src: ConfigSource, rel: string): { present: boolean; raw?: unknown; error?: string } {
+  try { const text = src.read(rel); if (text === null) return { present: false }; return { present: true, raw: parse(text, { uniqueKeys: true, maxAliasCount: 20 }) }; }
   catch (e) { return { present: true, error: `YAML parse error: ${String((e as Error).message).split('\n')[0]}` }; }
 }
 function versionError(raw: unknown, want: number, file: string): string | null {
@@ -31,8 +38,8 @@ function versionError(raw: unknown, want: number, file: string): string | null {
 }
 
 /** Load .github/warden.yml from a directory that holds the DEFAULT-BRANCH checkout (never a PR head: a PR cannot authorize itself). */
-export function loadWarden(root: string): Loaded<WardenConfig> {
-  const file = join(root, WARDEN_FILE); const y = readYaml(file);
+export function loadWarden(root: string | ConfigSource): Loaded<WardenConfig> {
+  const src = sourceOf(root); const file = src.describe(WARDEN_FILE); const y = readYaml(src, WARDEN_FILE);
   if (!y.present) return { ok: false, errors: [`${WARDEN_FILE} not found`], file, present: false };
   if (y.error) return { ok: false, errors: [y.error], file, present: true };
   const ve = versionError(y.raw, WARDEN_SCHEMA_VERSION, WARDEN_FILE); if (ve) return { ok: false, errors: [ve], file, present: true, raw: y.raw };
@@ -41,8 +48,8 @@ export function loadWarden(root: string): Loaded<WardenConfig> {
   if (!validateWardenSchema(merged)) return { ok: false, errors: ajvMessages(validateWardenSchema).map((m) => `${WARDEN_FILE}: ${m}`), file, present: true, raw: y.raw };
   return { ok: true, value: merged as WardenConfig, raw: y.raw, errors: [], file, present: true };
 }
-export function loadOrders(root: string): Loaded<Orders> {
-  const file = join(root, ORDERS_FILE); const y = readYaml(file);
+export function loadOrders(root: string | ConfigSource): Loaded<Orders> {
+  const src = sourceOf(root); const file = src.describe(ORDERS_FILE); const y = readYaml(src, ORDERS_FILE);
   if (!y.present) return { ok: false, errors: [`${ORDERS_FILE} not found`], file, present: false };
   if (y.error) return { ok: false, errors: [y.error], file, present: true };
   const ve = versionError(y.raw, ORDERS_SCHEMA_VERSION, ORDERS_FILE); if (ve) return { ok: false, errors: [ve], file, present: true, raw: y.raw };

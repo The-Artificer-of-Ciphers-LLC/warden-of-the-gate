@@ -4,7 +4,8 @@
 # Practice followed (GitHub "Security hardening for GitHub Actions" / secure-use reference):
 # - third-party actions pinned to a full-length commit SHA, with the release tag in a comment;
 # - the GITHUB_TOKEN is read-only for every job, and checkout does not persist it into .git/config;
-# - `pull_request`, never `pull_request_target`, so PR code never runs with write access or secrets.
+# - `pull_request`, never `pull_request_target`, so PR code never runs with write access or secrets;
+# - every workflow here and every Warden workflow template passes the zizmor audit (job `workflows` below; PRD §3 Actions hardening).
 name: checks
 
 on:
@@ -86,3 +87,25 @@ jobs:
         with:
           args: --offline --no-progress --exclude-path node_modules './**/*.md'
           fail: true
+
+  workflows:
+    name: Workflow audit (zizmor)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The product templates are inert `.yml.example` files, which zizmor does not collect by name. Copy them as `.yml` so they are audited too.
+      - name: Stage the Warden workflow templates for the audit
+        working-directory: .
+        run: |
+          mkdir -p "$RUNNER_TEMP/warden-templates/.github/workflows"
+          for f in packages/warden/templates/workflows/*.yml.example; do cp "$f" "$RUNNER_TEMP/warden-templates/.github/workflows/$(basename "$f" .example)"; done
+      # Offline audits only (no token is used); results print in the log and fail the job, nothing is uploaded.
+      - uses: zizmorcore/zizmor-action@1b4550e929643b8b26a62303c6bd64814271a4f1 # v0.9.2
+        with:
+          version: 1.33.1
+          inputs: .github/workflows ${{ runner.temp }}/warden-templates/.github/workflows
+          online-audits: false
+          advanced-security: false

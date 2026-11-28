@@ -30,7 +30,7 @@ warden setup --create-config --repo OWNER/REPO --maintainers you,teammate --crea
 warden config validate --show-effective
 ```
 
-Edit `.github/warden.yml` on the **default branch** (a pull request can never change the policy that judges it):
+Edit `.github/warden.yml` on the **default branch** (a pull request can never change the policy that judges it). When `--repo-dir` is a git checkout, every command that acts (`run`, `writer`, `status`, `approvals`, `stop`/`resume`, `credentials`) reads `warden.yml` and `ORDERS.yaml` from the commit at `origin/HEAD`, the default branch as `git clone` records it, never from the working tree. So a checked-out pull request, or an edit you have not merged, is not in force until it is on the default branch; `warden status` says which policy commit is in force and lists any policy file whose working copy differs. Without `origin/HEAD` (run `git remote set-head origin --auto`), pass `--trusted-ref REF` or set `WARDEN_TRUSTED_REF`; Warden refuses rather than fall back to the working tree. `setup` and `config validate` still read the working tree, so you can check an edit before you commit it. A pull request that changes these files, a workflow or another human-gate path always gets a full review and a maintainer decision:
 
 - `merge.factoryLogins`: the login that owns factory work (needed for Implement/Rework); `merge.automationLogins`: verified bots such as `dependabot[bot]`; identities are by login, never by label.
 - `verify.checks`: your repository's own checks, run by the trusted executor inside the boundary (for example `{id: unit, kind: test, command: node, args: [--test]}`). Without checks Implement and Rework refuse, because no evidence is possible.

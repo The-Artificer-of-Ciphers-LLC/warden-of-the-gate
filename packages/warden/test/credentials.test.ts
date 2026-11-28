@@ -95,3 +95,13 @@ test('no PAT fallback path exists in credential sources', () => {
     assert.ok(!/process\.env\.GITHUB_TOKEN|gh auth token|child_process|execFile/.test(txt), f);
   }
 });
+
+/** W-20 (issue #81), PRD §3 Actions hardening, confirmed by the owner on 2026-11-27: the App never gets the `workflows` permission. */
+test('the workflows permission is never requested, even when the operator ceiling would allow it; the issuer is never called', async () => {
+  const { c, issuer } = mk([], { ...CEIL, maxPermissions: { issues: 'write', workflows: 'write', contents: 'write' } });
+  for (const level of ['write', 'read'] as const) {
+    await assert.rejects(() => c.token({ ...REQ, permissions: { contents: 'write', workflows: level } }), (e: unknown) => e instanceof CredentialUnavailable && e.state === 'denied' && /workflows is never requested/.test(e.message));
+  }
+  assert.equal(issuer.calls, 0);
+  assert.equal(c.readAudit().filter((a) => a.event === 'ceiling-denied').length, 2, 'each refusal is audited');
+});
