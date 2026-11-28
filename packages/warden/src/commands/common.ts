@@ -48,9 +48,9 @@ export interface Loaded { warden: WardenConfig; orders: Orders | null; errors: s
  *  (`setup`, `config validate`, `upgrade`) read the working tree on purpose, to check an edit before it is committed. */
 /** `stopping`: only `warden stop` passes it. A stop can never widen authority, so when no trusted base resolves it still reads the working tree to find
  *  the control issue, rather than leave the operator unable to stop. Everything else, `resume` included, fails closed. */
-export function loadConfigs(c: Ctx, o: { stopping?: boolean } = {}): Loaded | { errors: string[] } {
+export function loadConfigs(c: Ctx, opts: { stopping?: boolean } = {}): Loaded | { errors: string[] } {
   let t = trustedSource(repoDir(c), str(c.flags, 'trusted-ref') ?? (c.env.WARDEN_TRUSTED_REF || undefined));
-  if (!t.ok && o.stopping) t = { ok: true, value: { source: workingTree(repoDir(c)), kind: 'directory', note: `stop only: ${t.error}; the working tree was read to find the control issue` } };
+  if (!t.ok && opts.stopping) t = { ok: true, value: { source: workingTree(repoDir(c)), kind: 'directory', note: `stop only: ${t.error}; the working tree was read to find the control issue` } };
   if (!t.ok) return { errors: [t.error] };
   const w = loadWarden(t.value.source); const o = loadOrders(t.value.source);
   const errors = [...w.errors, ...(o.present ? o.errors : [])];
