@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { SEVERITIES } from './schema.ts';
 import type { Finding, Severity } from './schema.ts';
 import type { PullFile } from '../github/store.ts';
+import { REVIEW_LIMITS } from './rules.ts';
 
 /** PRD section 5 Review [R]: each finding gets a stable fingerprint (rule, anchor, normalized location) so a repeated finding is recognised instead of duplicated; findings per review are
  *  capped (configurable) and ranked by severity while the ledger keeps the full list; every inline position is validated against the reviewed diff before anything is posted inline. */
-export const DEFAULT_MAX_POSTED_FINDINGS = 10;
+export const DEFAULT_MAX_POSTED_FINDINGS = REVIEW_LIMITS.posted.hard as number;   // the rule table's number (ADR 0028)
 
 /** The new-file line numbers a unified diff shows (context and added lines), mapped to the line's text. Deleted lines have no new-file number. */
 export function diffLines(patch: string | undefined): Map<number, string> {
