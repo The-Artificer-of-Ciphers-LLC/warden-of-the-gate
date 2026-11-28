@@ -95,6 +95,8 @@ export interface Ledger {
   /** ADR 0014: the acceptance tests frozen when a factory PR was opened (path, sha256, base commit); Rework keeps them. Set once, by the PR's link, never replaced. */
   frozen?: { baseCommit: string; files: Array<{ path: string; sha256: string }> };
   /** ADR 0015 card: what the frozen tests did on the unchanged base when the factory opened this PR (check id and exit code). */
+  /** ADR 0016 hidden-checks pilot: pass or fail per check id (never content), and the maintainer's verdict on each failure. */
+  holdout?: { results: Array<{ id: string; pass: boolean }>; verdicts?: Record<string, { verdict: 'defect' | 'wrong-check'; by: string; at: string; reason?: string }> };
   frozenResult?: Array<{ check: string; exit: number | null }>;
   mutantClearances?: Record<string, { by: string; at: string; reason: string }>;
   /** The review last posted to GitHub for this PR (head and the fingerprints it contained): the same review is never posted twice. */

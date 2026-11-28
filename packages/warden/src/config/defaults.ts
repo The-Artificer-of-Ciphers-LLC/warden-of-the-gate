@@ -1,6 +1,7 @@
 import { DEFAULT_TEST_PATHS } from '../verify/frozen.ts';
 import { DEFAULT_BOUNDARY_CLASSES } from '../verify/boundary.ts';
 import { DEFAULT_MUTATION } from '../verify/mutation.ts';
+import { DEFAULT_HOLDOUTS } from '../verify/holdout.ts';
 
 /** Real default materialization. JSON Schema `default` does NOT populate values (PRD section 10), so defaults live here,
  *  pinned to this package/schema behavior. Changing any value is a reviewed behavior change shown by `upgrade --dry-run`. */
@@ -36,7 +37,7 @@ export const DEFAULT_WARDEN = {
   /** The repository's own checks, run by the trusted executor inside the boundary. Taken from the DEFAULT-BRANCH config only. Empty => Implement refuses (no evidence is possible). */
   verify: { checks: [] as Array<{ id: string; kind: 'lint' | 'typecheck' | 'test' | 'build'; command: string; args: string[]; timeoutMs?: number }> },
   /** ADR 0014: which paths are tests. The test session may change only these; after it they are frozen. Taken from the DEFAULT-BRANCH config only. */
-  verification: { testPaths: [...DEFAULT_TEST_PATHS] as string[], loopTurns: 3, mutation: { ...DEFAULT_MUTATION, args: [...DEFAULT_MUTATION.args] } as { command: string; args: string[]; reportPath: string; timeoutMs: number } },
+  verification: { testPaths: [...DEFAULT_TEST_PATHS] as string[], loopTurns: 3, holdouts: { ...DEFAULT_HOLDOUTS, args: [...DEFAULT_HOLDOUTS.args] } as { enabled: boolean; command: string; args: string[]; timeoutMs: number }, mutation: { ...DEFAULT_MUTATION, args: [...DEFAULT_MUTATION.args] } as { command: string; args: string[]; reportPath: string; timeoutMs: number } },
   /** ADR 0015: boundary classes as path globs (a change touching one is a one-way door and always a maintainer decision). Taken from the DEFAULT-BRANCH config only. */
   boundaries: { classes: Object.fromEntries(Object.entries(DEFAULT_BOUNDARY_CLASSES).map(([k, v]) => [k, [...v]])) as Record<string, string[]> },
   /** Merge facts the writer cannot read from GitHub: identities by LOGIN (never label), and how many independent GitHub approvals the branch rules require. */

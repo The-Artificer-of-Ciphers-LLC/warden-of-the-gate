@@ -59,6 +59,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
       return rej('not-owner', `Release by ${i.actor} rejected: not the current owner.`);
     }
     case 'clear-mutant': return clearMutant(l, i, c);
+    case 'holdout-verdict': return holdoutVerdict(l, i, c);
     case 'note': return { accept: true, plan: [note(String(pl.text ?? 'note'))] };
     case 'transition': {
       const to = String(pl.to ?? ''); const from = l.state;
@@ -329,6 +330,17 @@ function forceReview(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (l.kind !== 'pr') return rej('force-review-on-issue', 'A full review applies to pull requests only.');
   return { accept: true, plan: [note(`Full review requested by ${i.actor}. The next review run reviews this head again, whether or not it changed.`)], apply: (led) => { led.forceReview = { by: i.actor, at: iso(c.now) }; } };
 }
+/** `/warden holdout <check id> defect|wrong-check [reason]`: the maintainer's verdict on ONE failed hidden acceptance check (pilot statistics: confirmed catches and wrong checks). */
+function holdoutVerdict(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Verdict rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Verdict by ${i.actor} rejected: not an authorized maintainer.`);
+  const pl = i.payload as { check?: string; verdict?: string; reason?: string }; const id = String(pl.check ?? '');
+  if (l.kind !== 'pr' || !/^[0-9a-f]{10}$/.test(id) || (pl.verdict !== 'defect' && pl.verdict !== 'wrong-check')) return rej('holdout-verdict-malformed', 'Verdict rejected: name one failed hidden check and say defect or wrong-check.');
+  if (!l.holdout?.results.some((r) => r.id === id && !r.pass)) return rej('holdout-not-failed', `Verdict rejected: check ${id} is not a failed hidden check on this pull request.`);
+  if (l.holdout.verdicts?.[id]) return rej('holdout-already-judged', `Check ${id} already has a verdict.`);
+  const verdict = pl.verdict;
+  return { accept: true, plan: [note(`Hidden check ${id} judged ${verdict === 'defect' ? 'a real defect' : 'a wrong check'} by ${i.actor}${pl.reason ? ` (${String(pl.reason).slice(0, 200)})` : ''}. Pilot statistics only; it gates nothing.`)], apply: (led) => { if (led.holdout) led.holdout.verdicts = { ...(led.holdout.verdicts ?? {}), [id]: { verdict, by: i.actor, at: iso(c.now), ...(pl.reason ? { reason: String(pl.reason).slice(0, 200) } : {}) } }; } };
+}
 /** `/warden clear-mutant <id> <reason>`: a maintainer clears ONE surviving mutant as equivalent. Warden never marks a mutant equivalent itself. */
 function clearMutant(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!c.sourceVerified) return rej('unverified-source', 'Clearance rejected: the GitHub source could not be verified.');
@@ -477,6 +489,7 @@ function linkPr(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!Number.isInteger(pl.issue)) return silent('link-needs-issue');
   if (l.linked.includes(pl.issue as number)) return silent('already-linked');
   const factory = (i.payload as { factory?: boolean }).factory === true; const frozen = factory && !l.frozen ? cleanFrozen((i.payload as { frozen?: unknown }).frozen) : null;
+  const hrRaw = (i.payload as { holdout?: unknown }).holdout; const hr = Array.isArray(hrRaw) && hrRaw.length > 0 && hrRaw.length <= 20 && hrRaw.every((e) => e && typeof e.id === 'string' && /^[0-9a-f]{10}$/.test(e.id) && typeof e.pass === 'boolean') ? (hrRaw as Array<{ id: string; pass: boolean }>).map((e) => ({ id: e.id, pass: e.pass })) : null;
   const frRaw = (i.payload as { failOnBase?: unknown }).failOnBase; const fr = Array.isArray(frRaw) && frRaw.length <= 8 && frRaw.every((e) => e && typeof e.check === 'string' && e.check.length <= 40 && (e.exit === null || Number.isInteger(e.exit))) ? (frRaw as Array<{ check: string; exit: number | null }>).map((e) => ({ check: e.check, exit: e.exit })) : null;
-  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; if (frozen) led.frozen = frozen; if (frozen && fr) led.frozenResult = fr; } };
+  return { accept: true, plan: [], apply: (led) => { led.linked = [...led.linked, pl.issue as number]; if (factory && !led.owner) led.owner = { kind: 'factory', id: i.actor, opid: i.opid }; if (frozen) led.frozen = frozen; if (frozen && fr) led.frozenResult = fr; if (factory && !led.holdout && hr) led.holdout = { results: hr }; } };
 }

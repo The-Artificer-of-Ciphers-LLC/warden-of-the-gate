@@ -22,6 +22,7 @@ export type MaintainerCommand =
   | { kind: 'resume-scope'; payload: { reason: string } }
   | { kind: 'force-review'; payload: Record<string, never> }
   | { kind: 'dismiss-finding'; payload: { fingerprint: string; reason?: string } }
+  | { kind: 'holdout-verdict'; payload: { check: string; verdict: 'defect' | 'wrong-check'; reason?: string } }
   | { kind: 'clear-mutant'; payload: { mutant: string; reason: string } }
   | { kind: 'claim'; payload: Record<string, never> }
   | { kind: 'release'; payload: Record<string, never> };
@@ -37,6 +38,8 @@ export function parseMaintainerCommand(body: string): MaintainerCommand | null {
   if (/^\/warden\s+review\s*$/.test(line)) return { kind: 'force-review', payload: {} };
   const dismiss = /^\/warden\s+dismiss\s+([0-9a-f]{8,16})(?:\s+(.*))?$/.exec(line);
   if (dismiss) return { kind: 'dismiss-finding', payload: { fingerprint: dismiss[1], ...(dismiss[2]?.trim() ? { reason: dismiss[2].trim() } : {}) } };
+  const hv = /^\/warden\s+holdout\s+([0-9a-f]{10})\s+(defect|wrong-check)(?:\s+(.*))?$/.exec(line);   // the maintainer's verdict on ONE failed hidden check
+  if (hv) return { kind: 'holdout-verdict', payload: { check: hv[1], verdict: hv[2] as 'defect' | 'wrong-check', ...(hv[3]?.trim() ? { reason: hv[3].trim() } : {}) } };
   const clear = /^\/warden\s+clear-mutant\s+([0-9a-f]{12})\s+(\S.*)$/.exec(line);   // one named mutant and a reason: a bare id or a blanket clearance is not a command
   if (clear) return { kind: 'clear-mutant', payload: { mutant: clear[1], reason: clear[2].trim() } };
   if (/^\/warden\s+claim\s*$/.test(line)) return { kind: 'claim', payload: {} };
