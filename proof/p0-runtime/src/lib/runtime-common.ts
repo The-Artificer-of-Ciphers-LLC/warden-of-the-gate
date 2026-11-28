@@ -91,7 +91,7 @@ export interface Preflight { ok: boolean; reasons: string[]; resolved?: Resolved
  * Rejects if the resolved default model, or ANY enabled provider, is not a loopback endpoint.
  * Also probes the local endpoint so local unavailability is detected before a session exists.
  */
-export async function preflightResolve(s: Server, opts: { probe?: boolean; expect?: { providerID: string; modelID: string } } = {}): Promise<Preflight> {
+export async function preflightResolve(s: Server, opts: { probe?: boolean; expect?: { providerID: string; modelID: string }; configured?: string } = {}): Promise<Preflight> {
   const reasons: string[] = [];
   let prov = await s.api('GET', '/api/provider');
   let def = await s.api('GET', '/api/model/default');
@@ -115,6 +115,13 @@ export async function preflightResolve(s: Server, opts: { probe?: boolean; expec
     resolved = { providerID: d.providerID, modelID: d.modelID ?? d.id, baseURL, host: c.host };
     if (!c.local) reasons.push(`resolved model ${d.providerID}/${d.modelID ?? d.id} routes to non-local endpoint: ${c.reason}`);
     // Resolved != configured: OpenCode silently substitutes another available model when the configured default is unavailable.
+    // Resolved != configured is a silent substitution even when the substitute happens to be the pool member: the harness did not
+    // honour its config. (On 2.2.7 the substitute was another LM Studio model; on 2.4.1 with one declared model it can be the pool
+    // member itself, which an expected-model comparison alone would accept.) Warden's adapter writes the expected model as the
+    // configured default, so there the two comparisons are the same.
+    if (opts.configured && `${resolved.providerID}/${resolved.modelID}` !== opts.configured) {
+      reasons.push(`resolved model ${resolved.providerID}/${resolved.modelID} != configured default ${opts.configured} (silent substitution)`);
+    }
     if (opts.expect && (resolved.providerID !== opts.expect.providerID || resolved.modelID !== opts.expect.modelID)) {
       reasons.push(`resolved model ${resolved.providerID}/${resolved.modelID} != expected pool member ${opts.expect.providerID}/${opts.expect.modelID} (silent substitution)`);
     }
@@ -240,6 +247,14 @@ export function extractJson(text: string): { value?: unknown; error?: string } {
   const candidate = fence ? fence[1] : t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1);
   try { return { value: JSON.parse(candidate) }; } catch (e) { return { error: (e as Error).message }; }
 }
+
+// ---------------- long generations ----------------
+/** A prompt that keeps a fast model generating for a long time. Essay prompts ("write 2000 words") let a small, fast model stop
+ *  after a few hundred tokens (observed on mlx-serve 2026-11-28: done in ~1 s), so cancellation and budget checks would test
+ *  nothing. Counting in words is easy for any model to keep doing and costs many tokens per line. */
+export const LONG_GENERATION = 'Count upward from one to five thousand, writing each number in English words on its own line (one, two, three, and so on). Do not use digits, do not skip numbers, do not summarize and do not stop early.';
+/** Output cap for sessions that must still be generating when an interrupt or budget fires (above the 4096 default). */
+export const LONG_OUTPUT_LIMIT = 16384;
 
 // ---------------- waiting ----------------
 /** Poll the message log until an idle record newer than the prompt message exists (or timeout). */
