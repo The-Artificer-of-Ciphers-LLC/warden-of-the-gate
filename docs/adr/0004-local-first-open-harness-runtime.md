@@ -34,6 +34,15 @@ Owner ruling (@trek-e, 2026-11-27), in his words: "open code is 2.4.1 we need to
 - Warden never checked the OpenCode binary's sha256 at run time; the hash above was recorded by the P0 proof only. Nothing is pinned to a hash now either.
 - **Open check:** the P0 proofs (`PROOF-runtime`, `PROOF-isolation`) ran on 2.2.7 and have **not** been re-run on 2.4.1 or any other 2.x release. The guarantees in the table below are observed for 2.2.7 only until the owner re-runs them on his Mac against the version he uses. The hardening flags, deny-all permission surface and resolved-provider check are still applied to every 2.x release, so a 2.x change that breaks one of them fails the preflight or the session rather than running unguarded.
 
+## Amendment 2026-11-28: mlx-serve provider id, and waiting for OpenCode to load
+
+Owner, 2026-11-28, in his words: "drop lmstudio we aren't using it" and "we are only using mlx-serve its performance is so much faster".
+
+- On OpenCode 2.4.1 the first review run stopped with "no resolved default model (status 200)". A probe on the owner's Mac showed why: 2.4.1 prints "listening" before its providers load. Just after startup `GET /api/provider` answered `data: []` and `GET /api/model/default` answered `data: null`; five seconds later the configured model was the default, at loopback `127.0.0.1:11234/v1`. The reply shape (`{ data }`) is the same as on 2.2.7.
+- The resolved-routing check now asks again while OpenCode answers 200 with no default model and nothing non-local, up to the startup limit (`startupMs`, 60 s), then refuses. A non-local provider or model, a substituted model, a model from another provider or an error reply still fails on the first reading, without waiting.
+- Warden's provider id is now `mlx-serve` (name "mlx-serve (local)"), not `lmstudio`. OpenCode merges a config provider into a built-in provider of the same id, so the old id pulled OpenCode's LM Studio catalogue models in beside the configured one (the probe listed three). OpenCode's own `lmstudio` and `ollama` providers, which discover models on their default ports, are denied by policy, as `opencode` already was.
+- mlx-serve is the MVP server. The adapter still speaks to the plain OpenAI-compatible endpoint at the configured URL, so Warden is not tied to one way of hosting the model.
+
 ## P0 proof record (2026-11-18, `PROOF-runtime`)
 
 Evidence: [`proof/p0-runtime`](../../proof/p0-runtime/README.md) — `results/runtime.json` (44/44 checks), `results/isolation.json` (28/28), commands in the README. These are spikes, not production modules. Host: Apple silicon, macOS 27.2.1, Node 26.13.0.

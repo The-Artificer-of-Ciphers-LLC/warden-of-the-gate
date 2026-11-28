@@ -14,6 +14,8 @@ The original constraint was "no API-key calls" (a subscription agent). The open-
 - Preflight the actual resolved provider/model, not only defaults. Reject unapproved remote routing, preserve pending work and report local unavailability. OpenAI-compatible API syntax does not imply use of OpenAI's hosted service.
 - An orchestrator/worker split (a strong model used lightly to plan, route and verify; local models do the token-heavy work) is v1.x, gated by benchmark replay of Warden's own past tasks.
 
+Amendment 2026-11-28: the MVP model server is mlx-serve (owner: "we are only using mlx-serve"; "drop lmstudio we aren't using it"). Warden registers it in OpenCode as the provider `mlx-serve` and denies OpenCode's built-in `lmstudio` and `ollama` providers (ADR 0004 amendment of the same date). The connection stays the plain OpenAI-compatible endpoint. The LM Studio notes below are the 2026-11-18 proof record.
+
 ## Consequences
 
 - v1 runs entirely on local models; the remote tier is a documented extension point, not built.

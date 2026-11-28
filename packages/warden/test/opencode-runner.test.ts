@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OpenCodeRunner, SUPPORTED_OPENCODE, classifyBaseURL, extractJson, openCodeVersionProblem, parseVersion } from '../src/runner/opencode.ts';
+import { BUILTIN_LOCAL_PROVIDERS, LOCAL_PROVIDER_ID, OpenCodeRunner, SUPPORTED_OPENCODE, classifyBaseURL, extractJson, judgeRouting, openCodeVersionProblem, parseVersion } from '../src/runner/opencode.ts';
 
 test('classifyBaseURL accepts only loopback literals and rejects lookalike hosts and userinfo tricks', () => {
   assert.equal(classifyBaseURL('http://127.0.0.1:11234/v1').local, true);
@@ -72,4 +72,55 @@ test('a session without a confirmed window is refused before any model server is
     assert.equal(res.outcome, 'failed'); assert.match(String(res.reason), /context window not confirmed/);
     assert.equal(hits, 0, 'server-specific window fields are not read: the window is configuration, not discovery');
   } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Replies as OpenCode 2.4.1 gave them on the owner's Mac (2026-11-28 probe), cut to the fields Warden reads. 2.2.7 answers in the same `{ data }` shape.
+const MODEL = 'beamster/Qwen3.8-Flash-Next-Sushi-2bpw'; const LOCAL = 'http://127.0.0.1:11234/v1';
+const ok200 = (data: unknown) => ({ status: 200, body: { location: { directory: '/tmp/ws' }, data } });
+const provider = (id = LOCAL_PROVIDER_ID, baseURL = LOCAL) => ({ id, integrationID: id, activation: 'enabled', package: '@opencode/ai/providers/openai-compatible', settings: { baseURL, provider: id } });
+const model = (id = MODEL, providerID = LOCAL_PROVIDER_ID, baseURL = LOCAL) => ({ id, modelID: id, providerID, settings: { baseURL, provider: providerID }, enabled: true, limit: { context: 1048576, output: 32768 } });
+
+test('judgeRouting: 2.4.1 answers with no providers and a null default just after "listening"; that reads as still loading, not as a pass', () => {
+  const early = judgeRouting(ok200([]), ok200(null), MODEL);
+  assert.equal(early.loading, true); assert.match(early.reasons.join(';'), /no resolved default model \(status 200\)/);
+  const loaded = judgeRouting(ok200([provider()]), ok200(model()), MODEL);
+  assert.deepEqual(loaded, { loading: false, resolvedModel: MODEL, reasons: [] }, 'the reply 2.4.1 gave once loaded (and 2.2.7 gives at once) passes');
+});
+
+test('judgeRouting still fails closed at once on non-local routing, a substituted model or a model from another provider', () => {
+  const remoteProvider = judgeRouting(ok200([provider(LOCAL_PROVIDER_ID, 'https://api.example.com/v1')]), ok200(null), MODEL);
+  assert.equal(remoteProvider.loading, false, 'a non-local provider is never waited out'); assert.match(remoteProvider.reasons.join(';'), /enabled provider "mlx-serve" is non-local/);
+  const remoteModel = judgeRouting(ok200([provider()]), ok200(model(MODEL, LOCAL_PROVIDER_ID, 'https://api.example.com/v1')), MODEL);
+  assert.match(remoteModel.reasons.join(';'), /routes to a non-local endpoint/);
+  const swapped = judgeRouting(ok200([provider()]), ok200(model('openai/gpt-oss-20b')), MODEL);
+  assert.equal(swapped.loading, false); assert.match(swapped.reasons.join(';'), /resolved model openai\/gpt-oss-20b != expected .* \(silent substitution\)/);
+  const otherProvider = judgeRouting(ok200([provider(), provider('lmstudio')]), ok200(model(MODEL, 'lmstudio')), MODEL);
+  assert.match(otherProvider.reasons.join(';'), /comes from provider "lmstudio", not Warden's "mlx-serve"/);
+  assert.equal(judgeRouting({ status: 500, body: 'boom' }, { status: 500, body: 'boom' }, MODEL).loading, false, 'an error reply is a failure, not a wait');
+});
+
+test('resolve asks again while OpenCode is still loading, and refuses when it never loads within startupMs', async () => {
+  type Reply = { status: number; body: unknown };
+  const stub = (replies: (n: number) => [Reply, Reply]) => { let n = 0; let pending: Reply | undefined;
+    return { calls: () => n, api: async (_m: string, p: string) => { if (p === '/api/provider') { const [a, b] = replies(n++); pending = b; return a; } return pending!; } }; };
+  const resolveOf = (r: OpenCodeRunner) => (r as unknown as { resolve(s: unknown): Promise<{ ok: boolean; resolvedModel?: string; reasons: string[] }> }).resolve.bind(r);
+  const late = stub((n) => (n < 3 ? [ok200([]), ok200(null)] : [ok200([provider()]), ok200(model())]));
+  const r1 = await resolveOf(new OpenCodeRunner({ modelId: MODEL, startupMs: 10_000 }))(late);
+  assert.deepEqual(r1, { ok: true, resolvedModel: MODEL, reasons: [] }); assert.equal(late.calls(), 4, 'three loading readings, then the loaded one');
+  const never = stub(() => [ok200([]), ok200(null)]);
+  const r2 = await resolveOf(new OpenCodeRunner({ modelId: MODEL, startupMs: 600 }))(never);
+  assert.equal(r2.ok, false); assert.match(r2.reasons.join(';'), /no resolved default model .*OpenCode had not loaded its providers after \d+s/);
+  const wrong = stub(() => [ok200([provider()]), ok200(model('qwen/qwen3-coder-30b'))]);
+  const r3 = await resolveOf(new OpenCodeRunner({ modelId: MODEL, startupMs: 10_000 }))(wrong);
+  assert.equal(r3.ok, false); assert.equal(wrong.calls(), 1, 'a substitution fails on the first reading, without waiting');
+});
+
+test('the generated OpenCode config registers only Warden\'s mlx-serve provider and denies OpenCode\'s own LM Studio and Ollama providers', () => {
+  const cfg = (new OpenCodeRunner({ modelId: MODEL, contextLimit: 1048576 }) as unknown as { config(): any }).config();
+  assert.equal(LOCAL_PROVIDER_ID, 'mlx-serve'); assert.equal(cfg.model, `mlx-serve/${MODEL}`);
+  assert.deepEqual(Object.keys(cfg.providers), ['mlx-serve'], 'no lmstudio provider (owner, 2026-11-28: "drop lmstudio we aren\'t using it")');
+  assert.equal(cfg.providers['mlx-serve'].package, '@ai-sdk/openai-compatible', 'still the plain OpenAI-compatible endpoint, whatever serves it');
+  assert.deepEqual(cfg.providers['mlx-serve'].settings, { baseURL: LOCAL });
+  const denied = cfg.policies.filter((x: any) => x.action === 'provider.use' && x.effect === 'deny').map((x: any) => x.resource);
+  assert.deepEqual(denied, ['opencode', ...BUILTIN_LOCAL_PROVIDERS]); assert.deepEqual([...BUILTIN_LOCAL_PROVIDERS], ['lmstudio', 'ollama']);
 });
