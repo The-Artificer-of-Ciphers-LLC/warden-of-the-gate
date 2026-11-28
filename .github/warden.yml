@@ -1,0 +1,16 @@
+# Warden operational configuration (schema version 1). Canonical home for operational settings.
+# Standing authority lives in ORDERS.yaml, not here. Unlisted settings take the documented defaults
+# materialized by the Warden CLI (`warden config validate --show-effective` prints them).
+schemaVersion: 1
+repository: The-Artificer-of-Ciphers-LLC/warden-of-the-gate
+maintainers:
+  - trek-e
+# mode: shadow keeps AI results local. Live operation needs the separate, protected activation step (never a config edit).
+mode: shadow
+# Control issues (create them in the repository, then set their numbers):
+inbox:
+  inboxIssue: 1
+  controlIssue: 2
+runtime:
+  modelPool:
+    - beamster/Qwen3.8-Flash-Next-Sushi-2bpw
