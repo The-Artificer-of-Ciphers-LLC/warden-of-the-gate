@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { appendTally, loadHoldouts, readTally, runHoldouts, saveHoldouts } from '../src/verify/holdout.ts';
 import { parseMaintainerCommand } from '../src/approvals/approvals.ts';
 import { cliEnv } from './cli-env.ts';
+import { requireContainment } from '../src/runner/seatbelt.ts';
 import { InstanceStorage } from '../src/storage/instance.ts';
 
 test('the operator store is 0700/0600, skips unsafe names, and round-trips; the tally appends', (t) => {
@@ -14,7 +15,8 @@ test('the operator store is 0700/0600, skips unsafe names, and round-trips; the 
   assert.equal(statSync(dir).mode & 0o777, 0o700); assert.equal(statSync(join(dir, `${ids[0]}.json`)).mode & 0o777, 0o600); assert.deepEqual(loadHoldouts(dir), [{ id: ids[0], name: 'test/a.test.js', content: 'x' }]); assert.deepEqual(loadHoldouts(join(d, 'none')), []);
   const tally = join(d, 'pilot.json'); appendTally(tally, { item: 1, at: 'a', total: 2, failed: 1 }); appendTally(tally, { item: 2, at: 'b', total: 1, failed: 0 }); assert.equal(readTally(tally).length, 2); assert.deepEqual(readTally(join(d, 'missing.json')), []);
 });
-test('checks run on a COPY of the candidate: pass or fail per id, the candidate and the store stay untouched, nothing configured runs nothing', async (t) => {
+test('checks run on a COPY of the candidate: pass or fail per id, the candidate and the store stay untouched, nothing configured runs nothing (skipped where containment is unavailable)', async (t) => {
+  try { await requireContainment(); } catch { t.skip('containment not available on this host'); return; }
   const d = mkdtempSync(join(tmpdir(), 'warden-hold-')); t.after(() => rmSync(d, { recursive: true, force: true })); const cand = join(d, 'cand'); mkdirSync(cand);
   const checks = [{ id: 'aaaaaaaaaa', name: 'holdout/ok.test.js', content: "require('node:test')('ok', () => {});\n" }, { id: 'bbbbbbbbbb', name: 'holdout/bad.test.js', content: "require('node:test')('bad', () => { throw new Error('no'); });\n" }];
   const r = await runHoldouts({ candidate: cand, checks, cfg: { enabled: true, command: process.execPath, args: ['--test', '{file}'], timeoutMs: 60_000 } }); assert.deepEqual(r, [{ id: 'aaaaaaaaaa', pass: true }, { id: 'bbbbbbbbbb', pass: false }]);
