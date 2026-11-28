@@ -2,7 +2,7 @@ import type { Store } from '../github/store.ts';
 import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
 import type { WardenConfig } from '../config/load.ts';
 import { readOnly } from '../github/store.ts';
-import type { Ledger } from '../state/model.ts';
+import { claimEndedOnGitHub, type Ledger } from '../state/model.ts';
 import { evaluateClock, type Due } from '../sweep/clocks.ts';
 import { authorActivity, clockConfigOf, clockItemFrom, isFresh, type SweepObs } from '../sweep/derive.ts';
 import { makeIntent } from '../writer/protocol.ts';
@@ -97,7 +97,7 @@ export async function planReconcile(rawStore: Store, cfg: WardenConfig, o: { ski
     if (!l || ['closed', 'merged', 'resolved'].includes(l.state)) continue;
     const itemKind = it.isPr ? 'pr' : 'issue'; let why = '';
     if (it.state === 'closed') why = itL(l, 'closed-outside-warden');
-    else if (l.kind === 'issue' && l.owner?.kind === 'contributor' && !it.assignees.includes(l.owner.id) && ['claimed', 'implementing'].includes(l.state)) why = 'owner-no-longer-assigned';
+    else if (l.kind === 'issue' && l.owner?.kind === 'contributor' && claimEndedOnGitHub(l.owner, it.assignees) && ['claimed', 'implementing'].includes(l.state)) why = 'owner-no-longer-assigned';
     else if (cfg.labels.projection) { const want = cfg.labels.states[l.state]; if ((want && !it.labels.includes(want)) || it.labels.some((x) => states.includes(x) && x !== want)) why = 'label-projection-mismatch'; }
     if (why) out.push({ item: it.number, itemKind, why });
   }

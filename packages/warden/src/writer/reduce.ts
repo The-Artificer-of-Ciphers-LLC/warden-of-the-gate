@@ -2,7 +2,7 @@ import { cleanFrozen } from '../verify/frozen.ts';
 import { cleanProvenance, provenanceText } from '../runner/provenance.ts';
 import type { Provenance } from '../runner/provenance.ts';
 import type { Effect, Ledger, Obligation, WorkflowState } from '../state/model.ts';
-import { canOverride, canTransition, isTerminal } from '../state/model.ts';
+import { canOverride, canTransition, claimEndedOnGitHub, isTerminal } from '../state/model.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
 import type { Intent } from './protocol.ts';
 import { decideApproval, requestApproval, revisionUpdate } from '../approvals/approvals.ts';
@@ -46,7 +46,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
         const refused = cl.kind === 'contributor' && !c.assignable(cl.id);
         plan.push(...project(c.policy, 'ready', 'claimed'), note(`Claim accepted: ${cl.kind} ${cl.id} now owns this item.${refused ? ' GitHub does not let this repository assign them, so the claim is recorded here only and no GitHub assignment was made.' : ''}`));
         return { accept: true, plan, apply: (led) => {
-          led.state = 'claimed'; led.owner = { kind: cl.kind, id: cl.id, opid: i.opid };
+          led.state = 'claimed'; led.owner = { kind: cl.kind, id: cl.id, opid: i.opid, ...(refused ? { ledgerOnly: true as const } : {}) };
           // Contributor commitments start at the confirmed assignment decision (not at issue creation or an old comment). Factory claims carry none.
           const hours = c.policy.sweep?.deliveryHours;
           if (cl.kind === 'contributor' && hours) led.obligations = [...led.obligations.filter((x) => x.type !== 'delivery'), { type: 'delivery', startedAt: iso(c.now), dueAt: iso(c.now + hours * 3_600_000), source: 'assignment' }];
@@ -255,8 +255,11 @@ function reconcile(l: Ledger, i: Intent, c: ReduceCtx): Decision {
       apply: (led) => { moveTo(led, 'closed', undefined, c.now); led.owner = null; led.obligations = []; } };
   }
   const plan: Effect[] = []; let release = false;
-  if (l.kind === 'issue' && l.owner?.kind === 'contributor' && !it.assignees.includes(l.owner.id) && ['claimed', 'implementing'].includes(l.state)) {
-    release = true; plan.push(...project(c.policy, l.state, 'ready'), note(`${l.owner.id} is no longer assigned on GitHub, so the claim is released and the delivery commitment ends. The issue stays open.`));
+  if (l.kind === 'issue' && l.owner?.kind === 'contributor' && claimEndedOnGitHub(l.owner, it.assignees) && ['claimed', 'implementing'].includes(l.state)) {
+    const why = l.owner.ledgerOnly
+      ? `GitHub now shows this issue assigned to ${it.assignees.filter((a) => a !== l.owner!.id).join(', ')}, so ${l.owner.id}'s claim (recorded here only, because GitHub could not assign them) is released and the delivery commitment ends.`
+      : `${l.owner.id} is no longer assigned on GitHub, so the claim is released and the delivery commitment ends.`;
+    release = true; plan.push(...project(c.policy, l.state, 'ready'), note(`${why} The issue stays open.`));
   }
   const target = release ? 'ready' : l.state; const want = c.policy.projection ? c.policy.labelStates[target] : undefined;
   if (want && !release) {

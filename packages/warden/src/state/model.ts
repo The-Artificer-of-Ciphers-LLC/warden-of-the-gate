@@ -19,7 +19,15 @@ export interface Facets {
   risk?: 'low' | 'medium' | 'high' | 'uncertain';      // change risk, assessed independently of severity
   quickWin?: boolean;
 }
-export type Owner = { kind: 'contributor' | 'factory'; id: string; opid: string };
+export type Owner = { kind: 'contributor' | 'factory'; id: string; opid: string;
+  /** Set when GitHub refused to assign this contributor (owner ruling 2026-11-26, PRD §5 Claim): the claim lives in the ledger only, so a
+   *  missing GitHub assignment is expected and is not a reason to release it. Absent on every assigned claim. */
+  ledgerOnly?: true };
+/** Does GitHub's assignee list show that a contributor claim ended outside Warden? An assigned claim ends when its owner is no longer
+ *  assigned; a ledger-only claim (never assigned) ends only when GitHub shows the issue assigned to someone else. */
+export function claimEndedOnGitHub(owner: Owner, assignees: string[]): boolean {
+  return owner.ledgerOnly ? assignees.some((a) => a !== owner.id) : !assignees.includes(owner.id);
+}
 export interface Blocker { reason: string; resumeTo: WorkflowState; at: string }
 /** Processing lease/attempts are separate from workflow state. */
 export interface ProcessingLease { holder: string; epoch: number; acquiredAt: string; expiresAt: string }
