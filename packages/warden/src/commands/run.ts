@@ -1,3 +1,8 @@
+import { mkdtempSync as mkd, rmSync as rmd } from 'node:fs';
+import { join } from 'node:path';
+import { cloneBase } from '../git/workspace.ts';
+import { runMutation } from '../verify/mutation.ts';
+import type { PullInfo } from '../github/store.ts';
 import { acquireScanLock, ScanLocked } from '../storage/scan-lock.ts';
 import { lastSweepRecord } from '../sweep/last.ts';
 import { mustReviewAgain } from '../review/force.ts';
@@ -193,7 +198,15 @@ export async function run(c: Ctx): Promise<Result> {
       // `--lookup-clone DIR`: a local clone the operator keeps fetched (Warden fetches nothing); reviews then get the repository context pack for the PR head.
       const lookupClone = str(c.flags, 'lookup-clone'); if (lookupClone && !existsSync(lookupClone)) return { code: 2, data: { task, outcome: 'refused' }, text: `run --task review: --lookup-clone ${lookupClone} does not exist` };
       const lookupCfg = lookupClone ? { context: lookupProvider(lookupClone, { root: st.path('review', 'packets') }), maxPromptChars: 60_000 } : {};
-      const rcfg = { ...lookupCfg, maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets'), testPaths: cfg.verification.testPaths };
+      // ADR 0016 on contributor PRs: opt-in (a configured mutation tool AND a --source repository holding the PR head). The tool runs on the head inside the execution boundary, never outside it.
+      const mutationCheck = cfg.verification.mutation.command && str(c.flags, 'source') ? async (pull: PullInfo) => {
+        const cm = (await store.listComments(pull.number)).find((x) => x.body.startsWith(LEDGER_MARK)); const led = cm ? parseLed2(cm.body) : null;
+        mkdirSync(st.path('review', 'mutation'), { recursive: true, mode: 0o700 }); const dir = mkd(join(st.path('review', 'mutation'), `pr${pull.number}-`)); const ws = join(dir, 'head');
+        try { cloneBase(str(c.flags, 'source')!, ws, pull.head); return await runMutation({ workspace: ws, changes: pull.files.map((f) => ({ path: f.path, status: f.status === 'removed' ? 'D' as const : f.status === 'added' ? 'A' as const : 'M' as const, patch: f.patch ?? '' })), cfg: cfg.verification.mutation, cleared: led?.mutantClearances, testGlobs: cfg.verification.testPaths }); }
+        catch (e) { return { status: 'failed-to-run' as const, note: `the pull request head could not be checked out or run: ${String((e as Error).message).slice(0, 120)}` }; }
+        finally { rmd(dir, { recursive: true, force: true }); }
+      } : undefined;
+      const rcfg = { ...lookupCfg, ...(mutationCheck ? { mutationCheck } : {}), maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets'), testPaths: cfg.verification.testPaths };
       const caps = { maxItems: cfg.runtime.budgets.maxItems, starveAfterHours: 168, maxFactoryImplementationPrs: cfg.runtime.budgets.maxFactoryImplementationPrs, openFactoryImplementationPrs: 0 };
       if (!str(c.flags, 'item')) {
         // Bounded scan: finite items and wall time, serial, then exit. Nothing is scheduled, polled or waited on.
@@ -215,7 +228,7 @@ export async function run(c: Ctx): Promise<Result> {
       // Live local AI is explicit opt-in (`--runner opencode`): the OpenCode 2.x adapter on a loopback-only LM Studio model. Default stays the honest not-ready refusal.
       const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: (str(c.flags, 'model-url') ?? str(c.flags, 'lmstudio-url')), ...modelLimits(c.flags) }) : new NotReadyRunner();
       const o = await runReview({ store, item, runner, kv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest,
-        cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets'), testPaths: cfg.verification.testPaths, ...lookupCfg } });
+        cfg: { maxAttempts, budgets: { maxToolCalls: cfg.runtime.budgets.maxToolCalls, maxModelTurns: cfg.runtime.budgets.maxModelTurns, wallTimeMs: cfg.runtime.budgets.wallTimeSeconds * 1000 }, localModels: cfg.runtime.modelPool, expectedModel: cfg.runtime.modelPool[0], packetRoot: st.path('review', 'packets'), testPaths: cfg.verification.testPaths, ...(mutationCheck ? { mutationCheck } : {}), ...lookupCfg } });
       const code = o.kind === 'accepted' || o.kind === 'reused' || o.kind === 'checks-only' ? 0 : o.kind === 'rejected' ? 1 : 4;
       const recorded = o.kind === 'accepted' && o.marker ? await recordAccepted(item, o.marker) : undefined;
       return { code, data: { task, outcome: o.kind, ...o, ...(recorded ? { recorded } : {}), runner: runner.name, ...harnessOf(runner) }, text: `task review #${item}: ${o.kind.toUpperCase()}: ${o.notice}${recorded ? ` Recorded for the writer (${'opid' in recorded ? recorded.opid : 'not submitted: ' + recorded.error}); run \`warden writer drain\` to apply.` : ''}` };
