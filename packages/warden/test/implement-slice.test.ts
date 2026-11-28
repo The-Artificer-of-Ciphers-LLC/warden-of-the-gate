@@ -245,6 +245,18 @@ test('ADR 0016 hidden checks pilot: a feature gets a holdout session that never 
   const off = await setup(FEATURE); t.after(off.cleanup); const mo = new Model(goodEdit); await off.run(mo); assert.ok(!mo.sessions.some((x) => x.phase === 'holdout'), 'off unless enabled'); assert.doesNotMatch(off.published[0].body, /hidden acceptance checks/);
 });
 
+test('ADR 0015 design card: work the issue says will cross a boundary class waits for the maintainer\'s pick; decline refuses, narrow limits the scope and rejects a change that crosses it anyway, proceed builds', async (t) => {
+  const BODY = 'Add a table. Put the migration in migrations/002_add.sql. sumTo(4) should be 6.';
+  const ask = async (pick?: string) => { const s = await setup(); t.after(s.cleanup); s.r.world.issues.get(s.n)!.body = BODY;
+    if (pick) { const cid = await s.r.comment(OPERATOR, s.n, `/warden design database-schema ${pick}`); await s.r.send({ kind: 'design-decision', item: s.n, itemKind: 'issue', origin: 'maintainer', actor: OPERATOR, payload: { class: 'database-schema', pick }, source: { kind: 'gh-comment', id: String(cid), observedAt: new Date(s.r.world.now()).toISOString() } }); await s.r.writer({ assignable: () => true }).drain(); } return s; };
+  const none = await ask(); const m0 = new Model(goodEdit); const o0 = await none.run(m0); assert.equal(o0.kind, 'blocked'); assert.equal(o0.reason, 'needs-design-decision'); assert.match(o0.notice, /database-schema[^\n]*design-card --item/); assert.equal(m0.calls, 0, 'no session starts before the pick');
+  const dec = await ask('decline'); assert.equal((await dec.run(new Model(goodEdit))).reason, 'design-declined'); assert.equal((await ledgerOf(dec.r, dec.n)).designDecisions?.['database-schema']?.pick, 'decline');
+  const nar = await ask('narrow'); const mn = new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') { mkdirSync(join(ws, 'migrations'), { recursive: true }); writeFileSync(join(ws, 'migrations/002_add.sql'), 'create table t (id int);\n'); } });
+  const on = await nar.run(mn); assert.equal(on.kind, 'rejected'); assert.equal(on.reason, 'narrowed-scope-violated'); assert.match(mn.sessions[0].prompt, /stay out of these boundary classes \(database-schema\)/); assert.equal(nar.published.length, 0);
+  const nar2 = await ask('narrow'); assert.equal((await nar2.run(new Model(goodEdit))).kind, 'opened', 'narrowed and the change stays out of it');
+  const go = await ask('proceed'); const og = await go.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') { mkdirSync(join(ws, 'migrations'), { recursive: true }); writeFileSync(join(ws, 'migrations/002_add.sql'), 'create table t (id int);\n'); } })); assert.equal(og.kind, 'opened', JSON.stringify(og)); assert.match(go.published[0].body, /one-way door/);
+});
+
 test('takeover: abandoned contributor work is read as DATA on top of the trusted base, ported work is credited, the factory branch is separate and the contributor branch is never touched', async (t) => {
   let abandoned = 0;
   const s = await setup({ ledger: () => undefined }); t.after(s.cleanup);

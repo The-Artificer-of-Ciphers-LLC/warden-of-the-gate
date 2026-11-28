@@ -1,3 +1,4 @@
+import { DEFAULT_BOUNDARY_CLASSES } from '../verify/boundary.ts';
 import { cleanFrozen } from '../verify/frozen.ts';
 import { cleanProvenance, provenanceText } from '../runner/provenance.ts';
 import type { Provenance } from '../runner/provenance.ts';
@@ -60,6 +61,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     }
     case 'clear-mutant': return clearMutant(l, i, c);
     case 'holdout-verdict': return holdoutVerdict(l, i, c);
+    case 'design-decision': return designDecision(l, i, c);
     case 'note': return { accept: true, plan: [note(String(pl.text ?? 'note'))] };
     case 'transition': {
       const to = String(pl.to ?? ''); const from = l.state;
@@ -329,6 +331,17 @@ function forceReview(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Review request by ${i.actor} rejected: not an authorized maintainer.`);
   if (l.kind !== 'pr') return rej('force-review-on-issue', 'A full review applies to pull requests only.');
   return { accept: true, plan: [note(`Full review requested by ${i.actor}. The next review run reviews this head again, whether or not it changed.`)], apply: (led) => { led.forceReview = { by: i.actor, at: iso(c.now) }; } };
+}
+/** `/warden design <class> proceed|narrow|decline`: the maintainer's pick on ONE boundary class the issue points at. Recorded once; a different pick needs a person to override the ledger. */
+function designDecision(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Design pick rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Design pick by ${i.actor} rejected: not an authorized maintainer.`);
+  const pl = i.payload as { class?: string; pick?: string }; const cls = String(pl.class ?? '');
+  if (l.kind !== 'issue') return rej('design-on-pr', 'A design pick belongs to an issue.');
+  if (!Object.keys(c.policy.boundaries ?? DEFAULT_BOUNDARY_CLASSES).includes(cls) || !['proceed', 'narrow', 'decline'].includes(String(pl.pick))) return rej('design-malformed', 'Design pick rejected: name a configured boundary class and proceed, narrow or decline.');
+  if (l.designDecisions?.[cls]) return rej('design-already-decided', `Boundary class ${cls} already has a pick (${l.designDecisions[cls].pick}).`);
+  const pick = pl.pick as 'proceed' | 'narrow' | 'decline';
+  return { accept: true, plan: [note(`Design pick for ${cls}: ${pick}, by ${i.actor}. Warden builds on it.`)], apply: (led) => { led.designDecisions = { ...(led.designDecisions ?? {}), [cls]: { pick, by: i.actor, at: iso(c.now) } }; } };
 }
 /** `/warden holdout <check id> defect|wrong-check [reason]`: the maintainer's verdict on ONE failed hidden acceptance check (pilot statistics: confirmed catches and wrong checks). */
 function holdoutVerdict(l: Ledger, i: Intent, c: ReduceCtx): Decision {

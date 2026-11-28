@@ -244,7 +244,7 @@ export class Writer {
       const cmd = sc0 ? parseMaintainerCommand(sc0.body) : null;
       return !!sc0 && sc0.author === i.actor && sc0.updatedAt === sc0.createdAt && cmd?.kind === i.kind && (i.kind === 'release' || claimant?.id === i.actor);
     }
-    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release' && i.kind !== 'resume-scope' && i.kind !== 'force-review' && i.kind !== 'dismiss-finding' && i.kind !== 'clear-mutant' && i.kind !== 'holdout-verdict') return true;
+    if (i.kind !== 'approval-decision' && i.kind !== 'override' && i.kind !== 'hold' && i.kind !== 'hold-release' && i.kind !== 'resume-scope' && i.kind !== 'force-review' && i.kind !== 'dismiss-finding' && i.kind !== 'clear-mutant' && i.kind !== 'holdout-verdict' && i.kind !== 'design-decision') return true;
     if (i.source.kind !== 'gh-comment') return false;
     const sc = (await this.store.listComments(i.item)).find((c) => c.id === Number(i.source.id));
     if (!sc || sc.author !== i.actor || sc.updatedAt !== sc.createdAt) return false;
