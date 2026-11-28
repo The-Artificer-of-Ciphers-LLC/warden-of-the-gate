@@ -84,6 +84,7 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'reconcile': return reconcile(l, i, c);
     case 'adopt': return adopt(l, i, c);
     case 'review-record': return reviewRecord(l, i, c);
+    case 'review-post': return reviewPost(l, i, c);
     case 'merge-request': return mergeRequest(l, i, c);
     case 'rework-attempt': return reworkAttempt(l, i, c);
     case 'carry-accounting': return carryAccounting(l, i, c);
@@ -305,6 +306,34 @@ function reviewRecord(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const from = l.state; const to: WorkflowState | null = !['needs-review', 'waiting-checks'].includes(from) ? null : gated ? (l.owner?.kind === 'factory' ? 'needs-rework' : null) : 'merge-ready';
   const move = to && canTransition('pr', from, to).ok ? to : null;
   return { accept: true, plan: move ? [...project(c.policy, from, move), ...(move === 'needs-rework' ? [note(`Review found ${sevs.filter((s) => s === 'blocker' || (gates ? gates[s] : true)).length} blocking finding(s); this factory pull request returns to rework (cycle accounting is persisted).`)] : [])] : [], apply: (led) => { if (move) moveTo(led, move, undefined, c.now); led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sev as Array<'blocker' | 'major' | 'minor' | 'nit'>, policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; } };
+}
+
+/** Post a recorded AI review to GitHub: ONE `COMMENT` review bound to the reviewed head (inline comments only for positions the diff shows, the rest in the body) and ONE Warden check run on that head
+ *  (PRD section 5 Review, decided 2026-11-26). It posts only what the ledger already recorded for the same head, only while the pull request still has that head, and never the same review twice. Origin `ai`, so
+ *  shadow mode records and posts nothing. A `COMMENT` review cannot approve or request changes: merging stays with the deterministic gates. */
+function reviewPost(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
+  if (i.origin !== 'ai') return silent('review-post-origin'); if (l.kind !== 'pr') return silent('review-post-on-issue');
+  const pl = i.payload as { head?: string; verdict?: string; omitted?: number; findings?: unknown };
+  const fs = Array.isArray(pl.findings) ? (pl.findings as Array<Record<string, unknown>>) : null;
+  const sevOk = (s: unknown) => ['blocker', 'major', 'minor', 'nit'].includes(String(s));
+  if (!pl.head || !pl.verdict || !fs || fs.length > 50 || fs.some((f) => !sevOk(f.severity) || typeof f.path !== 'string' || !Number.isInteger(f.line) || typeof f.rationale !== 'string' || typeof f.correction !== 'string')) return silent('review-post-malformed');
+  if (c.item?.isPr !== true || !c.pull) return silent('review-post-unobserved');
+  if (c.pull.head !== pl.head) return silent(`stale-review:reviewed-${pl.head.slice(0, 8)}-found-${c.pull.head.slice(0, 8)}`);
+  if (l.review?.head !== pl.head) return silent('review-not-recorded');
+  const fps = fs.map((f) => String(f.fingerprint ?? `${f.path}:${f.line}`)).sort();
+  if (l.reviewPosted && l.reviewPosted.head === pl.head && l.reviewPosted.fingerprints.join(',') === fps.join(',')) return silent('review-already-posted');
+  const gates = c.policy.merge?.gates; const sevs = fs.map((f) => String(f.severity));
+  const gated = (s: string) => s === 'blocker' || (gates ? gates[s as 'major' | 'minor' | 'nit'] : true);   // same gates the merge decision uses
+  const conclusion = !fs.length ? 'success' as const : sevs.some(gated) ? 'action_required' as const : 'neutral' as const;
+  const line = (f: Record<string, unknown>) => `**${String(f.severity)}**: ${String(f.rationale)}\n\nSuggested correction: ${String(f.correction)}`;
+  const inline = fs.filter((f) => f.inline === true).map((f) => ({ path: String(f.path), line: Number(f.line), body: line(f) }));
+  const rest = fs.filter((f) => f.inline !== true).map((f) => `- \`${String(f.path)}:${String(f.line)}\` ${line(f)}`);
+  const omitted = Number.isInteger(pl.omitted) && Number(pl.omitted) > 0 ? Number(pl.omitted) : 0;
+  const body = [`AI-assisted review (Warden) of \`${pl.head.slice(0, 8)}\`: ${fs.length ? `${fs.length} finding(s)` : 'no findings'}${omitted ? `, ${omitted} lower-ranked finding(s) are kept in the record and not shown here` : ''}. This is a comment, not an approval or a request for changes; a maintainer decides.`, ...(rest.length ? ['', 'Findings outside the lines this diff shows:', ...rest] : [])].join('\n');
+  const summary = fs.length ? `${fs.length} finding(s): ${['blocker', 'major', 'minor', 'nit'].map((s) => [s, sevs.filter((x) => x === s).length] as const).filter(([, n]) => n).map(([s, n]) => `${n} ${s}`).join(', ')}.` : 'No findings.';
+  return { accept: true, plan: [{ t: 'review', commitId: pl.head, body, comments: inline }, { t: 'check-run', headSha: pl.head, conclusion, title: 'Warden review', summary }],
+    apply: (led) => { led.reviewPosted = { head: pl.head!, fingerprints: fps, at: iso(c.now) }; } };
 }
 
 /** Merge request bound to the head the requester saw. Enqueueing is not merging: the effect re-reads, merges only that head, confirms with GitHub,

@@ -28,6 +28,11 @@ export interface Store {
   listIssues(opts?: { state?: 'open' | 'closed' | 'all' }): Promise<IssueState[]>;
   /** Read-only: may this login be assigned on this repository (GitHub's `GET /assignees/{login}`: 204 yes, 404 no)? Optional so simulated stores that do not model it stay valid; absent means "assume yes". */
   canAssign?(login: string): Promise<boolean>;
+  /** Review posting (PRD section 5 Review): a COMMENT review bound to `commitId`, and a check run on the reviewed head. Optional: a store that cannot post leaves the effect failing visibly. */
+  createReview?(n: number, o: { commitId: string; body: string; comments: Array<{ path: string; line: number; body: string }> }): Promise<{ id: number }>;
+  listReviews?(n: number): Promise<Array<{ id: number; body: string; commitId: string; author: string }>>;
+  createCheckRun?(o: { name: string; headSha: string; conclusion: 'success' | 'neutral' | 'action_required'; title: string; summary: string; externalId: string }): Promise<{ id: number }>;
+  listCheckRuns?(headSha: string): Promise<Array<{ id: number; name: string; externalId: string; conclusion: string }>>;
   addAssignee(n: number, login: string): Promise<void>;
   removeAssignee(n: number, login: string): Promise<void>;
   addLabel(n: number, label: string): Promise<void>;

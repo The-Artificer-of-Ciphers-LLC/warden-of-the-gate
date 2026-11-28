@@ -63,7 +63,9 @@ export type Effect =
   | { t: 'unassign'; login: string }
   | { t: 'merge'; expectedHead: string }
   | { t: 'mark-merged' }
-  | { t: 'close' };
+  | { t: 'close' }
+  | { t: 'review'; commitId: string; body: string; comments: Array<{ path: string; line: number; body: string }> }
+  | { t: 'check-run'; headSha: string; conclusion: 'success' | 'neutral' | 'action_required'; title: string; summary: string };
 
 export interface Ledger {
   v: 1; repository: string; item: number; kind: ItemKind; epoch: number; seq: number;
@@ -77,6 +79,8 @@ export interface Ledger {
   draftDecision?: 'keep';
   /** Latest accepted AI review summary, recorded through a live-mode `review-record` intent (never in shadow). Severities only: no finding text is copied. */
   review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; policyDigest?: string; acceptedAt: string };
+  /** The review last posted to GitHub for this PR (head and the fingerprints it contained): the same review is never posted twice. */
+  reviewPosted?: { head: string; fingerprints: string[]; at: string };
   /** Critical escape / unauthorized effect: the affected scope is paused (only notes and an explicit maintainer resume are accepted) and evidence is preserved. */
   paused?: { reason: string; at: string; evidence: string[] };
   /** Adoption receipt reference (the inventory/receipt file is NOT a second canonical ledger). */

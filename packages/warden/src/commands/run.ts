@@ -1,4 +1,4 @@
-import { reviewRecordIntent } from '../review/record.ts';
+import { reviewPostIntent, reviewRecordIntent } from '../review/record.ts';
 import { GitHubPublisher, HttpsGitRemote, PathRemote } from '../implement/github-publisher.ts';
 import type { PullWriter } from '../implement/github-publisher.ts';
 import type { PrPublisher } from '../implement/slice.ts';
@@ -170,9 +170,9 @@ export async function run(c: Ctx): Promise<Result> {
       return { code: o.kind === 'accepted' || o.kind === 'reused' ? 0 : o.kind === 'rejected' ? 1 : 4, data: { task, outcome: o.kind, ...o, runner: runner.name }, text: `task triage #${item}: ${o.kind.toUpperCase()}: ${o.notice}` };
     }
     /** Live mode only: an accepted review is handed to the writer as a `review-record` intent. Shadow mode submits nothing (and the writer would refuse an AI-origin intent anyway). */
-    const recordAccepted = async (item: number, marker: Parameters<typeof reviewRecordIntent>[0]['marker']): Promise<{ opid: string } | { error: string } | undefined> => {
+    const recordAccepted = async (item: number, marker: Parameters<typeof reviewRecordIntent>[0]['marker']): Promise<{ opid: string; postOpid: string } | { error: string } | undefined> => {
       if (pol.mode !== 'live') return undefined;
-      try { return await makeSink().submit(reviewRecordIntent({ repo: cfg.repository, item, marker })); } catch (e) { return { error: String((e as Error).message).slice(0, 160) }; }
+      try { const sink = makeSink(); const first = await sink.submit(reviewRecordIntent({ repo: cfg.repository, item, marker })); const post = await sink.submit(reviewPostIntent({ repo: cfg.repository, item, marker, causalAfter: first.opid })); return { opid: first.opid, postOpid: post.opid }; } catch (e) { return { error: String((e as Error).message).slice(0, 160) }; }
     };
     if (task === 'review') {
       // P3 first checkpoint: ONE read-only shadow review of ONE pull request. Local only: nothing is posted, merged or written to the contributor's branch.

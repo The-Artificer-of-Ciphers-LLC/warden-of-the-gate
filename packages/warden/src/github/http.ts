@@ -49,6 +49,10 @@ export class HttpStore implements Store {
   }
   async getIssue(n: number) { return this.is((await this.req('GET', `/issues/${n}`)).json); }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { return (await this.paged('/issues', `state=${o.state ?? 'open'}`)).map(this.is); }
+  async createReview(n: number, o: { commitId: string; body: string; comments: Array<{ path: string; line: number; body: string }> }) { const r = await this.req('POST', `/pulls/${n}/reviews`, { commit_id: o.commitId, body: o.body, event: 'COMMENT', comments: o.comments.map((c) => ({ path: c.path, line: c.line, side: 'RIGHT', body: c.body })) }); return { id: r.json.id as number }; }
+  async listReviews(n: number) { return (await this.paged(`/pulls/${n}/reviews`)).map((x) => ({ id: x.id as number, body: String(x.body ?? ''), commitId: String(x.commit_id ?? ''), author: x.user?.login ?? 'unknown' })); }
+  async createCheckRun(o: { name: string; headSha: string; conclusion: 'success' | 'neutral' | 'action_required'; title: string; summary: string; externalId: string }) { const r = await this.req('POST', '/check-runs', { name: o.name, head_sha: o.headSha, status: 'completed', conclusion: o.conclusion, external_id: o.externalId, output: { title: o.title, summary: o.summary } }); return { id: r.json.id as number }; }
+  async listCheckRuns(headSha: string) { const r = await this.req('GET', `/commits/${encodeURIComponent(headSha)}/check-runs`, undefined, { query: 'per_page=100' }); return ((r.json?.check_runs ?? []) as any[]).map((x) => ({ id: x.id as number, name: String(x.name), externalId: String(x.external_id ?? ''), conclusion: String(x.conclusion ?? '') })); }
   async canAssign(login: string) { return (await this.req('GET', `/assignees/${encodeURIComponent(login)}`, undefined, { okStatuses: [404] })).status === 204; }
   async addAssignee(n: number, login: string) { await this.req('POST', `/issues/${n}/assignees`, { assignees: [login] }); }
   async removeAssignee(n: number, login: string) { await this.req('DELETE', `/issues/${n}/assignees`, { assignees: [login] }); }
