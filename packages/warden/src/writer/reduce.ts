@@ -85,6 +85,8 @@ export function reduce(i: Intent, l: Ledger, c: ReduceCtx): Decision {
     case 'adopt': return adopt(l, i, c);
     case 'review-record': return reviewRecord(l, i, c);
     case 'review-post': return reviewPost(l, i, c);
+    case 'force-review': return forceReview(l, i, c);
+    case 'dismiss-finding': return dismissFinding(l, i, c);
     case 'merge-request': return mergeRequest(l, i, c);
     case 'rework-attempt': return reworkAttempt(l, i, c);
     case 'carry-accounting': return carryAccounting(l, i, c);
@@ -298,14 +300,41 @@ function reviewRecord(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
   if (i.origin !== 'ai') return silent('review-record-origin');
   if (l.kind !== 'pr') return silent('review-record-on-issue');
-  const pl = i.payload as { head?: string; base?: string; verdict?: string; severities?: unknown; policyDigest?: string };
+  const pl = i.payload as { head?: string; base?: string; verdict?: string; severities?: unknown; fingerprints?: unknown; policyDigest?: string };
   const sev = Array.isArray(pl.severities) ? (pl.severities as unknown[]) : null;
   if (!pl.head || !pl.base || !pl.verdict || !sev || sev.some((s) => !['blocker', 'major', 'minor', 'nit'].includes(String(s)))) return silent('review-record-malformed');
   if (c.item?.isPr !== true) return silent('review-record-unobserved');
-  const sevs = sev as Array<'blocker' | 'major' | 'minor' | 'nit'>; const gates = c.policy.merge?.gates; const gated = sevs.some((s) => s === 'blocker' || (gates ? gates[s] : true));
+  // Findings a maintainer already dismissed (same fingerprint, so the same unchanged code) neither gate a merge nor are recorded again.
+  const fpsIn = Array.isArray(pl.fingerprints) && (pl.fingerprints as unknown[]).length === sev.length && (pl.fingerprints as unknown[]).every((x) => typeof x === 'string') ? (pl.fingerprints as string[]) : undefined;
+  const keepIdx = sev.map((_, k) => k).filter((k) => !(fpsIn && l.dismissed?.[fpsIn[k]]));
+  const sevs = keepIdx.map((k) => sev[k]) as Array<'blocker' | 'major' | 'minor' | 'nit'>; const fpsKept = fpsIn ? keepIdx.map((k) => fpsIn[k]) : undefined; const gates = c.policy.merge?.gates; const gated = sevs.some((s) => s === 'blocker' || (gates ? gates[s] : true));
   const from = l.state; const to: WorkflowState | null = !['needs-review', 'waiting-checks'].includes(from) ? null : gated ? (l.owner?.kind === 'factory' ? 'needs-rework' : null) : 'merge-ready';
   const move = to && canTransition('pr', from, to).ok ? to : null;
-  return { accept: true, plan: move ? [...project(c.policy, from, move), ...(move === 'needs-rework' ? [note(`Review found ${sevs.filter((s) => s === 'blocker' || (gates ? gates[s] : true)).length} blocking finding(s); this factory pull request returns to rework (cycle accounting is persisted).`)] : [])] : [], apply: (led) => { if (move) moveTo(led, move, undefined, c.now); led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sev as Array<'blocker' | 'major' | 'minor' | 'nit'>, policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; } };
+  return { accept: true, plan: move ? [...project(c.policy, from, move), ...(move === 'needs-rework' ? [note(`Review found ${sevs.filter((s) => s === 'blocker' || (gates ? gates[s] : true)).length} blocking finding(s); this factory pull request returns to rework (cycle accounting is persisted).`)] : [])] : [], apply: (led) => { if (move) moveTo(led, move, undefined, c.now); led.review = { head: pl.head!, base: pl.base!, verdict: pl.verdict!, severities: sevs, ...(fpsKept ? { fingerprints: fpsKept } : {}), policyDigest: pl.policyDigest, acceptedAt: iso(c.now) }; if (led.forceReview && Date.parse(i.source.observedAt) >= Date.parse(led.forceReview.at)) delete led.forceReview; } };
+}
+
+/** `/warden review`: a maintainer asks for a full review of this pull request even though the head is unchanged. The writer only records the request; the next review run on the Mac sees it in the ledger
+ *  and reviews again. Authorized by the verified source comment's author being a configured maintainer, never by the text. */
+function forceReview(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Review request rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Review request by ${i.actor} rejected: not an authorized maintainer.`);
+  if (l.kind !== 'pr') return rej('force-review-on-issue', 'A full review applies to pull requests only.');
+  return { accept: true, plan: [note(`Full review requested by ${i.actor}. The next review run reviews this head again, whether or not it changed.`)], apply: (led) => { led.forceReview = { by: i.actor, at: iso(c.now) }; } };
+}
+/** `/warden dismiss <fingerprint> [reason]`: a maintainer dismisses ONE finding. It stays dismissed while its code is unchanged (the fingerprint includes the anchor line's text) and is removed from the
+ *  recorded severities, so it no longer gates a merge. */
+function dismissFinding(l: Ledger, i: Intent, c: ReduceCtx): Decision {
+  if (!c.sourceVerified) return rej('unverified-source', 'Dismissal rejected: the GitHub source could not be verified.');
+  if (!c.policy.maintainers.includes(i.actor)) return rej('unauthorized-identity', `Dismissal by ${i.actor} rejected: not an authorized maintainer.`);
+  if (l.kind !== 'pr') return rej('dismiss-on-issue', 'Findings belong to pull requests.');
+  const pl = i.payload as { fingerprint?: string; reason?: string }; const fp = String(pl.fingerprint ?? '');
+  if (!/^[0-9a-f]{8,16}$/.test(fp)) return rej('dismiss-malformed', 'Dismissal rejected: give the finding\'s fingerprint.');
+  if (l.dismissed?.[fp]) return rej('already-dismissed', `Finding ${fp} is already dismissed.`);
+  return { accept: true, plan: [note(`Finding ${fp} dismissed by ${i.actor}${pl.reason ? ` (${pl.reason.slice(0, 200)})` : ''}. It stays dismissed while its code is unchanged and no longer counts toward a merge gate.`)],
+    apply: (led) => {
+      led.dismissed = { ...(led.dismissed ?? {}), [fp]: { by: i.actor, at: iso(c.now), ...(pl.reason ? { reason: pl.reason.slice(0, 200) } : {}) } };
+      const r = led.review; if (r?.fingerprints && r.fingerprints.length === r.severities.length) { const keep = r.fingerprints.map((x, k) => k).filter((k) => r.fingerprints![k] !== fp); led.review = { ...r, severities: keep.map((k) => r.severities[k]), fingerprints: keep.map((k) => r.fingerprints![k]) }; }
+    } };
 }
 
 /** Post a recorded AI review to GitHub: ONE `COMMENT` review bound to the reviewed head (inline comments only for positions the diff shows, the rest in the body) and ONE Warden check run on that head
@@ -315,9 +344,10 @@ function reviewPost(l: Ledger, i: Intent, c: ReduceCtx): Decision {
   const silent = (reason: string): Decision => ({ accept: false, reason, plan: [] });
   if (i.origin !== 'ai') return silent('review-post-origin'); if (l.kind !== 'pr') return silent('review-post-on-issue');
   const pl = i.payload as { head?: string; verdict?: string; omitted?: number; findings?: unknown };
-  const fs = Array.isArray(pl.findings) ? (pl.findings as Array<Record<string, unknown>>) : null;
+  const allFs = Array.isArray(pl.findings) ? (pl.findings as Array<Record<string, unknown>>) : null;
+  const fs = allFs ? allFs.filter((f) => !l.dismissed?.[String(f.fingerprint ?? '')]) : null;   // a dismissed finding is never posted again while its code is unchanged
   const sevOk = (s: unknown) => ['blocker', 'major', 'minor', 'nit'].includes(String(s));
-  if (!pl.head || !pl.verdict || !fs || fs.length > 50 || fs.some((f) => !sevOk(f.severity) || typeof f.path !== 'string' || !Number.isInteger(f.line) || typeof f.rationale !== 'string' || typeof f.correction !== 'string')) return silent('review-post-malformed');
+  if (!pl.head || !pl.verdict || !fs || (allFs?.length ?? 0) > 50 || fs.some((f) => !sevOk(f.severity) || typeof f.path !== 'string' || !Number.isInteger(f.line) || typeof f.rationale !== 'string' || typeof f.correction !== 'string')) return silent('review-post-malformed');
   if (c.item?.isPr !== true || !c.pull) return silent('review-post-unobserved');
   if (c.pull.head !== pl.head) return silent(`stale-review:reviewed-${pl.head.slice(0, 8)}-found-${c.pull.head.slice(0, 8)}`);
   if (l.review?.head !== pl.head) return silent('review-not-recorded');

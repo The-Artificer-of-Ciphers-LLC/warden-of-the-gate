@@ -1,3 +1,4 @@
+import { mustReviewAgain } from '../review/force.ts';
 import { reviewPostIntent, reviewRecordIntent } from '../review/record.ts';
 import { GitHubPublisher, HttpsGitRemote, PathRemote } from '../implement/github-publisher.ts';
 import type { PullWriter } from '../implement/github-publisher.ts';
@@ -196,6 +197,10 @@ export async function run(c: Ctx): Promise<Result> {
       const item = Number(str(c.flags, 'item')); if (!Number.isInteger(item) || item < 1) return { code: 2, data: { task, outcome: 'refused' }, text: 'run --task review: --item must be a pull request number' };
       const kv = fileKV(st);
       if (c.flags['dry-run']) { const p = await planReview(store, item, kv, maxAttempts); return { code: p.action === 'blocked' ? 4 : 0, data: { task, outcome: 'proposed', mode: 'dry-run', plan: p, mutations: 0 }, text: `task review (dry-run) #${item}: ${p.action}: ${p.why} (attempts ${p.attempts.used} of ${p.attempts.max}); no model call, no repository mutation` }; }
+      {   // `/warden review` (a maintainer asked for a full review): drop the local accepted review that predates the request so this head is reviewed again
+        const cm = (await store.listComments(item).catch(() => [])).find((x) => x.body.startsWith(LEDGER_MARK)); const led = cm ? parseLed2(cm.body) : null; const rec0 = kv.read(item);
+        if (rec0 && mustReviewAgain(led, rec0.marker)) kv.write(item, { ...rec0, marker: null });
+      }
       // Live local AI is explicit opt-in (`--runner opencode`): the pinned OpenCode adapter on a loopback-only LM Studio model. Default stays the honest not-ready refusal.
       const runner: AgentRunner = str(c.flags, 'runner') === 'opencode' ? new OpenCodeRunner({ modelId: cfg.runtime.modelPool[0], baseURL: (str(c.flags, 'model-url') ?? str(c.flags, 'lmstudio-url')), ...modelLimits(c.flags) }) : new NotReadyRunner();
       const o = await runReview({ store, item, runner, kv, stopped: () => ctl.stopped || local.stopped, signal: abort.signal, policyDigest: pol.digest,

@@ -78,7 +78,11 @@ export interface Ledger {
   /** Set by deliberate adoption: an existing draft was kept; policy closure does not apply to it. */
   draftDecision?: 'keep';
   /** Latest accepted AI review summary, recorded through a live-mode `review-record` intent (never in shadow). Severities only: no finding text is copied. */
-  review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; policyDigest?: string; acceptedAt: string };
+  review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; /** parallel to `severities`: which finding each severity belongs to, so a dismissal can remove it */ fingerprints?: string[]; policyDigest?: string; acceptedAt: string };
+  /** A maintainer asked for a full review of this PR (`/warden review`); cleared when a review accepted after that moment is recorded. */
+  forceReview?: { by: string; at: string };
+  /** Findings a maintainer dismissed (`/warden dismiss <fingerprint>`); a dismissed finding stays dismissed while its code is unchanged (the fingerprint includes the anchor text). */
+  dismissed?: Record<string, { by: string; at: string; reason?: string }>;
   /** The review last posted to GitHub for this PR (head and the fingerprints it contained): the same review is never posted twice. */
   reviewPosted?: { head: string; fingerprints: string[]; at: string };
   /** Critical escape / unauthorized effect: the affected scope is paused (only notes and an explicit maintainer resume are accepted) and evidence is preserved. */

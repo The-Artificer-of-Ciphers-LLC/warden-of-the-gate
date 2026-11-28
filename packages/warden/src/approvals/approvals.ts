@@ -20,6 +20,8 @@ export type MaintainerCommand =
   | { kind: 'hold'; payload: { reason: string } }
   | { kind: 'hold-release'; payload: { reason?: string } }
   | { kind: 'resume-scope'; payload: { reason: string } }
+  | { kind: 'force-review'; payload: Record<string, never> }
+  | { kind: 'dismiss-finding'; payload: { fingerprint: string; reason?: string } }
   | { kind: 'claim'; payload: Record<string, never> }
   | { kind: 'release'; payload: Record<string, never> };
 export function parseMaintainerCommand(body: string): MaintainerCommand | null {
@@ -31,6 +33,9 @@ export function parseMaintainerCommand(body: string): MaintainerCommand | null {
   if (hold) return { kind: 'hold', payload: { reason: hold[1].trim() } };
   const rel = /^\/warden\s+release-hold(?:\s+(.*))?$/.exec(line);
   if (rel) return { kind: 'hold-release', payload: { reason: rel[1]?.trim() || undefined } };
+  if (/^\/warden\s+review\s*$/.test(line)) return { kind: 'force-review', payload: {} };
+  const dismiss = /^\/warden\s+dismiss\s+([0-9a-f]{8,16})(?:\s+(.*))?$/.exec(line);
+  if (dismiss) return { kind: 'dismiss-finding', payload: { fingerprint: dismiss[1], ...(dismiss[2]?.trim() ? { reason: dismiss[2].trim() } : {}) } };
   if (/^\/warden\s+claim\s*$/.test(line)) return { kind: 'claim', payload: {} };
   if (/^\/warden\s+release\s*$/.test(line)) return { kind: 'release', payload: {} };
   const resume = /^\/warden\s+resume-scope\s+(.+)$/.exec(line);
