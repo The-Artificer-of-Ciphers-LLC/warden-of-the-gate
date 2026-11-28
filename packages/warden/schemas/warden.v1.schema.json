@@ -490,6 +490,28 @@
           "maximum": 6
         }
       }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "classes": {
+          "type": "object",
+          "maxProperties": 24,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,40}$"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "maxItems": 60,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          }
+        }
+      }
     }
   }
 }

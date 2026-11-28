@@ -82,3 +82,14 @@ test('delivery binding: a request is stale if the head, policy or evidence moved
   assert.match((deliverable({ ...b, evidenceDigest: 'e1' }, input()) as { reason: string }).reason, /evidence changed/);
   assert.match((deliverable(b, input({ mutate: (i) => { i.stopped = true; } })) as { reason: string }).reason, /no longer eligible: stop is in force/);
 });
+
+test('ADR 0015: a boundary change floors at a maintainer decision even when review, checks and standing orders are clean; an approval clears it', () => {
+  const clean = evaluateMerge(input()); assert.equal(clean.action, 'merge');
+  const v = evaluateMerge(input({ pull: { files: [{ path: 'migrations/001.sql', status: 'added' }] } })); assert.equal(v.action, 'escalate'); assert.match((v as { reasons: string[] }).reasons.join(' '), /boundary change \(database-schema\): a maintainer decision is required/);
+  const ok = evaluateMerge(input({ pull: { files: [{ path: 'migrations/001.sql', status: 'added' }] }, mutate: (i) => { i.ledger.approvals['apr_1'] = approved(); } })); assert.equal(ok.action, 'merge'); assert.equal((ok as { via: string }).via, 'maintainer-approval');
+  const factory = evaluateMerge(input({ pull: { author: 'warden-factory', files: [{ path: '.github/workflows/release.yml', status: 'modified' }] } })); assert.equal(factory.action, 'escalate'); assert.match((factory as { reasons: string[] }).reasons.join(' '), /external-effect/);
+  const dep = evaluateMerge(input({ pull: { files: [{ path: 'package.json', status: 'modified', patch: '@@\n-    "ajv": "^8.0.0",\n+    "ajv": "^9.0.0",' }] } })); assert.equal(dep.action, 'escalate');
+  const gone = evaluateMerge(input({ pull: { files: [{ path: 'src/old.js', status: 'removed' }] } })); assert.equal(gone.action, 'escalate');
+  assert.equal(evaluateMerge(input({ pull: { files: [{ path: 'src/shared/ui/Button.tsx', status: 'modified' }] }, mutate: (i) => { i.policy = { ...i.policy, boundaries: { 'shared-component': ['src/shared/'] } }; } })).action, 'escalate', 'the repository names its shared components');
+  assert.equal(evaluateMerge(input({ pull: { files: [{ path: 'docs/old.md', status: 'removed' }] } })).action, 'escalate'); assert.equal(evaluateMerge(input({ pull: { files: [{ path: 'docs/old.md', status: 'removed' }] }, mutate: (i) => { i.policy = { ...i.policy, boundaries: {} }; } })).action, 'merge', 'an explicitly empty configured set means no boundary classes');
+});

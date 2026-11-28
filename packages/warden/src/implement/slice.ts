@@ -25,6 +25,7 @@ import type { Weakening } from '../verify/executor.ts';
 import { iso } from '../util.ts';
 import { DEFAULT_TEST_PATHS, freezeTests, isGuardedPath, isTestPath, nonTestChanges, verifyFrozen } from '../verify/frozen.ts';
 import type { FrozenSet } from '../verify/frozen.ts';
+import { boundaryClassesOf, boundaryHits } from '../verify/boundary.ts';
 
 /** P4 Implement (factory). One issue per invocation, one fresh serial session in a trusted checkout of the base, writable ONLY in that checkout, no shell
  *  for the model, no network. The executor (never the model) produces the evidence; weakened gates, authority-path edits and oversize diffs are refused whole.
@@ -35,7 +36,7 @@ export interface IntentSink { submit(i: IntentCore): Promise<{ opid: string }>; 
 export interface ImplRecord { v: 1; item: number; attempts: { completed: number; launchRetries: number }; branch?: string; pr?: number; /** ADR 0014: the acceptance tests frozen after the test session (path, sha256, base commit). */ frozen?: FrozenSet; lastEvidence?: { sufficient: boolean; reasons: string[] }; log: Array<{ at: string; event: string; detail?: string }> }
 export interface ImplKV { read(item: number): ImplRecord | null; write(item: number, r: ImplRecord): void }
 export interface ImplConfig { repository: string; source: string; baseSha: string; factoryLogins: string[]; factoryAuthor: { name: string; email: string }; model: string; harness: string; maxFactoryPrs: number; maxAttempts: number; maxLaunchRetries: number;
-  budgets: Budgets; localModels: string[]; workRoot?: string; checks: Check[]; readonlyPaths?: string[]; maxFiles?: number; maxPatchChars?: number; /** ADR 0014 `verification.testPaths`: which paths are tests (defaults when unset). */ testPaths?: string[]; /** ADR 0016 `verification.loopTurns`: how many fix sessions one attempt may use while the executor still sees a failing check (default 3). */ loopTurns?: number }
+  budgets: Budgets; localModels: string[]; workRoot?: string; checks: Check[]; readonlyPaths?: string[]; maxFiles?: number; maxPatchChars?: number; /** ADR 0014 `verification.testPaths`: which paths are tests (defaults when unset). */ testPaths?: string[]; /** ADR 0015 `boundaries.classes` (defaults when unset). */ boundaries?: Record<string, string[]>; /** ADR 0016 `verification.loopTurns`: how many fix sessions one attempt may use while the executor still sees a failing check (default 3). */ loopTurns?: number }
 export interface ImplementOpts { store: Store; item: number; policy: PolicySnapshot; cfg: ImplConfig; runner: AgentRunner; kv: ImplKV; publisher: PrPublisher; intents: IntentSink; stopped: () => boolean | Promise<boolean>; signal?: AbortSignal; clock?: () => number }
 export type ImplKind = 'opened' | 'prepared' | 'blocked' | 'rejected' | 'insufficient-evidence' | 'interrupted';
 export interface ImplOutcome { kind: ImplKind; notice: string; reason?: string; pr?: { number: number | null; url: string }; evidence?: { sufficient: boolean; reasons: string[] }; attempts: { completed: number; max: number; launchRetries: number } }
@@ -54,7 +55,8 @@ type FixOutput = Partial<ImplOutput> & { summary: string; testDispute?: { path: 
 
 /** The door floor is deterministic: the model may say two-way, but touching schema, migration, auth, secrets or deletions makes it one-way. */
 export const ONE_WAY = /(^|\/)(migrations?|schema|auth|secrets?|credentials?)(\/|\.|$)|\.sql$|(^|\/)db\//i;
-export const doorFor = (files: Change[], claimed: Door): { door: Door; floor: boolean } => (files.some((f) => ONE_WAY.test(f.path) || f.status === 'D') ? { door: 'one-way', floor: claimed !== 'one-way' } : { door: claimed, floor: false });
+/** ADR 0015: a change is a one-way door exactly when it touches a configured boundary class; the model's own claim is recorded in the PR text but never sets the door. */
+export const doorFor = (files: Change[], claimed: Door, classes?: Record<string, readonly string[]>): { door: Door; floor: boolean; classes: string[] } => { const cl = boundaryClassesOf(boundaryHits(files, classes)); return cl.length ? { door: 'one-way', floor: true, classes: cl } : { door: 'two-way', floor: false, classes: [] }; };
 
 const machinery = (c: Comment) => c.body.startsWith('<!--');
 export interface Abandoned { pr: number; author: string; patches: string; commits: PullCommit[] }
@@ -200,14 +202,14 @@ export async function runImplement(o: ImplementOpts): Promise<ImplOutcome> {
     const fin = model as ImplOutput; note('verified', `${turn} fix session(s)`);
     const ev = evidenceFor(kind, cmp, weak); rec.lastEvidence = ev;
     if (!ev.sufficient) return fail('insufficient-evidence', `Not opened: ${ev.reasons.join('; ')}${turn >= maxTurns && maxTurns > 1 ? ` (after ${turn} fix session(s); the loop limit is ${maxTurns})` : ''}.`, 'insufficient-evidence', { evidence: ev });
-    const door = doorFor(ch, fin.danger.door);
+    const door = doorFor(ch, fin.danger.door, c.boundaries);
     const credited = ab ? creditTrailers(ab.commits.map((x) => ({ ...x, ported: (fin.portedCommits ?? []).includes(x.sha) })), c.factoryLogins) : [];
     const evidence = (cmp.map((x) => `${x.kind} ${x.id}: base ${x.base}, candidate ${x.candidate} (${x.relation})`) as string[])
       .concat(pre.map((r) => `frozen tests on the unchanged base, check ${r.id}: exit ${r.code}${r.timedOut ? ' (timed out)' : ''}`))
       .concat((cand as CheckResult[]).map((r) => `executor ${r.id}: \`${r.command} ${r.args.join(' ')}\` exit ${r.code} at ${r.revision}, output sha256 ${r.outputSha256.slice(0, 12)}, last output: \`${r.outputTail.trim().split('\n').slice(-3).join(' | ').replace(/`/g, "'").slice(-240)}\``))
       .concat([`fix sessions used: ${turn} of ${maxTurns} allowed (verify-and-continue)`]);
     const body = renderPrBody({ scope: `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${it.title.slice(0, 120)}`, approach: fin.approach + (fin.interpretation ? `\n\nHow ambiguous requirements were read: ${fin.interpretation}` : ''), evidence,
-      attribution: { aiAssisted: true, model: c.model, harness: harnessLabel(c.harness, (pf as PreflightReport).harnessVersion), credited: ab && credited.length ? [...new Set(ab.commits.filter((x) => (fin.portedCommits ?? []).includes(x.sha)).map((x) => x.authorLogin).filter((x) => !/\[bot\]$/.test(x)))] : undefined }, danger: { door: door.door, blastRadius: fin.danger.blastRadius, why: door.floor ? `Forced one-way: the change touches schema, migration, auth, secrets or deletes files. ${fin.danger.why}` : fin.danger.why }, closes: [o.item], frozenTests: frozen.files.map((f) => f.path), unreviewedTests: ch.filter((x) => isTestPath(x.path, globs) && !fp.has(x.path)).map((x) => x.path) });
+      attribution: { aiAssisted: true, model: c.model, harness: harnessLabel(c.harness, (pf as PreflightReport).harnessVersion), credited: ab && credited.length ? [...new Set(ab.commits.filter((x) => (fin.portedCommits ?? []).includes(x.sha)).map((x) => x.authorLogin).filter((x) => !/\[bot\]$/.test(x)))] : undefined }, danger: { door: door.door, blastRadius: fin.danger.blastRadius, why: door.floor ? `Boundary change (${door.classes.join(', ')}): this is a one-way door and comes to the maintainer as a decision. The model said ${fin.danger.door}: ${fin.danger.why}` : fin.danger.why }, closes: [o.item], frozenTests: frozen.files.map((f) => f.path), unreviewedTests: ch.filter((x) => isTestPath(x.path, globs) && !fp.has(x.path)).map((x) => x.path) });
     const sha = commitAll(ws, `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${fin.summary}`, c.factoryAuthor, credited);
     const pr = await o.publisher.open({ branch, sha, title: `${kind === 'bug' ? 'Fix' : 'Implement'} #${o.item}: ${it.title.slice(0, 80)}`, body, workspace: ws, baseSha: c.baseSha }); if (pr.number === null) { note('prepared', pr.url); return out('prepared', `Prepared branch ${branch} (${door.door} door) locally at ${pr.url}. Nothing was published: opening a PR needs write credentials the current ceiling does not grant.`, { pr, evidence: ev }); }
     rec.pr = pr.number;

@@ -3,6 +3,7 @@ import type { Ledger } from '../state/model.ts';
 import type { PolicySnapshot } from '../config/snapshot.ts';
 import { evaluate } from '../config/policy.ts';
 import { checkAuthorized } from '../approvals/approvals.ts';
+import { boundaryClassesOf, boundaryHits } from '../verify/boundary.ts';
 
 /** P4 merge eligibility: a PURE decision from current facts. It never merges anything: it says merge / wait / escalate / block with reasons.
  *  Mandatory rules (not weakenable by configuration): blocker findings always gate; high or uncertain risk, workflow/access/maintainer/standing-order
@@ -47,6 +48,8 @@ export function evaluateMerge(i: MergeInput): MergeVerdict {
   const dep = origin === 'automation' ? i.dependency : undefined;
   if (origin === 'automation' && (dep?.breakingMajor || dep?.migration)) esc.push('breaking major or migration in an automation PR cannot bypass escalation');
   if (origin === 'automation' && kind === 'dependency' && dep && !dep.verifiedAdvisory && !dep.breakingMajor && !dep.migration) { /* ordinary verified-origin dependency update: standing orders decide */ }
+  // ADR 0015: a boundary change floors at a maintainer decision even when every other gate passes. The classes come from approved config; the reason names classes only (no file text).
+  const classes = boundaryClassesOf(boundaryHits(pull.files, i.policy.boundaries)); if (classes.length) esc.push(`boundary change (${classes.join(', ')}): a maintainer decision is required`);
   const pol = evaluate(i.policy.orders, { task: 'merge', kind, paths, origin, risk });
   let via: 'standing-order' | 'maintainer-approval' = 'standing-order'; let approvalId: string | undefined;
   if (pol.decision === 'deny') block.push(...pol.reasons);
