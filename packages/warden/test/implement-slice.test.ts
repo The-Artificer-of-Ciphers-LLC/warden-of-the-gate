@@ -29,8 +29,8 @@ const RESULT = { summary: 'Fix off-by-one in sumTo', approach: 'Loop below n, wi
 const done = (o: unknown = RESULT): SessionResult => ({ outcome: 'completed', structuredOutput: o, usage: { toolCalls: 0, modelTurns: 1, wallMs: 1 } });
 
 /** ADR 0014: Implement runs a TEST session (tests only) and then a FIX session (frozen tests denied to it). Rework still runs one session ('other'). */
-type Phase = 'test' | 'fix' | 'other';
-const phaseOf = (req: SessionRequest): Phase => { const p = readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'); return /ACCEPTANCE TESTS for ONE change/.test(p) ? 'test' : /are FROZEN/.test(p) ? 'fix' : 'other'; };
+type Phase = 'test' | 'fix' | 'holdout' | 'other';
+const phaseOf = (req: SessionRequest): Phase => { const p = readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'); return /HIDDEN ACCEPTANCE CHECKS/.test(p) ? 'holdout' : /ACCEPTANCE TESTS for ONE change/.test(p) ? 'test' : /are FROZEN/.test(p) ? 'fix' : 'other'; };
 class Model implements AgentRunner {
   readonly name = 'fake'; readonly pinnedVersion = '0'; calls = 0; pf: PreflightReport; edit: (ws: string, phase: Phase) => void | Promise<void>; result: unknown;
   sessions: Array<{ phase: Phase; deny?: string[]; prompt: string }> = []; fixQueue: unknown[] = [];
@@ -39,10 +39,10 @@ class Model implements AgentRunner {
   async run(req: SessionRequest, signal: AbortSignal): Promise<SessionResult> {
     this.calls++; assert.equal(req.workspace?.writable, true); assert.ok(req.tools.allow.includes('edit') && !req.tools.allow.includes('shell'), 'no shell for the model'); assert.ok(!signal.aborted || true);
     const phase = phaseOf(req); this.sessions.push({ phase, deny: req.workspace?.denyWrite, prompt: readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8') });
-    await this.edit(req.workspace!.dir, phase); return done(phase === 'test' ? { summary: 'acceptance tests', testsAdded: ['test/sum.test.js'] } : phase === 'fix' && this.fixQueue.length ? this.fixQueue.shift() : this.result);
+    await this.edit(req.workspace!.dir, phase); return done(phase === 'test' || phase === 'holdout' ? { summary: 'acceptance tests', testsAdded: ['test/sum.test.js'] } : phase === 'fix' && this.fixQueue.length ? this.fixQueue.shift() : this.result);
   }
 }
-const goodEdit = (ws: string, phase: Phase = 'other') => { if (phase !== 'fix') { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), TEST); } if (phase !== 'test') writeFileSync(join(ws, 'sum.js'), FIXED); };
+const goodEdit = (ws: string, phase: Phase = 'other') => { if (phase === 'holdout') return; if (phase !== 'fix') { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), TEST); } if (phase !== 'test') writeFileSync(join(ws, 'sum.js'), FIXED); };
 const PASSING_ON_BASE = "const { test } = require('node:test'); const assert = require('node:assert'); const { sumTo } = require('../sum.js'); test('sumTo(0) is 0', () => assert.strictEqual(sumTo(0), 0));\n";
 
 async function setup(o: { orders?: Orders; ledger?: (l: Ledger) => void; over?: Record<string, unknown>; issueState?: boolean } = {}) {
@@ -219,6 +219,30 @@ test('ADR 0016 properties: the test session is told to prefer properties for pur
   assert.match(m.sessions[0].prompt, /prefer property-based tests[^\n]*Properties are encouraged, not required/); assert.match(none.published[0].body, /property-based tests among the frozen tests: none \(example tests only\)/);
   const prop = await setup(); t.after(prop.cleanup); const o = await prop.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'test') writeFileSync(join(ws, 'test/sum.test.js'), TEST + "// const fc = require('fast-check'); fc.assert(fc.property(fc.nat(), (n) => n >= 0));\n"); }));
   assert.equal(o.kind, 'opened', JSON.stringify(o)); assert.match(prop.published[0].body, /property-based tests among the frozen tests: test\/sum\.test\.js/);
+});
+
+const FEATURE = { ledger: (l: Ledger) => { l.facets = { workKind: 'feature', risk: 'low' }; l.approvals = { a1: { id: 'a1', type: 'feature-design', action: 'feature-scope', binding: { revision: '', policyDigest: '', evidenceDigest: '' }, bindingDigest: 'x', requestedBy: 'agent', requestedAt: 'now', expiresAt: null, status: 'approved', decidedBy: 'm' } as never }; },
+  orders: { schemaVersion: 1, programs: [{ name: 'f', tasks: ['implement', 'merge', 'review'], decision: 'allow', scope: { kinds: ['feature'], origins: ['factory'] } }] } as Orders };
+const HOLD_PASS = "const { test } = require('node:test'); const assert = require('node:assert'); const { sumTo } = require('../sum.js'); test('hidden: sumTo(3) is 3', () => assert.strictEqual(sumTo(3), 3)); // HIDDEN-SECRET-CONTENT\n";
+const HOLD_FAIL = "const { test } = require('node:test'); const assert = require('node:assert'); const { sumTo } = require('../sum.js'); test('hidden: sumTo(3) is 99', () => assert.strictEqual(sumTo(3), 99)); // HIDDEN-SECRET-CONTENT\n";
+const holdModel = (content: string) => new Model((ws, ph) => { if (ph === 'holdout') { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/holdout_a.test.js'), content); } else goodEdit(ws, ph); });
+
+test('ADR 0016 hidden checks pilot: a feature gets a holdout session that never sees the fix; checks live in a 0700 store, only pass or fail per id is shown, a failure gates nothing, and a maintainer judges it once', async (t) => {
+  const { statSync, readdirSync } = await import('node:fs');
+  const s1 = await setup(FEATURE); t.after(s1.cleanup); const dir = join(s1.root, 'holdouts'); const hcfg = { ...s1.cfg, holdoutDir: dir, holdouts: { enabled: true, command: process.execPath, args: ['--test', '{file}'], timeoutMs: 60_000 } };
+  const m = holdModel(HOLD_PASS); const o = await s1.run(m, { cfg: hcfg }); assert.equal(o.kind, 'opened', JSON.stringify(o));
+  const hs = m.sessions.find((x) => x.phase === 'holdout')!; assert.ok(hs, 'a holdout session ran'); assert.doesNotMatch(hs.prompt, /FROZEN|test\/sum\.test\.js|exports\.sumTo/, 'it never sees the coding session or the frozen tests'); assert.match(hs.prompt, /sumTo\(4\) should be 6|sumTo includes n/, 'it reads the issue');
+  const body = s1.published[0].body; assert.match(body, /hidden acceptance checks \(pilot, not a gate\): 1 run, 1 passed/); assert.doesNotMatch(body, /HIDDEN-SECRET|sumTo\(3\)|holdout_a/, 'no check content or name reaches the PR');
+  assert.equal(statSync(dir).mode & 0o777, 0o700); const f = readdirSync(join(dir, String(s1.n))); assert.equal(f.length, 1); assert.equal(statSync(join(dir, String(s1.n), f[0])).mode & 0o777, 0o600);
+  const led = await ledgerOf(s1.r, s1.published[0].number); assert.deepEqual(led.holdout?.results, [{ id: f[0].replace('.json', ''), pass: true }]); assert.equal(JSON.parse(readFileSync(join(dir, 'pilot.json'), 'utf8')).runs.length, 1);
+  const s2 = await setup(FEATURE); t.after(s2.cleanup); const dir2 = join(s2.root, 'holdouts'); const c2 = { ...s2.cfg, holdoutDir: dir2, holdouts: hcfg.holdouts };
+  const o2 = await s2.run(holdModel(HOLD_FAIL), { cfg: c2 }); assert.equal(o2.kind, 'opened', 'a failed hidden check gates nothing'); const id = readdirSync(join(dir2, String(s2.n)))[0].replace('.json', ''); assert.match(s2.published[0].body, new RegExp(`FAILED ${id}: the maintainer judges each as a real defect or a wrong check`));
+  const pr = s2.published[0].number; const say = async (as: string, kindWord: string, check = id) => { const cid = await s2.r.comment(as, pr, `/warden holdout ${check} ${kindWord} reason`); await s2.r.send({ kind: 'holdout-verdict', item: pr, itemKind: 'pr', origin: 'maintainer', actor: as, payload: { check, verdict: kindWord, reason: 'reason' }, source: { kind: 'gh-comment', id: String(cid), observedAt: new Date(s2.r.world.now()).toISOString() } }); await s2.r.writer({ assignable: () => true }).drain(); };
+  await say('rando', 'defect'); assert.equal((await ledgerOf(s2.r, pr)).holdout?.verdicts, undefined, 'a non-maintainer cannot judge');
+  await say(OPERATOR, 'defect', 'aaaaaaaaaa'); assert.equal((await ledgerOf(s2.r, pr)).holdout?.verdicts, undefined, 'an unknown check cannot be judged');
+  await say(OPERATOR, 'defect'); assert.equal((await ledgerOf(s2.r, pr)).holdout?.verdicts?.[id]?.verdict, 'defect'); await say(OPERATOR, 'wrong-check'); assert.equal((await ledgerOf(s2.r, pr)).holdout?.verdicts?.[id]?.verdict, 'defect', 'judged once');
+  const bug = await setup(); t.after(bug.cleanup); const mb = new Model(goodEdit); assert.equal((await bug.run(mb, { cfg: { ...bug.cfg, holdoutDir: join(bug.root, 'holdouts'), holdouts: hcfg.holdouts } })).kind, 'opened'); assert.ok(!mb.sessions.some((x) => x.phase === 'holdout'), 'features only'); assert.doesNotMatch(bug.published[0].body, /hidden acceptance checks/);
+  const off = await setup(FEATURE); t.after(off.cleanup); const mo = new Model(goodEdit); await off.run(mo); assert.ok(!mo.sessions.some((x) => x.phase === 'holdout'), 'off unless enabled'); assert.doesNotMatch(off.published[0].body, /hidden acceptance checks/);
 });
 
 test('takeover: abandoned contributor work is read as DATA on top of the trusted base, ported work is credited, the factory branch is separate and the contributor branch is never touched', async (t) => {

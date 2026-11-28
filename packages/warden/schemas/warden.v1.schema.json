@@ -516,6 +516,32 @@
               "maximum": 3600000
             }
           }
+        },
+        "holdouts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "command": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "args": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 3600000
+            }
+          }
         }
       }
     },

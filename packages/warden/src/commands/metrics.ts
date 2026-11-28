@@ -6,12 +6,13 @@ import type { StoredReport } from '../metrics/pilot.ts';
 import { LEDGER_MARK, parseLedger } from '../writer/protocol.ts';
 import type { Ledger } from '../state/model.ts';
 import { redact } from '../util.ts';
+import { PROMOTION, readTally } from '../verify/holdout.ts';
 
 /** PRD section 11 (owner ruling 2026-11-27): the on-demand metrics report. `warden status` shows only the pilot gate, the must-be-zero counters and the measured budgets; everything else of the
  *  tracking list is here. Only what Warden actually records is reported; the rest is listed as not tracked, never filled with an estimate. */
 export const NOT_TRACKED = ['assignment-to-ready, active execution, review wait, CI wait and fix time separately', 'claim, takeover and extension outcomes', 'auto-merge and human-escalation rates', 'maintainer effort and maintainer decisions per completed item',
   'escapes, reverts and escaped defects after merge', 'duplicate review attempts versus accepted duplicates', 'operation recovery', 'local tokens and resource usage (no source in a session result)', 'code-lookup quality and overhead',
-  'time to first response and distinct returning contributors', 'mutation score and survivors, frozen-test violations and test-dispute outcomes, verify-and-continue turns per attempt, holdout results (the loop and frozen tests are built; their counts are not persisted)', 'boundary-change escalations', 'how often review ran on the same model family as the writer'];
+  'time to first response and distinct returning contributors', 'mutation score and survivors, frozen-test violations and test-dispute outcomes, verify-and-continue turns per attempt (built; their counts are not persisted)', 'boundary-change escalations', 'how often review ran on the same model family as the writer'];
 const days = (ms: number) => Math.round((ms / 86_400_000) * 10) / 10;
 
 export async function metrics(c: Ctx): Promise<Result> {
@@ -37,6 +38,12 @@ export async function metrics(c: Ctx): Promise<Result> {
     out.remote = { reachable: true, states, reviewsByModelAndTier: byModel, reviewsWithoutProvenance: unrecorded, reviewsRecorded: reviewed };
     lines.push(`open items by state (count, oldest in days): ${Object.entries(states).map(([k, v]) => `${k} ${v.n} (${v.oldestDays}d)`).join('; ') || 'none'}`, `accepted reviews recorded on open items: ${reviewed}; by model and tier: ${Object.entries(byModel).map(([k, v]) => `${k} ${v}`).join('; ') || 'none'}${unrecorded ? `; ${unrecorded} without provenance (recorded before it existed)` : ''}`);
   } catch (e) { out.remote = { reachable: false, reason: redact(String((e as Error).message)).slice(0, 160) }; lines.push('remote: unreachable; state counts and review provenance are unknown'); }
+  // The hidden-checks pilot (ADR 0016): runs from the local tally, verdicts from the PR ledgers. Promotion to a gate is the owner's call; this only shows the evidence against the bar he ruled.
+  const runs = readTally(st.path('holdouts', 'pilot.json')); let catches = 0; let wrong = 0; let unjudged = 0; let verdictSource = 'not read (the remote is unreachable)';
+  if (store) try { verdictSource = 'every pull request ledger'; for (const it of await store.listIssues({ state: 'all' })) { if (!it.isPr) continue; const lc = (await store.listComments(it.number)).find((x) => x.body.startsWith(LEDGER_MARK)); const l = lc ? (parseLedger(lc.body) as Ledger | null) : null; if (!l?.holdout) continue; for (const r of l.holdout.results) { if (r.pass) continue; const v = l.holdout.verdicts?.[r.id]?.verdict; if (v === 'defect') catches++; else if (v === 'wrong-check') wrong++; else unjudged++; } } } catch { verdictSource = 'not read (the remote could not be queried)'; }
+  const met = catches >= PROMOTION.minCatches && runs.length >= PROMOTION.minRuns && wrong === 0;
+  out.holdoutPilot = { runs: runs.length, failedChecksRun: runs.reduce((t, r) => t + r.failed, 0), confirmedDefects: catches, wrongChecks: wrong, unjudgedFailures: unjudged, verdictSource, bar: PROMOTION, barMet: met };
+  lines.push(`hidden-checks pilot: ${runs.length} run(s); failed checks judged a real defect ${catches}, a wrong check ${wrong}, awaiting a verdict ${unjudged} (from ${verdictSource}); bar for a gate: ${PROMOTION.minCatches} confirmed catches and ${PROMOTION.minRuns} runs with no wrong check: ${met ? 'MET (the owner decides whether to promote it)' : 'not met'}. Whether the frozen tests, mutation and review also missed a confirmed defect is not tracked`);
   out.notTracked = NOT_TRACKED; lines.push('not tracked yet (no instrumentation, so no number is shown):', ...NOT_TRACKED.map((x) => `  - ${x}`));
   return { code: 0, data: out, text: lines.join('\n') };
 }
