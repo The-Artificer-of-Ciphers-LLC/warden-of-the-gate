@@ -163,6 +163,7 @@ export class OpenCodeRunner implements AgentRunner {
     const c = classifyBaseURL(this.o.baseURL);
     if (!c.local) failures.push(`provider endpoint is not loopback: ${c.reason}`);
     else {
+      rep.tier = 'local-unverified'; try { rep.endpoint = new URL(this.o.baseURL).host; } catch { /* unparsable: recorded as unknown */ }   // loopback, but the server's own egress is not enforced
       try {
         const r = await fetch(this.o.baseURL.replace(/\/$/, '') + '/models', { signal: AbortSignal.timeout(3000) }); const j: any = await r.json().catch(() => ({}));
         if (r.status !== 200 || !(Array.isArray(j.data) && j.data.some((m: any) => m.id === this.o.modelId))) failures.push(`local endpoint unhealthy or model "${this.o.modelId}" not served (status ${r.status})`);

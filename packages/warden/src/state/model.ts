@@ -78,7 +78,7 @@ export interface Ledger {
   /** Set by deliberate adoption: an existing draft was kept; policy closure does not apply to it. */
   draftDecision?: 'keep';
   /** Latest accepted AI review summary, recorded through a live-mode `review-record` intent (never in shadow). Severities only: no finding text is copied. */
-  review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; /** parallel to `severities`: which finding each severity belongs to, so a dismissal can remove it */ fingerprints?: string[]; policyDigest?: string; acceptedAt: string };
+  review?: { head: string; base: string; verdict: string; severities: Array<'blocker' | 'major' | 'minor' | 'nit'>; /** parallel to `severities`: which finding each severity belongs to, so a dismissal can remove it */ fingerprints?: string[]; policyDigest?: string; /** tier, endpoint and exact model of the session that produced it (owner ruling 2026-11-27); absent on reviews recorded before it existed, never guessed */ provenance?: { tier: string; endpoint: string; model: string; harness: string }; acceptedAt: string };
   /** A maintainer asked for a full review of this PR (`/warden review`); cleared when a review accepted after that moment is recorded. */
   forceReview?: { by: string; at: string };
   /** Findings a maintainer dismissed (`/warden dismiss <fingerprint>`); a dismissed finding stays dismissed while its code is unchanged (the fingerprint includes the anchor text). */

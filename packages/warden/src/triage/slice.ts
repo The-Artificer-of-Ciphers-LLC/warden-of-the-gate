@@ -1,3 +1,5 @@
+import { provenanceOf } from '../runner/provenance.ts';
+import type { Provenance } from '../runner/provenance.ts';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +17,7 @@ import type { TriageOutput } from './schema.ts';
 /** P3 Triage (shadow): one local, read-only triage of ONE issue. Same discipline as the review slice: persisted attempts before the session,
  *  whole-result rejection, bound to the issue revision it saw, unchanged revision reuses the accepted result with no model call, nothing is posted,
  *  labelled or closed. The result is a draft proposal card only the maintainer sees. */
-export interface TriageMarker { revision: string; output: TriageOutput; acceptedAt: string; policyDigest?: string }
+export interface TriageMarker { revision: string; output: TriageOutput; acceptedAt: string; policyDigest?: string; /** The endpoint tier, endpoint and exact model that produced this verdict (owner ruling 2026-11-27). */ provenance?: Provenance }
 export interface TriageRecord { v: 1; item: number; attempts: { used: number }; marker: TriageMarker | null; card: { text: string; posted: false; revision: string } | null; log: Array<{ at: string; event: string; detail?: string }> }
 export interface TriageKV { read(item: number): TriageRecord | null; write(item: number, r: TriageRecord): void }
 export interface TriageOpts { store: Store; item: number; runner: AgentRunner; kv: TriageKV; cfg: ReviewConfig; stopped: () => boolean | Promise<boolean>; signal?: AbortSignal; clock?: () => number; policyDigest?: string }
@@ -72,7 +74,7 @@ export async function runTriage(o: TriageOpts): Promise<TriageOutcome> {
   const output = res.output as TriageOutput; const why = incomplete(output); if (why) return fail(`The schema was fine, but the result is incomplete: ${why}. Rejected whole.`, `incomplete:${why}`);
   let again: IssueState; let c2: Comment[]; try { again = await store.getIssue(o.item); c2 = await store.listComments(o.item); } catch { return fail('The issue could not be re-read to confirm its revision. Rejected.', 'revision-unconfirmed'); }
   if (revisionOf(again, c2) !== revision || again.state !== 'open') return fail('The issue changed while the triage ran. A triage is bound to the revision it saw, so it is rejected as stale.', 'revision-moved');
-  rec.marker = { revision, output, acceptedAt: iso(now()), policyDigest: o.policyDigest };
+  rec.marker = { revision, output, acceptedAt: iso(now()), policyDigest: o.policyDigest, provenance: provenanceOf(pf, o.runner.name) };
   const cardText = ((): string => { switch (output.outcome) {
     case 'likely-bug': return `Recommend: treat as a likely ${output.severity} bug (risk ${output.risk}); needs trusted reproduction before it is confirmed.`;
     case 'needs-info': return `Recommend: ask the reporter ${output.questions!.length} precise question(s).`;

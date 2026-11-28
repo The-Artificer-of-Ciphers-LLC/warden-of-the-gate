@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import type { PullInfo, Store } from '../github/store.ts';
 import { readOnly } from '../github/store.ts';
 import { runValidated } from '../runner/agent-runner.ts';
+import { provenanceOf } from '../runner/provenance.ts';
+import type { Provenance } from '../runner/provenance.ts';
 import type { AgentRunner, Budgets, PreflightReport } from '../runner/agent-runner.ts';
 import { iso } from '../util.ts';
 import { reviewResultSchema } from './schema.ts';
@@ -17,6 +19,8 @@ import type { ContextPack, ContextSummary } from './context.ts';
  *  components (store, runner seam, Ajv, persistence). There is deliberately NO code path that posts, merges or edits a contributor branch: the
  *  store handed to the scan is wrapped read-only, so a write throws instead of happening. The result is a local draft decision card only. */
 export interface Marker { head: string; base: string; verdict: ReviewOutput['verdict']; findings: Finding[]; ci: PullInfo['ci']; acceptedAt: string; policyDigest?: string; context?: ContextSummary;
+  /** The endpoint tier, endpoint and exact model that produced this verdict (owner ruling 2026-11-27). Absent only on records written before it existed. */
+  provenance?: Provenance;
   /** Trusted policy, workflow or rule files this head changes (config/trusted.ts). Non-empty: reviewed in full and decided by a maintainer. */
   trustedInputs?: string[] }
 export interface Card { text: string; posted: false; head: string }
@@ -137,7 +141,7 @@ export async function runReview(o: ReviewOpts): Promise<ReviewOutcome> {
 
   const findings = annotate(output.findings, pull.files);   // fingerprints, inline flags and repeated findings collapsed; the ledger keeps this full list
   const open = findings.length;
-  rec.marker = { head: pull.head, base: pull.base, verdict: output.verdict, findings, ci: after.ci, acceptedAt: iso(now()), policyDigest: o.policyDigest, ...(ctx ? { context: ctx } : {}), ...(trusted.length ? { trustedInputs: trusted } : {}) };
+  rec.marker = { head: pull.head, base: pull.base, verdict: output.verdict, findings, ci: after.ci, acceptedAt: iso(now()), policyDigest: o.policyDigest, provenance: provenanceOf(pf, o.runner.name), ...(ctx ? { context: ctx } : {}), ...(trusted.length ? { trustedInputs: trusted } : {}) };
   rec.card = { text: `${open ? `Recommend: request changes (${findings.filter((f) => f.severity === 'blocker').length} blocker(s), ${open} finding(s)).` : 'Recommend: no review findings. Merge still needs checks and authority.'}${ctx && ctx.status !== 'complete' ? ` Repository context: ${ctx.status}${ctx.reason ? ` (${ctx.reason})` : ''}.` : ''}${trusted.length ? ` Maintainer decision required: this pull request changes trusted policy, workflow or rule files (${trusted.join(', ')}). It was reviewed in full under the base branch's rules, and no standing order can merge it.` : ''}`, posted: false, head: pull.head };
   rec.attempts.used = 0;
   const prior = m ? m.findings.length : 0;
