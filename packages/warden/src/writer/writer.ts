@@ -207,7 +207,7 @@ export class Writer {
         const sourceVerified = await this.verifySource(intent);
         const linkedPr = intent.kind === 'submission' && typeof (intent.payload as { pr?: unknown }).pr === 'number' ? await this.store.getIssue((intent.payload as { pr: number }).pr).catch(() => undefined) : undefined;
         const replaced = intent.kind === 'carry-accounting' && typeof (intent.payload as { replaces?: unknown }).replaces === 'number' ? await this.loadLedgerReadOnly((intent.payload as { replaces: number }).replaces) : undefined;
-        const pullObs = intent.kind === 'merge-request' ? await this.store.getPull(intent.item).catch(() => undefined) : undefined;
+        const pullObs = intent.kind === 'merge-request' || intent.kind === 'review-post' ? await this.store.getPull(intent.item).catch(() => undefined) : undefined;
         const observed = intent.kind === 'sweep-action' ? await this.observeSweep(intent, iss) : undefined;
         const claimant = intent.kind === 'claim' ? (intent.payload as { claimant?: { kind?: string; id?: string } }).claimant : undefined;
         const claimantOk = claimant?.kind === 'contributor' && claimant.id && this.store.canAssign ? await this.store.canAssign(claimant.id) : undefined;   // GitHub's own answer, read at decision time; a failed lookup retries, it never guesses
@@ -293,7 +293,8 @@ export class Writer {
   private planProblem(plan: readonly Effect[]): string | null {
     const r = this.outgoingRules();
     for (const e of plan) {
-      const why = e.t === 'comment' ? checkOutgoingText(e.text, r) : e.t === 'label' ? checkOutgoingLabels([...(e.add ?? []), ...(e.remove ?? [])], r) : null;
+      const texts = e.t === 'comment' ? [e.text] : e.t === 'review' ? [e.body, ...e.comments.map((x) => x.body)] : e.t === 'check-run' ? [e.title, e.summary] : [];
+      const why = texts.map((t) => checkOutgoingText(t, r)).find(Boolean) ?? (e.t === 'label' ? checkOutgoingLabels([...(e.add ?? []), ...(e.remove ?? [])], r) : null);
       if (why) return why;
     }
     return null;
@@ -334,6 +335,20 @@ export class Writer {
       const lr = checkOutgoingLabels([...(e.add ?? []), ...(e.remove ?? [])], this.outgoingRules()); if (lr) throw new OutgoingBlocked(lr);
       for (const a of e.add ?? []) await this.store.addLabel(i.item, a);
       for (const r of e.remove ?? []) await this.store.removeLabel(i.item, r);
+    } else if (e.t === 'review' || e.t === 'check-run') {
+      const r = this.outgoingRules(); const texts = e.t === 'review' ? [e.body, ...e.comments.map((x) => x.body)] : [e.title, e.summary];
+      for (const t of texts) { const why = checkOutgoingText(t, r); if (why) throw new OutgoingBlocked(why); }
+      const sha = e.t === 'review' ? e.commitId : e.headSha;
+      if ((await this.store.getPull(i.item)).head !== sha) throw new StaleMerge(`head moved before the ${e.t} was posted (reviewed ${sha.slice(0, 8)})`);   // bound to the reviewed head: never posted against another
+      const marker = `${i.opid}:${idx}`;
+      if (e.t === 'review') {
+        if (!this.store.createReview || !this.store.listReviews) throw new Error('this store cannot post reviews');
+        const tag = `<!-- ${EFFECT_MARK}:${marker} -->`;
+        if (!(await this.store.listReviews(i.item)).some((x) => x.body.includes(tag))) { await this.store.createReview(i.item, { commitId: e.commitId, body: `${tag}\n${e.body}`, comments: e.comments }); if (this.faults.take('effect-reply-lost:review')) throw new NetworkError('reply lost after effect review'); }
+      } else {
+        if (!this.store.createCheckRun || !this.store.listCheckRuns) throw new Error('this store cannot post check runs');
+        if (!(await this.store.listCheckRuns(e.headSha)).some((x) => x.externalId === marker)) { await this.store.createCheckRun({ name: 'Warden review', headSha: e.headSha, conclusion: e.conclusion, title: e.title, summary: e.summary, externalId: marker }); if (this.faults.take('effect-reply-lost:check-run')) throw new NetworkError('reply lost after effect check run'); }
+      }
     } else {
       const why = checkOutgoingText(e.text, this.outgoingRules()); if (why) throw new OutgoingBlocked(why);
       const tag = `<!-- ${EFFECT_MARK}:${i.opid}:${idx} -->`;

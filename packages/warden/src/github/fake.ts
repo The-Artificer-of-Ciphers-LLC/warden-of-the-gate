@@ -19,6 +19,9 @@ export class FakeWorld {
   down = false;
   /** Test knob: logins GitHub would refuse to assign on this repository. */
   nonAssignable = new Set<string>();
+  /** Posted reviews and check runs (the simulated GitHub keeps them so tests can read them back). */
+  reviews: Array<{ id: number; item: number; body: string; commitId: string; author: string; comments: Array<{ path: string; line: number; body: string }> }> = [];
+  checkRuns: Array<{ id: number; name: string; headSha: string; externalId: string; conclusion: string; title: string; summary: string }> = [];
   view(actor: string, faults = new Faults()): FakeStore { return new FakeStore(this, actor, faults); }
   now() { return this.clock ?? Date.now(); }
   addIssue(o: Partial<IssueState> & { title?: string } = {}): number {
@@ -66,6 +69,10 @@ export class FakeStore implements Store {
     return { number: n, headRef: i.pull.headRef, title: i.title, author: i.author, draft: !!i.draft, state: i.state, merged: !!i.pull.merged, approvals: [...(i.pull.approvals ?? [])], head: i.pull.head, base: i.pull.base, ci: i.pull.ci, files: i.pull.files.map((f) => ({ ...f })) };
   }
   async listIssues(o: { state?: 'open' | 'closed' | 'all' } = {}) { await this.lat(); return [...this.w.issues.values()].filter((i) => !o.state || o.state === 'all' || i.state === o.state).map((i) => this.view(i)); }
+  async createReview(n: number, o: { commitId: string; body: string; comments: Array<{ path: string; line: number; body: string }> }) { await this.lat(); this.issue(n); const id = this.w.nextId++; this.w.reviews.push({ id, item: n, body: o.body, commitId: o.commitId, author: this.who, comments: o.comments.map((c) => ({ ...c })) }); this.touch(); await this.maybeLost('createReview'); return { id }; }
+  async listReviews(n: number) { await this.lat(); return this.w.reviews.filter((r) => r.item === n).map((r) => ({ id: r.id, body: r.body, commitId: r.commitId, author: r.author })); }
+  async createCheckRun(o: { name: string; headSha: string; conclusion: 'success' | 'neutral' | 'action_required'; title: string; summary: string; externalId: string }) { await this.lat(); const id = this.w.nextId++; this.w.checkRuns.push({ id, name: o.name, headSha: o.headSha, externalId: o.externalId, conclusion: o.conclusion, title: o.title, summary: o.summary }); this.touch(); await this.maybeLost('createCheckRun'); return { id }; }
+  async listCheckRuns(headSha: string) { await this.lat(); return this.w.checkRuns.filter((c) => c.headSha === headSha).map((c) => ({ id: c.id, name: c.name, externalId: c.externalId, conclusion: c.conclusion })); }
   async canAssign(login: string) { await this.lat(); return !this.w.nonAssignable.has(login); }
   async addAssignee(n: number, login: string) { await this.lat(); const i = this.issue(n); if (!i.assignees.includes(login)) i.assignees.push(login); this.touch(); await this.maybeLost('addAssignee'); }
   async addLabel(n: number, label: string) {
