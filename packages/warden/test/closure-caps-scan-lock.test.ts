@@ -29,7 +29,7 @@ test('scan lock: a lock left by a process that no longer exists is reclaimed; a 
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
-const finding = (item: number) => ({ item, itemKind: 'issue' as const, state: 'needs-info', due: { kind: 'close-information' as const, since: '2026-10-01T00:00:00.000Z' }, obs: { keepOpen: false, draft: false, authorLastActivityAt: null } as never });
+const finding = (item: number) => ({ item, itemKind: 'issue' as const, state: 'needs-info', due: { kind: 'close-information' as const, clock: 'other-information', since: '2026-10-01T00:00:00.000Z' }, obs: { keepOpen: false, draft: false, authorLastActivityAt: null } as never });
 const nudge = (item: number) => ({ item, itemKind: 'issue' as const, state: 'needs-info', due: { kind: 'nudge' as const, hours: 48 as const, since: '2026-10-01T00:00:00.000Z' } as never, obs: { keepOpen: false, draft: false, authorLastActivityAt: null } as never });
 
 test('closure caps: at most `perRun` closures are submitted, the day allowance is honoured, excess closures are deferred and reported, and non-closing actions are not capped', async () => {
