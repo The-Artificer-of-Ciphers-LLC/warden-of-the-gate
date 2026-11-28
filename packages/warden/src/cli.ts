@@ -10,6 +10,7 @@ import { run } from './commands/run.ts';
 import { status } from './commands/status.ts';
 import { metrics } from './commands/metrics.ts';
 import { decisionCard } from './commands/decision-card.ts';
+import { designCard } from './commands/design-card.ts';
 import { resume, stop } from './commands/control.ts';
 import { eventHandle, journalReconcile, writerDrain } from './commands/writer.ts';
 import { approvals } from './commands/approvals.ts';
@@ -30,6 +31,7 @@ const HELP = `warden ${CLI_VERSION}  (warden.yml schema v${WARDEN_SCHEMA_VERSION
   run --task <intake|triage|claim|implement|review|rework|sweep|retro> [--dry-run] [--item N]
   status [--json]                           (pilot gate, must-be-zero counters, measured budgets)
   decision-card --item N [--json]           (the card a maintainer reads before deciding on implementation work; read-only, posts nothing)
+  design-card --item N [--json]             (the proposed design to answer before work that crosses a boundary class is built; read-only)
   metrics [--json]                          (the on-demand metrics report: everything else PRD section 11 tracks)
   stop [--global] [--reason text]          resume --confirm [--global]
   writer drain                              (the one serialized effect path; Actions entry point)
@@ -63,6 +65,7 @@ export async function main(argv: string[], io: { env?: NodeJS.ProcessEnv; cwd?: 
     else if (a === 'status') r = await status(c);
     else if (a === 'metrics') r = await metrics(c);
     else if (a === 'decision-card') r = await decisionCard(c);
+    else if (a === 'design-card') r = await designCard(c);
     else if (a === 'stop') r = await stop(c);
     else if (a === 'resume') r = await resume(c);
     else if (a === 'writer' && b === 'drain') r = await writerDrain(c);

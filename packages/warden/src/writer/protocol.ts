@@ -9,7 +9,7 @@ export const INTENT_MARK = '<!-- warden-intent:v1 -->';
 export const RECEIPT_MARK = '<!-- warden-receipt:v1 -->';
 export const LEDGER_MARK = '<!-- warden-ledger:v1 -->';
 export const EFFECT_MARK = 'warden-effect';
-export const INTENT_KINDS = ['claim', 'release', 'note', 'transition', 'override', 'approval-request', 'approval-decision', 'revision-update', 'sweep-action', 'intake', 'review-round', 'submission', 'hold', 'hold-release', 'reconcile', 'adopt', 'review-record', 'review-post', 'force-review', 'dismiss-finding', 'clear-mutant', 'holdout-verdict', 'merge-request', 'rework-attempt', 'carry-accounting', 'critical-escape', 'resume-scope', 'link-pr'] as const;
+export const INTENT_KINDS = ['claim', 'release', 'note', 'transition', 'override', 'approval-request', 'approval-decision', 'revision-update', 'sweep-action', 'intake', 'review-round', 'submission', 'hold', 'hold-release', 'reconcile', 'adopt', 'review-record', 'review-post', 'force-review', 'dismiss-finding', 'clear-mutant', 'holdout-verdict', 'design-decision', 'merge-request', 'rework-attempt', 'carry-accounting', 'critical-escape', 'resume-scope', 'link-pr'] as const;
 export type IntentKind = (typeof INTENT_KINDS)[number];
 /** Who produced the proposal: AI results are blocked in shadow mode; maintainer-origin intents need a verified GitHub source. */
 export type Origin = 'deterministic' | 'ai' | 'maintainer';
