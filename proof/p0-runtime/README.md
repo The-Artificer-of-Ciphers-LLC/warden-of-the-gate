@@ -98,10 +98,24 @@ changes in how it is observed:
   inference stream the harness opens and when the harness hangs up on it. D1 requires every stream open at the interrupt
   to be hung up within 3 s and no new one to start. D5 requires the killed harness's stream to hang up and none to be
   open after recovery.
-- **D1b is UNVERIFIED.** Whether mlx-serve itself stops decoding once the client hangs up is not observable here:
-  mlx-serve documents no per-request or in-flight status (only `/health`, `/props`, and `/metrics.json` with
-  `--metrics`, whose keys are undocumented), and it is shared with the maintainer's own Warden reviews. The proof records
-  any `/metrics.json` numbers for a human reader and does not guess a key name.
+- **D1b reads mlx-serve's cancelled-request counter.** mlx-serve documents `/metrics.json` (with `--metrics`) but not
+  its keys. On the maintainer's build (observed 2026-11-28) it reports `counters.requests_cancelled_total` and
+  `gauges.requests_running`. D1b is required when that counter is served: it must rise by at least the number of streams
+  the harness hung up, which is mlx-serve's own record that it stopped those requests. Another client's cancel on the
+  shared server can only raise the counter, never hide ours. Without the counter, D1b stays UNVERIFIED and is never
+  guessed from other keys.
+- **Long generation** (2026-11-28 rerun): the Flash model finished a "2000-word essay" in about one second, before the
+  interrupt (D1, D2), the kill (D5) or the 8 s budget (E4) could act, so those checks judged nothing. They now ask for
+  a count to five thousand in words with a 16384-token output limit (half the served context at most), and D1 and D5 wait
+  until the tap sees bytes still arriving on an open stream before they interrupt or kill. D1 and D5 fail if generation
+  never starts, so a fast model can no longer pass them or fail them for the wrong reason.
+- **C4 compares the resolved model with the configured default.** On 2.2.7 the hardened hosted-default case resolved
+  to another LM Studio model OpenCode found by itself, which failed the expected-model check. On 2.4.1 that provider is
+  denied and only the expected model is declared, so OpenCode substituted the expected model and the case passed by
+  accident. The preflight now also rejects any resolution that differs from the configured default, and the case
+  declares a second local model to substitute. This was a gap in the proof, not in the Warden adapter: the adapter
+  writes the expected model as the configured default, so "differs from configured" and "differs from expected" are the
+  same test there.
 - **Isolation** checks the model server port 11234 instead of 1235. If nothing listens there, the proof opens a
   stand-in listener, so `--fast` needs no model server. It connects first and never binds beside a running server.
 - **Shared server**: the full runtime run sends its requests to the same mlx-serve the maintainer's agent uses, so both
@@ -109,4 +123,4 @@ changes in how it is observed:
 
 ### Not proven
 
-mlx-serve stopping decoding on client hang-up (D1b); other macOS majors; Docker/Apple `container`; nested sandboxes (Swift macros); reliability statistics beyond 5 structured runs of one model; CodeGraphContext and Atlas execution (P3); the inbox/writer track (separate session).
+mlx-serve stopping decoding on client hang-up where `/metrics.json` has no cancelled counter (D1b); other macOS majors; Docker/Apple `container`; nested sandboxes (Swift macros); reliability statistics beyond 5 structured runs of one model; CodeGraphContext and Atlas execution (P3); the inbox/writer track (separate session).

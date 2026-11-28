@@ -13,7 +13,7 @@ import { cleanup, createSession, harnessEnv, inSupportedRange, messages, OPENCOD
 import { inferenceRequests, startModelTap, startRefusingProxy, proxyEnv } from '../lib/proxy.ts';
 import {
   awaitCompletion, cfgFor, classifyBaseURL, extractJson, FORWARDERS, freePort, HARDEN_ENV, LOCAL_MODEL_ID, LOCAL_PROVIDER_ID, metricsSnapshot,
-  MODEL_BASE_URL, MODEL_PORT, modelPortOwners, preflightResolve, proofContextLimit, reviewPrompt, servedModel, validateReview, REVIEW_SCHEMA,
+  LONG_GENERATION, LONG_OUTPUT_LIMIT, MODEL_BASE_URL, MODEL_PORT, modelPortOwners, preflightResolve, proofContextLimit, reviewPrompt, servedModel, validateReview, REVIEW_SCHEMA,
 } from '../lib/runtime-common.ts';
 import { realpath, requireContainment, type ContainmentSpec } from '../lib/seatbelt.ts';
 
@@ -187,7 +187,7 @@ async function sectionC(r: Report) {
   // live: good config
   const s1 = await boot(cfgFor(), ws);
   const EXPECT = { providerID: LOCAL_PROVIDER_ID, modelID: LOCAL_MODEL_ID };
-  const pf1 = await preflightResolve(s1, { probe: true, expect: EXPECT });
+  const pf1 = await preflightResolve(s1, { probe: true, expect: EXPECT, configured: `${LOCAL_PROVIDER_ID}/${LOCAL_MODEL_ID}` });
   check(r, { id: 'C2-resolved-local-accepted', claim: 'preflight asks the running harness for the RESOLVED model; default resolves to the loopback mlx-serve endpoint, only that provider is enabled, endpoint healthy and serving the model', expected: 'ok=true', observed: pf1, pass: pf1.ok && pf1.enabledProviders.length === 1 && pf1.endpoint?.modelListed === true });
   const sesOk = await createSession(s1, { directory: ws, permissions: [DENY_ALL] });
   const runOk = await runPrompt(s1, sesOk.id, 'Reply with the single word: pong');
@@ -198,16 +198,17 @@ async function sectionC(r: Report) {
   const px = await startRefusingProxy();
   const cases: Array<[string, Record<string, unknown>, boolean, string[]]> = [
     ['default model is hosted (opencode/big-pickle), harness UNhardened: resolves hosted', cfgFor({ defaultModel: 'opencode/big-pickle', denyHosted: false }), false, ['unhardened']],
-    ['default model is hosted, harness hardened: silently substitutes ANOTHER local model (resolved != configured)', cfgFor({ defaultModel: 'opencode/big-pickle' }), false, []],
+    // A second declared local model gives OpenCode another local model to substitute, as LM Studio's model list did on 2.2.7.
+    ['default model is hosted, harness hardened: silently substitutes ANOTHER local model (resolved != configured)', cfgFor({ defaultModel: 'opencode/big-pickle', extraModels: { 'warden-proof-decoy': { name: 'warden-proof-decoy', limit: { context: 4096, output: 512 } } } }), false, []],
     ['"mlx-serve" provider baseURL points at a remote host', cfgFor({ baseURL: 'https://api.example.invalid/v1' }), false, []],
     ['configured-local default but hosted provider left enabled (ambient)', cfgFor({ denyHosted: false }), false, []],
   ];
   const outs: any[] = [];
   for (const [name, cfg, wantOk] of cases) {
     const s = await boot(cfg, ws, proxyEnv(px.port), !(name.startsWith('configured-local') || name.includes('UNhardened')));
-    const pf = await preflightResolve(s, { probe: true, expect: EXPECT });
+    const pf = await preflightResolve(s, { probe: true, expect: EXPECT, configured: String(cfg.model) });
     const sessionsBefore = (await s.api('GET', '/api/session')).body?.data?.length ?? 0;
-    outs.push({ name, ok: pf.ok, wantOk, resolved: pf.resolved ? `${pf.resolved.providerID}/${pf.resolved.modelID}@${pf.resolved.host}` : null, reasons: pf.reasons.slice(0, 2), sessionsCreatedByPreflight: sessionsBefore });
+    outs.push({ name, ok: pf.ok, wantOk, resolved: pf.resolved ? `${pf.resolved.providerID}/${pf.resolved.modelID}@${pf.resolved.host}` : null, reasons: pf.reasons.slice(0, 3), sessionsCreatedByPreflight: sessionsBefore });
     await s.stop(); cleanup(s);
   }
   check(r, { id: 'C4-remote-resolution-rejected', claim: 'each configuration that resolves (or could resolve) to a non-local provider is rejected by preflight before any session is created', expected: 'all rejected', observed: outs, pass: outs.every((o) => o.ok === o.wantOk && o.sessionsCreatedByPreflight === 0) });
@@ -261,17 +262,27 @@ async function sectionD(r: Report) {
   // harness opens and when the harness hangs up on it. The tap passes the hang-up on, so mlx-serve sees what it would see without it.
   // It also keeps this proof's streams apart from the maintainer's own Warden reviews on the same mlx-serve.
   const tap = await startModelTap(MODEL_PORT);
-  const tapCfg = () => cfgFor({ baseURL: tap.baseURL });
+  const longOut = Math.min(LONG_OUTPUT_LIMIT, Math.floor(proofContextLimit() / 2));
+  const tapCfg = () => cfgFor({ baseURL: tap.baseURL, outputLimit: longOut });
+  /** Wait until the harness has an inference stream open whose bytes are still growing (the model is generating right now). */
+  const waitGenerating = async (timeoutMs: number) => {
+    for (const t = Date.now(); Date.now() - t < timeoutMs; ) {
+      const open = openStreams(); const before = open.map((x) => x.bytesDown);
+      await sleep(1000);
+      if (open.some((x, i) => x.completedAt === undefined && x.clientClosedAt === undefined && x.bytesDown > before[i])) return true;
+    }
+    return false;
+  };
   const openStreams = (before = Infinity) => inferenceRequests(tap, 0, before).filter((x) => x.completedAt === undefined && x.clientClosedAt === undefined);
   let s = await boot(tapCfg(), ws);
   const writeTools = [DENY_ALL, allow('read'), allow('write'), allow('edit'), allow('apply_patch')];
   // D1 interrupt mid-generation, with a workspace write already done
   let ses = await createSession(s, { directory: ws, permissions: writeTools });
-  const LONG = 'First, use your file-writing tool to create the file notes.txt containing exactly: PARTIAL-WORK. Only after that, write a very long 2000-word essay about lighthouse history. Do not stop early.';
+  const LONG = 'You are an automated test harness. You MUST call the named tool with the exact arguments given; never describe or simulate a call. Step 1: call the write tool to create the file notes.txt with exactly this content: PARTIAL-WORK. Step 2: only after that tool call has completed, do this: ' + LONG_GENERATION;
   const p1 = await prompt(s, ses.id, LONG);
   let wrote = false;
   for (let i = 0; i < 120 && !wrote; i++) { await sleep(1000); wrote = existsSync(path.join(ws, 'notes.txt')); }
-  await sleep(4000); // let the essay start streaming
+  const generatingAtInterrupt = wrote && await waitGenerating(60000); // the long count must be streaming when the interrupt lands
   const metricsBefore = await metricsSnapshot();
   const t0 = Date.now();
   const openAtInterrupt = openStreams(t0); // live records: their clientClosedAt fills in when the harness hangs up
@@ -286,11 +297,17 @@ async function sectionD(r: Report) {
   const m1 = await messages(s, ses.id);
   const sm1 = summarize(m1);
   const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  check(r, { id: 'D1-interrupt-stops-generation', claim: 'interrupt returns, session records outcome=interrupted, and the harness stops the generation it asked for: every inference stream open at the interrupt is hung up within 3s (observed on the wire by the tap) and no new inference request starts', expected: 'interrupted; >=1 open stream, all hung up <=3s; 0 new', observed: { interrupt: ir.body, outcome: done.outcome, stopMs, streamsOpenAtInterrupt: streams, startedAfterInterrupt }, pass: ir.body?.interrupted === true && done.outcome === 'interrupted' && allHungUp && startedAfterInterrupt === 0 });
-  // LM Studio reported generating -> idle per model; mlx-serve documents no in-flight or per-request status (only /health, /props and,
-  // with --metrics, /metrics.json whose keys are undocumented), and it is shared with the maintainer's reviews. So the server-side half
-  // of the claim is recorded, never guessed from a key name.
-  check(r, { id: 'D1b-server-stops-decoding', claim: 'UNVERIFIED on mlx-serve: after the hang-up the model server itself stops decoding (not exactly observable: mlx-serve documents no per-request status, and other clients may share it)', expected: 'mlx-serve per-request status (none documented)', observed: { metricsBefore, metricsAfter, note: 'metrics are recorded for a human reader; pass=false here is "not proven", not "failed"' }, pass: false, severity: 'unverified' });
+  check(r, { id: 'D1-interrupt-stops-generation', claim: 'interrupt returns, session records outcome=interrupted, and the harness stops the generation it asked for: every inference stream open at the interrupt is hung up within 3s (observed on the wire by the tap) and no new inference request starts', expected: 'generating at interrupt; interrupted; >=1 open stream, all hung up <=3s; 0 new', observed: { generatingAtInterrupt, interrupt: ir.body, outcome: done.outcome, stopMs, streamsOpenAtInterrupt: streams, startedAfterInterrupt }, pass: generatingAtInterrupt && ir.body?.interrupted === true && done.outcome === 'interrupted' && allHungUp && startedAfterInterrupt === 0 });
+  // Server side: mlx-serve documents /metrics.json (with --metrics) but not its keys. The owner's build (2026-11-28) reports
+  // counters.requests_cancelled_total and gauges.requests_running. Each stream the harness hung up must show up as a cancelled
+  // request on the server, i.e. mlx-serve stopped it. The server is shared, so the counter can only rise by MORE (another client's
+  // cancel), never hide one of ours. Without those keys the claim stays UNVERIFIED rather than guessed.
+  const cancelled = (m: Awaited<ReturnType<typeof metricsSnapshot>>) => m.numbers?.['counters.requests_cancelled_total'];
+  const cBefore = cancelled(metricsBefore); const cAfter = cancelled(metricsAfter);
+  const observable = typeof cBefore === 'number' && typeof cAfter === 'number';
+  const cancelledDelta = observable ? cAfter! - cBefore! : null;
+  const serverPick = (m: Awaited<ReturnType<typeof metricsSnapshot>>) => ({ status: m.status, requestsCancelledTotal: cancelled(m), requestsRunning: m.numbers?.['gauges.requests_running'], requestsWaiting: m.numbers?.['gauges.requests_waiting'], generationTokensTotal: m.numbers?.['counters.generation_tokens_total'] });
+  check(r, { id: 'D1b-server-stops-decoding', claim: 'the model server itself stops decoding once the harness hangs up: mlx-serve counts each hung-up stream as a cancelled request (/metrics.json counters.requests_cancelled_total rises by at least the number of hung-up streams within ~3s)', expected: observable ? `cancelled delta >= ${openAtInterrupt.length} (and >= 1)` : 'UNVERIFIED: /metrics.json not served or has no counters.requests_cancelled_total (start mlx-serve with --metrics)', observed: { hungUpStreams: openAtInterrupt.length, cancelledDelta, before: serverPick(metricsBefore), after: serverPick(metricsAfter) }, pass: observable && allHungUp && cancelledDelta! >= Math.max(1, openAtInterrupt.length), ...(observable ? {} : { severity: 'unverified' as const }) });
   check(r, { id: 'D2-work-recoverable', claim: 'after cancel, partial work is recoverable: transcript persisted, workspace changes enumerable via git, and the workspace can be restored to the base revision', expected: 'notes.txt dirty + transcript present', observed: { wroteBeforeCancel: wrote, dirty, assistantMessages: sm1.assistantCount, reasoningOrTextPersisted: m1.some((x) => x.type === 'assistant' && (x.content ?? []).length > 0) }, pass: wrote && dirty.some((l) => l.includes('notes.txt')) && sm1.assistantCount >= 1 });
   execFileSync('git', ['clean', '-fdq'], { cwd: ws }); execFileSync('git', ['checkout', '-q', '--', '.'], { cwd: ws });
   check(r, { id: 'D3-restore-clean', claim: 'workspace restores to a clean base state (rollback path for abandoned work)', expected: 'clean', observed: execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }), pass: execFileSync('git', ['status', '--porcelain'], { cwd: ws, encoding: 'utf8' }).trim() === '' });
@@ -299,15 +316,15 @@ async function sectionD(r: Report) {
 
   // D5 hard crash (SIGKILL) mid-run, restart on the same state dir
   ses = await createSession(s, { directory: ws, permissions: [DENY_ALL], title: 'crash-victim' });
-  await prompt(s, ses.id, 'Write a very long 2000-word essay about lighthouse history. Do not stop early.');
-  await sleep(5000);
+  await prompt(s, ses.id, LONG_GENERATION);
+  const generatingAtKill = await waitGenerating(60000);
   const metricsDuringCrash = await metricsSnapshot();
   const tk = Date.now();
   const openAtKill = openStreams(tk);
   process.kill(-s.pid, 'SIGKILL');
   await sleep(3000);
   const killStreams = openAtKill.map((x) => ({ path: x.path, bytesDown: x.bytesDown, hungUpMsAfterKill: x.clientClosedAt === undefined ? null : x.clientClosedAt - tk }));
-  const killHungUp = openAtKill.length > 0 && killStreams.every((x) => x.hungUpMsAfterKill !== null && x.hungUpMsAfterKill <= 3000);
+  const killHungUp = generatingAtKill && openAtKill.length > 0 && killStreams.every((x) => x.hungUpMsAfterKill !== null && x.hungUpMsAfterKill <= 3000);
   const metricsAfterKill = await metricsSnapshot();
   const stateDir = s.stateDir;
   cleanupServerOnly(s);
@@ -331,12 +348,12 @@ async function sectionD(r: Report) {
   // Recovery policy: never continue the crashed session; start a FRESH one (ADR 0004: fresh session per item).
   const fresh = await createSession(s2, { directory: ws, permissions: [DENY_ALL], title: 'recovery' });
   const rr2 = await runPrompt(s2, fresh.id, 'Reply with the single word: recovered', 120000);
-  check(r, { id: 'D5-crash-recovery', claim: 'after SIGKILL of the harness mid-generation, a restarted harness on the same state dir still lists the crashed session and its prompt (audit trail); a FRESH session on the restarted harness completes normally, and no inference stream is left open: the killed harness\'s stream to the model server hangs up within 3s of the kill and none is open after recovery (observed by the tap; whether mlx-serve stops decoding is D1b)', expected: 'session + prompt persisted; stream hung up; 0 open; fresh session succeeds', observed: { sessionListed: !!found, userPromptPersisted: !!userMsg, harnessAutoResumedUnfinishedTurn: autoResumed, interrupt: intr2.body, streamsOpenAtKill: killStreams, openStreamsAfterRecovery: openAfterRecovery, freshOutcome: rr2.done.outcome, freshText: rr2.summary.text.slice(0, 30) }, pass: !!found && !!userMsg && killHungUp && openAfterRecovery === 0 && rr2.done.outcome === 'succeeded' && /recovered/i.test(rr2.summary.text) });
+  check(r, { id: 'D5-crash-recovery', claim: 'after SIGKILL of the harness mid-generation, a restarted harness on the same state dir still lists the crashed session and its prompt (audit trail); a FRESH session on the restarted harness completes normally, and no inference stream is left open: the killed harness\'s stream to the model server hangs up within 3s of the kill and none is open after recovery (observed by the tap; whether mlx-serve stops decoding is D1b)', expected: 'session + prompt persisted; stream hung up; 0 open; fresh session succeeds', observed: { generatingAtKill, sessionListed: !!found, userPromptPersisted: !!userMsg, harnessAutoResumedUnfinishedTurn: autoResumed, interrupt: intr2.body, streamsOpenAtKill: killStreams, openStreamsAfterRecovery: openAfterRecovery, freshOutcome: rr2.done.outcome, freshText: rr2.summary.text.slice(0, 30) }, pass: !!found && !!userMsg && killHungUp && openAfterRecovery === 0 && rr2.done.outcome === 'succeeded' && /recovered/i.test(rr2.summary.text) });
   // Informational: what happens if the runner instead re-prompts the crashed session
   const same = await runPrompt(s2, ses.id, 'Reply with the single word: recovered', 150000);
   check(r, { id: 'D5b-same-session-resume-hazard', claim: 'FINDING (informational): re-prompting the crashed session also answers its dangling unanswered prompt (long essay), i.e. unbounded work - so recovery must use a fresh session', expected: 'informational', observed: { outcome: same.done.outcome, ms: same.done.ms, replyChars: same.summary.text.length, harnessAutoResumedUnfinishedTurn: autoResumed }, pass: true, severity: 'informational' });
   if (same.done.timedOut) await s2.api('POST', `/api/session/${ses.id}/interrupt`, {});
-  check(r, { id: 'D6-accepted-request-honesty', claim: 'OBSERVED (informational): when the harness is SIGKILLed its socket to the model server dies with it, so mlx-serve sees the client hang up (whether it then stops decoding is D1b; on 2.2.7 LM Studio aborted at once); the accepted request is still not exactly-once - its partial output is lost and reports must say "request was accepted, result discarded"', expected: 'informational', observed: { streamsOpenAtKill: killStreams, metricsDuringRun: metricsDuringCrash, metricsAfterKill }, pass: true, severity: 'informational' });
+  check(r, { id: 'D6-accepted-request-honesty', claim: 'OBSERVED (informational): when the harness is SIGKILLed its socket to the model server dies with it, so mlx-serve sees the client hang up (whether it then stops decoding is D1b; on 2.2.7 LM Studio aborted at once); the accepted request is still not exactly-once - its partial output is lost and reports must say "request was accepted, result discarded"', expected: 'informational', observed: { streamsOpenAtKill: killStreams, cancelledDuringRun: metricsDuringCrash.numbers?.['counters.requests_cancelled_total'], cancelledAfterKill: metricsAfterKill.numbers?.['counters.requests_cancelled_total'], requestsRunningAfterKill: metricsAfterKill.numbers?.['gauges.requests_running'], metricsStatus: metricsAfterKill.status }, pass: true, severity: 'informational' });
   await s2.stop(); cleanup(s2); await tap.close(); rmSync(base, { recursive: true, force: true });
 }
 function cleanupServerOnly(_s: Server) { /* state dir deliberately retained for restart */ }
@@ -347,6 +364,7 @@ async function sectionE(r: Report) {
   writeFileSync(path.join(ws, 'big.txt'), Array.from({ length: 4000 }, (_, i) => `line ${i} ${'x'.repeat(30)}`).join('\n'));
   await ensureModelServed();
   const cfg = cfgFor({
+    outputLimit: Math.min(LONG_OUTPUT_LIMIT, Math.floor(proofContextLimit() / 2)), // E4 needs a turn that outlives its 8s budget
     toolOutput: { max_bytes: 2048, max_lines: 40 },
     extraModels: {
       capped: { modelID: LOCAL_MODEL_ID, name: 'capped', limit: { context: proofContextLimit(), output: 48 } },
@@ -401,7 +419,7 @@ async function sectionE(r: Report) {
   // E4 wall-clock budget enforced by the adapter
   ses = await createSession(s, { directory: ws, permissions: [DENY_ALL] });
   const BUDGET = 8000;
-  const pw = await prompt(s, ses.id, 'Write a very long 3000-word essay about lighthouse history. Do not stop early.');
+  const pw = await prompt(s, ses.id, LONG_GENERATION);
   const tw = Date.now();
   const dw = await awaitCompletion(s, ses.id, pw.time.created - 1, BUDGET);
   let intr: any = null;
