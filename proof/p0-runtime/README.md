@@ -109,6 +109,10 @@ changes in how it is observed:
   a count to five thousand in words with a 16384-token output limit (half the served context at most), and D1 and D5 wait
   until the tap sees bytes still arriving on an open stream before they interrupt or kill. D1 and D5 fail if generation
   never starts, so a fast model can no longer pass them or fail them for the wrong reason.
+- **D1's write is its own turn** (second 2026-11-28 rerun): asked to write `notes.txt` and then count in one turn, the
+  Flash model wrote the file and ended the turn, so nothing was streaming at the interrupt. D1 now writes `notes.txt` in
+  one turn, then interrupts a second turn of the same session running the long count, as D5 does. D2 still requires
+  that uncommitted write to be listed by git after the cancel.
 - **C4 compares the resolved model with the configured default.** On 2.2.7 the hardened hosted-default case resolved
   to another LM Studio model OpenCode found by itself, which failed the expected-model check. On 2.4.1 that provider is
   denied and only the expected model is declared, so OpenCode substituted the expected model and the case passed by
