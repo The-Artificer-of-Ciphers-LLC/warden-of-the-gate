@@ -51,3 +51,9 @@ export function cleanFrozen(x: unknown): FrozenSet | null {
   const files: FrozenSet['files'] = []; for (const e of f.files as Array<{ path?: unknown; sha256?: unknown }>) { if (!e || typeof e.path !== 'string' || !e.path || e.path.length > 120 || e.path.startsWith('/') || e.path.split('/').includes('..') || typeof e.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(e.sha256)) return null; files.push({ path: e.path, sha256: e.sha256 }); }
   return { baseCommit: f.baseCommit, files };
 }
+
+/** ADR 0016: property-based tests are encouraged for pure logic, not required, and their presence is reported. Detected from the frozen files' text (fast-check, Hypothesis, proptest, QuickCheck and kin), by the executor's side, never from the model's claim. */
+export const PROPERTY_MARKERS = /\bfast-check\b|\bfc\.(assert|property|asyncProperty)\b|@given\(|\bhypothesis\b|\bproptest!?|\bquickcheck\b|\bjqwik\b|\btestcheck\b/i;
+export function propertyTests(workspace: string, files: ReadonlyArray<{ path: string }>): string[] {
+  return files.filter((f) => { try { return PROPERTY_MARKERS.test(readFileSync(join(workspace, f.path), 'utf8')); } catch { return false; } }).map((f) => f.path);
+}
