@@ -109,7 +109,7 @@ Checked 2026-11-25 from public pages.
 
 ## Candidate incorporations (ranked)
 
-All are applied in this PR as **[S]** text or as ADRs. Candidates 1, 2, 3 and 5 were decided on 2026-11-26. Candidate 4 is partly decided (cited rules must resolve; the scorecard pause and how it lifts); its scorecard design is Proposed.
+All are applied in this PR as **[S]** text or as ADRs. Candidates 1, 2, 3 and 5 were decided on 2026-11-26. Candidate 4 is decided except the self-assessment and abstention proposals: cited rules must resolve and the scorecard pause and how it lifts (2026-11-26); the weighted scorecard and per-model replay sets (2026-11-27).
 
 1. **Rank evidence by whether the test predates the change** (ADR 0017, PRD §7 [S]; **decided 2026-11-26**, with the gate in owner question 1). The executor records, per test that ran, whether its file and content are byte-identical on the trusted base. The card shows pre-existing evidence first. A change to a pre-existing test's expectation removes that test from the evidence for the change and still needs approval against requirements (§7). Basis: claims 8, 13, 29.
 2. **Optional differential checks, and generators must prove they catch something** (ADR 0017, PRD §7 [S]; **decided 2026-11-26**, opt-in, off by default). For work declared behavior-preserving, run base and candidate on the same inputs and report any difference as a finding. Generated inputs or fuzzers count as evidence only if they catch a planted defect. Unsupported languages are reported as unsupported, never as a pass. Basis: claims 16, 17, 30.
@@ -145,12 +145,12 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 ## Owner questions (for @trek-e)
 
 1. **Evidence ranking (ADR 0017):** decided 2026-11-26. Always show which tests existed before the change. Block auto-merge only when the PR edits or deletes a pre-existing test, or is labelled a refactor or bug fix with no pre-existing test covering the changed code. New features need no pre-existing test; their new tests get extra review or independent checks.
-   - **Refinement decided 2026-11-26** ("yes on 2 and 3"): new feature behavior goes in as new test cases inside the existing test file for the unit it extends; existing cases are not edited; a new test file only for a new unit. Still open: whether an added test that kills no new mutant is a finding. See [Follow-up research](#1-tests-for-new-features-without-test-sprawl).
+   - **Refinement decided 2026-11-26** ("yes on 2 and 3"): new feature behavior goes in as new test cases inside the existing test file for the unit it extends; existing cases are not edited; a new test file only for a new unit. Decided 2026-11-27: an added test that kills no new mutant is shown on the card only, not as a finding. See [Follow-up research](#1-tests-for-new-features-without-test-sprawl).
 2. **Differential checks (ADR 0017):** decided 2026-11-26 ("Yes to both"). Opt-in per repository for behavior-preserving work, off by default; a reported difference is a finding under the 2026-11-24 rule.
 3. **Special-casing check (PRD §5 Review):** decided 2026-11-26 ("Yes, check for those"). Review reports gamed tests, meaning code that special-cases test inputs to pass, and replay includes such a case.
-4. **Measured, not estimated (ADR 0018):** cited rules decided 2026-11-26 ("Yes, must match"). The plain run-over-run scorecard was rejected for one "intelligent with weights and medians"; that design is proposed in [Follow-up research](#3-a-weighted-robust-scorecard) and still open.
+4. **Measured, not estimated (ADR 0018):** cited rules decided 2026-11-26 ("Yes, must match"). The plain run-over-run scorecard was rejected for one "intelligent with weights and medians"; that design, with safety metrics weighted above throughput by default, was decided 2026-11-27 ("Yes"). See [Follow-up research](#3-a-weighted-robust-scorecard).
 5. **No planning Markdown (PRD §5 Implement):** decided 2026-11-26 ("Yes to both"). Factory PRs add no planning or design docs unless the issue asks.
-6. **Model scorecard (ADR 0018):** adopt replay regression and capability sets scored per model with confidence intervals, plus live rates on control charts? Decided 2026-11-26: a live rate outside its limits is a Retro finding and also pauses auto-merge for that model. Decided 2026-11-26: only the maintainer lifts the pause, after the regression set passes again on replay. Still open: adopting the replay sets. See [Follow-up research](#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect).
+6. **Model scorecard (ADR 0018):** adopt replay regression and capability sets scored per model with confidence intervals, plus live rates on control charts? Decided 2026-11-26: a live rate outside its limits is a Retro finding and also pauses auto-merge for that model. Decided 2026-11-26: only the maintainer lifts the pause, after the regression set passes again on replay. Decided 2026-11-27: the replay sets are adopted. See [Follow-up research](#2-a-scorecard-that-catches-a-model-not-doing-what-we-expect).
 
 ## Open threads
 
@@ -162,7 +162,7 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 
 ## Follow-up research (2026-11-26): feature tests and model scorecards
 
-@trek-e asked for established practice, not guesses, on two points left open by the older-test ruling. Everything below is **proposed**; it changes nothing until he rules.
+@trek-e asked for established practice, not guesses, on two points left open by the older-test ruling. Everything below was proposed. He decided feature-test placement on 2026-11-26, and the redundancy display, the model scorecard and the weighted scorecard on 2026-11-27.
 
 ### 1. Tests for new features without test sprawl
 
@@ -180,9 +180,9 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 1. **New behavior goes in as a new test case inside the existing test file or suite for the unit it extends**, reusing that suite's fixtures and helpers. No new test file, harness, fixture set or test framework for a feature on existing code.
 2. **Existing test cases are not edited** for a new feature or a bug fix. A bug fix adds the missing case beside the others.
 3. **A new test file only for a new unit**: a new public function, module or class with no existing test home. That is Tom's "completely new function" exception.
-4. **Redundancy is measured, not guessed**: where mutation checks run (proposed in PR #47, ADR 0016), an added test that kills no mutant the existing suite misses is reported as redundant.
+4. **Redundancy is measured, not guessed**: where mutation checks run (proposed in PR #47, ADR 0016), an added test that kills no mutant the existing suite misses is reported as redundant, on the card only (decided 2026-11-27).
 
-**How Warden would enforce it (proposed).** Provenance (ADR 0017) already separates `added` from `modified`. It would also record whether an added test sits in an existing test file or a new one. The Implement contract places new cases in the test file that already exercises the changed unit. Review reports a new test file, harness or fixture set for code that already has a test home as a finding, unless the change adds a new unit. Where mutation checks run, the card shows added tests that killed nothing new.
+**How Warden enforces it (decided).** Provenance (ADR 0017) already separates `added` from `modified`. It would also record whether an added test sits in an existing test file or a new one. The Implement contract places new cases in the test file that already exercises the changed unit. Review reports a new test file, harness or fixture set for code that already has a test home as a finding, unless the change adds a new unit. Where mutation checks run, the card shows added tests that killed nothing new.
 
 ### 2. A scorecard that catches a model not doing what we expect
 
@@ -210,7 +210,7 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
   - It used "not helpful" feedback "to identify recurring failure patterns". This is the live-signal half: what the people on the other end do with the model's output.
 - Sumner's hourly side-by-side scorecard (claim 25) is the practitioner version of the same idea.
 
-**What a Warden scorecard would contain (proposed).**
+**What a Warden scorecard contains (decided 2026-11-27).**
 
 1. **Replay sets with known answers.** Split the §11 replay corpus into a regression set (cases Warden already handles; expected near 100%) and a capability set (hard cases). Every case has a recorded expected outcome: a planted defect that must be found, a clean change that must pass, an injection that must cause no effect. Balance cases that should trigger a finding with ones that should not. Start from 20 to 50 real failures and add each new escaped defect. Capability cases graduate to regression once passed reliably.
 2. **Run them on every model, harness, prompt or configuration change and on a schedule**, per model. Tom's pool is several models (local, Nemotron, Gemma, frontier), so each is scored separately. For cases that decide auto-merge, report pass^k over repeated trials, not a single pass.
@@ -229,9 +229,9 @@ PR #47 (Spector, "Review Its Tests") asks Tom six questions. This talk is a seco
 
 All numbers come from the executor and ledgers, never from the model (ADR 0018).
 
-**Open for Tom.**
+**Decisions.**
 
-- Adopt this structure?
+- ~~Adopt this structure?~~ Decided 2026-11-27 (@trek-e): yes.
 - ~~When a live rate leaves its control limits, Retro finding only, or also pause auto-merge?~~ Decided 2026-11-26 (@trek-e): "Also pause auto-merge." Retro flags it and auto-merge pauses for that model.
 - ~~What lifts the pause?~~ Decided 2026-11-26 (@trek-e): the maintainer clears it once the model's regression set passes again on replay.
 
@@ -268,10 +268,10 @@ All numbers come from the executor and ledgers, never from the model (ADR 0018).
 2. **Medians and MAD for baselines.** A rolling window of comparable runs sets each metric's median and MAD. The modified z-score flags an unusual run (|M| > 3.5) for review. One odd PR does not shift the baseline the way it would shift a mean.
 3. **Two kinds of change, two charts.** A p-chart on rates catches sudden shifts. An EWMA chart (λ 0.2 to 0.3) catches slow drift. A limit counts as breached only when a long and a short window both show it (SRE multiwindow), for fewer false alarms and a faster reset.
 4. **Say when there is too little data.** Below a minimum sample, show "insufficient data" instead of a verdict. Fill the gap with replay (artificial traffic), pooling across repositories for the same model, or a longer window.
-5. **Explicit weights, tested.** The maintainer sets weights in `.github/warden.yml` and they are shown. Retro checks whether the verdict changes under equal weights (the OECD robustness step). Proposed default: safety metrics (escaped defects, reverted merges, overrides) outweigh throughput.
+5. **Explicit weights, tested.** The maintainer sets weights in `.github/warden.yml` and they are shown. Retro checks whether the verdict changes under equal weights (the OECD robustness step). Default, decided 2026-11-27: safety metrics (escaped defects, reverted merges, overrides) outweigh throughput.
 6. **The composite summarises; it never gates.** It is shown with its parts and next to the previous run, which stays visible as one column.
 
-**Still open for Tom.** Adopt this design? Should safety metrics outweigh throughput by default? Baseline length and the low-volume floor are left to build planning.
+**Decided 2026-11-27 (@trek-e).** Adopt this design: yes. Safety metrics outweigh throughput by default: yes. Baseline length and the low-volume floor are left to build planning.
 
 ### Sources for the follow-up
 
