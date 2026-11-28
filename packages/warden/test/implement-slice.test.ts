@@ -107,7 +107,9 @@ test('weakened gates, edits to authority paths and oversize diffs are refused wh
 test('the one-way door floor is deterministic: touching a migration forces one-way even if the model says two-way', async (t) => {
   const s = await setup(); t.after(s.cleanup);
   const o = await s.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') { mkdirSync(join(ws, 'migrations'), { recursive: true }); writeFileSync(join(ws, 'migrations/001.sql'), 'select 1;\n'); } }));
-  assert.equal(o.kind, 'opened'); assert.match(s.published[0].body, /Merge Danger:\*\* one-way door\. Forced one-way/);
+  assert.equal(o.kind, 'opened'); assert.match(s.published[0].body, /Merge Danger:\*\* one-way door\. Boundary change \(database-schema\)[^\n]*The model said two-way/);
+  const t2 = await setup(); t.after(t2.cleanup); const o2 = await t2.run(new Model((ws, ph) => { goodEdit(ws, ph); }, GOOD, { ...RESULT, danger: { door: 'one-way', blastRadius: 'everything', why: 'scary' } }));
+  assert.equal(o2.kind, 'opened'); assert.match(t2.published[0].body, /Merge Danger:\*\* two-way door\./, 'a model claiming one-way does not set the door: only a configured boundary class does');
 });
 
 test('eligibility: no ledger, not ready, owned, no work kind, unapproved feature, standing orders silent or denying, factory cap, stop, remote model and paused scope are all refused before any session', async (t) => {
