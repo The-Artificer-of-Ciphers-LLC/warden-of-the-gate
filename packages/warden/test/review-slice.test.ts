@@ -163,3 +163,17 @@ test('repo context: a read-only snapshot is materialized under ./repo, the sessi
   const o2 = await r2.scan(new FakeRunner(GOOD, (req) => { seen2.push(req); return done(CLEAN); }), { context: () => { throw new Error('no such commit'); } });
   assert.equal(o2.kind, 'accepted'); assert.deepEqual(seen2[0].tools.allow, ['read']); assert.equal(seen2[0].repoContext, false);
 });
+
+test('accepted findings carry a fingerprint and an inline flag; a position outside the diff is kept but not postable inline, and a repeated finding collapses to the more severe one', async (t) => {
+  const r = rig(); t.after(r.cleanup);
+  const out: ReviewOutput = { verdict: 'changes needed', findings: [
+    { id: 'edge-1', severity: 'minor', path: 'src/auth/refresh.ts', line: 1, rationale: 'x', correction: 'y' },
+    { id: 'edge-2', severity: 'major', path: 'src/auth/refresh.ts', line: 1, rationale: 'x again', correction: 'y' },
+    { id: 'far', severity: 'blocker', path: 'src/auth/refresh.ts', line: 48, rationale: 'z', correction: 'w' },
+  ] };
+  const o = await r.scan(new FakeRunner(GOOD, () => done(out)));
+  assert.equal(o.kind, 'accepted'); const fs = o.marker!.findings;
+  assert.equal(fs.length, 2, 'the repeated finding collapsed'); assert.equal(fs[0].id, 'edge-2'); assert.equal(fs[0].severity, 'major'); assert.equal(fs[0].inline, true);
+  assert.equal(fs[1].id, 'far'); assert.equal(fs[1].inline, false); assert.match(fs[0].fingerprint!, /^[0-9a-f]{16}$/);
+  assert.match(o.card!.text, /1 blocker\(s\), 2 finding\(s\)/);
+});
