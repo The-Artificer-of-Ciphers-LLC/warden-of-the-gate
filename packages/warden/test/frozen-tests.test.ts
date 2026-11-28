@@ -16,7 +16,7 @@ test('test paths: the default globs and the test-runner, lint, coverage and muta
 test('a test session may change tests only: any other changed path is named', () => {
   const ch = [{ path: 'test/a.test.js', status: 'A' as const }, { path: 'src/a.js', status: 'M' as const }, { path: 'jest.config.js', status: 'M' as const }];
   assert.deepEqual(nonTestChanges(ch, DEFAULT_TEST_PATHS), ['src/a.js', 'jest.config.js']);   // runner configuration is not a test file: the test session may not touch it
-  assert.deepEqual(nonTestChanges([{ path: 'test/a.test.js', status: 'A' }], DEFAULT_TEST_PATHS), []);
+  assert.deepEqual(nonTestChanges([{ path: 'test/a.test.js' }], DEFAULT_TEST_PATHS), []);
 });
 
 function ws() { const d = mkdtempSync(join(tmpdir(), 'warden-frozen-')); mkdirSync(join(d, 'test'), { recursive: true }); writeFileSync(join(d, 'test', 'a.test.js'), 'assert(1)'); writeFileSync(join(d, 'test', 'b.test.js'), 'assert(2)'); return d; }

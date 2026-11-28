@@ -28,16 +28,22 @@ const TEST = "const { test } = require('node:test'); const assert = require('nod
 const RESULT = { summary: 'Fix off-by-one in sumTo', approach: 'Loop below n, with a test that failed before the fix', danger: { door: 'two-way', blastRadius: 'sumTo only', why: 'pure function, revertable' } };
 const done = (o: unknown = RESULT): SessionResult => ({ outcome: 'completed', structuredOutput: o, usage: { toolCalls: 0, modelTurns: 1, wallMs: 1 } });
 
+/** ADR 0014: Implement runs a TEST session (tests only) and then a FIX session (frozen tests denied to it). Rework still runs one session ('other'). */
+type Phase = 'test' | 'fix' | 'other';
+const phaseOf = (req: SessionRequest): Phase => { const p = readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'); return /ACCEPTANCE TESTS for ONE change/.test(p) ? 'test' : /are FROZEN/.test(p) ? 'fix' : 'other'; };
 class Model implements AgentRunner {
-  readonly name = 'fake'; readonly pinnedVersion = '0'; calls = 0; pf: PreflightReport; edit: (ws: string) => void | Promise<void>; result: unknown;
-  constructor(edit: (ws: string) => void | Promise<void>, pf: PreflightReport = GOOD, result: unknown = RESULT) { this.edit = edit; this.pf = pf; this.result = result; }
+  readonly name = 'fake'; readonly pinnedVersion = '0'; calls = 0; pf: PreflightReport; edit: (ws: string, phase: Phase) => void | Promise<void>; result: unknown;
+  sessions: Array<{ phase: Phase; deny?: string[]; prompt: string }> = []; fixQueue: unknown[] = [];
+  constructor(edit: (ws: string, phase: Phase) => void | Promise<void>, pf: PreflightReport = GOOD, result: unknown = RESULT) { this.edit = edit; this.pf = pf; this.result = result; }
   async preflight() { return this.pf; }
   async run(req: SessionRequest, signal: AbortSignal): Promise<SessionResult> {
     this.calls++; assert.equal(req.workspace?.writable, true); assert.ok(req.tools.allow.includes('edit') && !req.tools.allow.includes('shell'), 'no shell for the model'); assert.ok(!signal.aborted || true);
-    await this.edit(req.workspace!.dir); return done(this.result);
+    const phase = phaseOf(req); this.sessions.push({ phase, deny: req.workspace?.denyWrite, prompt: readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8') });
+    await this.edit(req.workspace!.dir, phase); return done(phase === 'test' ? { summary: 'acceptance tests', testsAdded: ['test/sum.test.js'] } : phase === 'fix' && this.fixQueue.length ? this.fixQueue.shift() : this.result);
   }
 }
-const goodEdit = (ws: string) => { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), TEST); writeFileSync(join(ws, 'sum.js'), FIXED); };
+const goodEdit = (ws: string, phase: Phase = 'other') => { if (phase !== 'fix') { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), TEST); } if (phase !== 'test') writeFileSync(join(ws, 'sum.js'), FIXED); };
+const PASSING_ON_BASE = "const { test } = require('node:test'); const assert = require('node:assert'); const { sumTo } = require('../sum.js'); test('sumTo(0) is 0', () => assert.strictEqual(sumTo(0), 0));\n";
 
 async function setup(o: { orders?: Orders; ledger?: (l: Ledger) => void; over?: Record<string, unknown>; issueState?: boolean } = {}) {
   const r = rig(o.over ?? {}, o.orders ?? ORDERS); const root = mkdtempSync(join(tmpdir(), 'warden-impl-t-')); const bare = join(root, 'origin.git'); const seed = join(root, 'seed');
@@ -61,9 +67,12 @@ const ledgerOf = async (r: Rig, n: number) => parseLedger((await r.world.view('x
 
 test('a bug is fixed end to end: claim, trusted base checkout, model edits, executor fail-before/pass-after, PR with door/attribution/evidence, ledgers linked, no review or merge claimed', async (t) => {
   const s = await setup(); t.after(s.cleanup); const model = new Model(goodEdit);
-  const o = await s.run(model); assert.equal(o.kind, 'opened', JSON.stringify(o)); assert.equal(model.calls, 1); assert.equal(s.published.length, 1);
+  const o = await s.run(model); assert.equal(o.kind, 'opened', JSON.stringify(o)); assert.equal(model.calls, 2, 'a test session then a fix session'); assert.equal(s.published.length, 1);
+  assert.deepEqual(model.sessions.map((x) => x.phase), ['test', 'fix']); assert.equal(model.sessions[0].deny, undefined, 'the test session may write anything it likes (only tests are accepted afterwards)'); assert.ok(model.sessions[1].deny!.includes('test/sum.test.js'), 'the OS write denial covers the frozen test');
+  assert.match(model.sessions[1].prompt, /test\/sum\.test\.js/, 'the fix session is told which tests are frozen'); assert.doesNotMatch(model.sessions[1].prompt, /make (them|the tests) pass/i); assert.doesNotMatch(model.sessions[1].prompt, /acceptance tests for ONE change/i);
   const p = s.published[0]; assert.equal(p.branch, `warden/bug-${s.n}`); assert.equal(git(s.bare, ['rev-parse', `refs/heads/${p.branch}`]).trim(), p.sha, 'the branch really reached the remote');
-  assert.match(p.body, /Merge Danger:\*\* two-way door/); assert.match(p.body, /model local-default via opencode 2\.2\.7/); assert.match(p.body, /unit: base fail, candidate pass \(fixed\)/); assert.match(p.body, /nothing here claims a review or a merge/);
+  assert.match(p.body, /Merge Danger:\*\* two-way door/); assert.match(p.body, /model local-default via opencode 2\.2\.7/); assert.match(p.body, /unit: base fail, candidate pass \(fixed\)/); assert.match(p.body, /nothing here claims a review or a merge/); assert.match(p.body, /Frozen acceptance tests\*\* \(written in a separate session[^\n]*\n- test\/sum\.test\.js/); assert.doesNotMatch(p.body, /Tests added by the fix session/);
+  assert.deepEqual(s.rec()!.frozen!.files.map((f) => f.path), ['test/sum.test.js']); assert.equal(s.rec()!.frozen!.baseCommit, s.cfg.baseSha);
   const issue = await ledgerOf(s.r, s.n); assert.equal(issue.owner?.kind, 'factory'); assert.equal(issue.state, 'in-review'); assert.deepEqual(issue.linked, [p.number]);
   const prl = await ledgerOf(s.r, p.number); assert.equal(prl.state, 'needs-review'); assert.deepEqual(prl.linked, [s.n]); assert.equal(prl.review, undefined, 'Implement never advances or records a review');
   assert.equal(git(s.bare, ['log', '-1', '--format=%an', `refs/heads/${p.branch}`]).trim(), 'warden-factory');
@@ -71,15 +80,19 @@ test('a bug is fixed end to end: claim, trusted base checkout, model edits, exec
 
 test('a bug fix without a failing-before test is NOT opened: the evidence comes from the executor, not the model; the attempt is consumed', async (t) => {
   const s = await setup(); t.after(s.cleanup);
-  const o = await s.run(new Model((ws) => writeFileSync(join(ws, 'sum.js'), FIXED)));
-  assert.equal(o.kind, 'insufficient-evidence'); assert.match(o.notice, /no test went from failing on the base to passing on the candidate|no passing test/); assert.equal(s.published.length, 0); assert.equal(s.rec()!.attempts.completed, 1);
+  const model = new Model((ws, ph) => { if (ph === 'test') { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), PASSING_ON_BASE); } });
+  const o = await s.run(model);
+  assert.equal(o.kind, 'rejected'); assert.equal(o.reason, 'tests-pass-on-base'); assert.match(o.notice, /pass on the unchanged base/); assert.equal(model.calls, 1, 'no fix session starts for tests that do not reproduce the bug'); assert.equal(s.published.length, 0); assert.equal(s.rec()!.attempts.completed, 1);
+  const s2 = await setup(); t.after(s2.cleanup);   // a fix that does not make the frozen test pass is still not evidence
+  const o2 = await s2.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') writeFileSync(join(ws, 'sum.js'), BUGGY + '// no real change\n'); }));
+  assert.equal(o2.kind, 'insufficient-evidence'); assert.equal(s2.published.length, 0);
 });
 
 test('weakened gates, edits to authority paths and oversize diffs are refused whole, with no PR', async (t) => {
-  const cases: Array<[string, (ws: string) => void, string]> = [
-    ['skipped test', (ws) => { goodEdit(ws); writeFileSync(join(ws, 'test/extra.test.js'), "const { test } = require('node:test'); test.skip('later', () => {});\nit.skip('x', () => {});\n"); }, 'gate-weakening'],
-    ['workflow edit', (ws) => { goodEdit(ws); mkdirSync(join(ws, '.github/workflows'), { recursive: true }); writeFileSync(join(ws, '.github/workflows/ci.yml'), 'name: ci\n'); }, 'authority-path-touched'],
-    ['too large', (ws) => { goodEdit(ws); for (let i = 0; i < 45; i++) writeFileSync(join(ws, `gen${i}.js`), 'x\n'); }, 'diff-too-large'],
+  const cases: Array<[string, (ws: string, ph: Phase) => void, string]> = [
+    ['skipped test', (ws, ph) => { goodEdit(ws, ph); if (ph === 'test') writeFileSync(join(ws, 'test/extra.test.js'), "const { test } = require('node:test'); test.skip('later', () => {});\nit.skip('x', () => {});\n"); }, 'gate-weakening'],
+    ['workflow edit', (ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') { mkdirSync(join(ws, '.github/workflows'), { recursive: true }); writeFileSync(join(ws, '.github/workflows/ci.yml'), 'name: ci\n'); } }, 'authority-path-touched'],
+    ['too large', (ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') for (let i = 0; i < 45; i++) writeFileSync(join(ws, `gen${i}.js`), 'x\n'); }, 'diff-too-large'],
     ['no change', () => undefined, 'no-change'],
   ];
   for (const [name, edit, reason] of cases) { const s = await setup(); t.after(s.cleanup); const o = await s.run(new Model(edit)); assert.equal(o.kind, 'rejected', name); assert.equal(o.reason, reason, name); assert.equal(s.published.length, 0, name); }
@@ -87,7 +100,7 @@ test('weakened gates, edits to authority paths and oversize diffs are refused wh
 
 test('the one-way door floor is deterministic: touching a migration forces one-way even if the model says two-way', async (t) => {
   const s = await setup(); t.after(s.cleanup);
-  const o = await s.run(new Model((ws) => { goodEdit(ws); mkdirSync(join(ws, 'migrations'), { recursive: true }); writeFileSync(join(ws, 'migrations/001.sql'), 'select 1;\n'); }));
+  const o = await s.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') { mkdirSync(join(ws, 'migrations'), { recursive: true }); writeFileSync(join(ws, 'migrations/001.sql'), 'select 1;\n'); } }));
   assert.equal(o.kind, 'opened'); assert.match(s.published[0].body, /Merge Danger:\*\* one-way door\. Forced one-way/);
 });
 
@@ -112,8 +125,8 @@ test('eligibility: no ledger, not ready, owned, no work kind, unapproved feature
 });
 
 test('attempts persist: exhausted attempts block without another session; launch failures use a separate budget; an abort is an interruption with the attempt counted and nothing published', async (t) => {
-  const s = await setup(); t.after(s.cleanup); const bad = new Model((ws) => writeFileSync(join(ws, 'sum.js'), FIXED));
-  for (let k = 0; k < 3; k++) { const o = await s.run(bad); assert.equal(o.kind, 'insufficient-evidence'); if (k < 2) { const led = await ledgerOf(s.r, s.n); assert.equal(led.owner?.kind, 'factory'); } }
+  const s = await setup(); t.after(s.cleanup); const bad = new Model((ws, ph) => { if (ph === 'test') { mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), PASSING_ON_BASE); } });
+  for (let k = 0; k < 3; k++) { const o = await s.run(bad); assert.equal(o.kind, 'rejected'); if (k < 2) { const led = await ledgerOf(s.r, s.n); assert.equal(led.owner?.kind, 'factory'); } }
   const again = await s.run(bad); assert.equal(again.kind, 'blocked'); assert.equal(again.reason, 'attempts-exhausted'); assert.equal(bad.calls, 3);
   const rel = await ledgerOf(s.r, s.n); assert.equal(rel.state, 'ready'); assert.equal(rel.owner, null, 'an exhausted claim is released, not held');
   const s2 = await setup(); t.after(s2.cleanup); const remote = new Model(goodEdit, { ok: false, resolvedModel: 'local-default', isolation: 'seatbelt', failures: ['endpoint down'] });
@@ -134,6 +147,34 @@ test('no configured checks means no possible evidence: Implement refuses; the lo
   assert.equal((await ledgerOf(s.r, s.n)).linked.length, 0, 'nothing was linked or announced: no PR exists');
 });
 
+test('ADR 0014: a test session that touches anything but tests is refused before any fix session; a frozen test the fix session changes, deletes or renames rejects the attempt', async (t) => {
+  const s = await setup(); t.after(s.cleanup); const m = new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'test') writeFileSync(join(ws, 'sum.js'), FIXED); });
+  const o = await s.run(m); assert.equal(o.kind, 'rejected'); assert.equal(o.reason, 'test-session-touched-code'); assert.match(o.notice, /sum\.js/); assert.equal(m.calls, 1); assert.equal(s.published.length, 0);
+  const cfgFile = await setup(); t.after(cfgFile.cleanup); const o2 = await cfgFile.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'test') writeFileSync(join(ws, 'jest.config.js'), 'module.exports = {};\n'); })); assert.equal(o2.reason, 'test-session-touched-code', 'runner configuration is not a test file');
+  for (const [name, tamper] of [['modified', (ws: string) => writeFileSync(join(ws, 'test/sum.test.js'), TEST.replace('6', '10'))], ['deleted', (ws: string) => rmSync(join(ws, 'test/sum.test.js'))], ['renamed', (ws: string) => { writeFileSync(join(ws, 'test/renamed.test.js'), TEST); rmSync(join(ws, 'test/sum.test.js')); }]] as const) {
+    const r = await setup(); t.after(r.cleanup); const out = await r.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') tamper(ws); }));
+    assert.equal(out.kind, 'rejected', name); assert.equal(out.reason, 'frozen-test-modified', name); assert.match(out.notice, /test\/sum\.test\.js/, name); assert.equal(r.published.length, 0, name);
+  }
+  const cfgFix = await setup(); t.after(cfgFix.cleanup); const o3 = await cfgFix.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') writeFileSync(join(ws, 'jest.config.js'), 'module.exports = {};\n'); })); assert.equal(o3.reason, 'frozen-test-modified', 'a runner configuration added by the fix session is guarded too');
+});
+
+test('ADR 0014: tests the fix session adds are listed as unreviewed and never reach the base run; no code change from the fix session is refused', async (t) => {
+  const s = await setup(); t.after(s.cleanup);
+  const o = await s.run(new Model((ws, ph) => { goodEdit(ws, ph); if (ph === 'fix') writeFileSync(join(ws, 'test/extra.test.js'), "const { test } = require('node:test'); test('extra', () => {});\n"); }));
+  assert.equal(o.kind, 'opened', JSON.stringify(o)); const body = s.published[0].body; assert.match(body, /Tests added by the fix session\*\* \(unreviewed[^\n]*\n- test\/extra\.test\.js/); assert.doesNotMatch(body.split('Tests added by the fix session')[0], /extra\.test\.js/, 'the frozen list does not include it');
+  const n = await setup(); t.after(n.cleanup); const o2 = await n.run(new Model((ws, ph) => { if (ph === 'test') goodEdit(ws, ph); })); assert.equal(o2.reason, 'no-change'); assert.equal(n.published.length, 0);
+});
+
+test('ADR 0014 test-dispute: a frozen test the fix session judges wrong is reported, the tests get exactly one more round, and a second dispute goes to a maintainer', async (t) => {
+  const DISPUTE = { summary: 'disputing', testDispute: { path: 'test/sum.test.js', reason: 'the test expects 6 but the issue says 5' } };
+  const s = await setup(); t.after(s.cleanup); const m = new Model(goodEdit); m.fixQueue = [DISPUTE, DISPUTE];
+  const o = await s.run(m); assert.equal(o.kind, 'rejected'); assert.equal(o.reason, 'test-dispute'); assert.equal(m.calls, 4, 'test, fix (dispute), test again, fix (dispute again)'); assert.equal(s.published.length, 0);
+  assert.match(m.sessions[2].prompt, /disputed one of your earlier tests[^\n]*the test expects 6 but the issue says 5/, 'the second test session sees the dispute'); assert.match(s.rec()!.log.map((x) => x.event).join(','), /test-dispute/);
+  const r = await setup(); t.after(r.cleanup); let round = 0;   // the re-test round corrects the test, the second fix session succeeds
+  const m2 = new Model((ws, ph) => { if (ph === 'test') { round++; mkdirSync(join(ws, 'test'), { recursive: true }); writeFileSync(join(ws, 'test/sum.test.js'), round === 1 ? TEST.replace('6', '5') : TEST); } else writeFileSync(join(ws, 'sum.js'), FIXED); }); m2.fixQueue = [DISPUTE];
+  const o2 = await r.run(m2); assert.equal(o2.kind, 'opened', JSON.stringify(o2)); assert.equal(m2.calls, 4); assert.match(git(r.bare, ['show', `refs/heads/${r.published[0].branch}:test/sum.test.js`]), /strictEqual\(sumTo\(4\), 6\)/);
+});
+
 test('takeover: abandoned contributor work is read as DATA on top of the trusted base, ported work is credited, the factory branch is separate and the contributor branch is never touched', async (t) => {
   let abandoned = 0;
   const s = await setup({ ledger: () => undefined }); t.after(s.cleanup);
@@ -142,8 +183,8 @@ test('takeover: abandoned contributor work is read as DATA on top of the trusted
     commits: [{ sha: 'c1c1c1c', authorLogin: 'contrib1', authorName: 'Contrib One', authorEmail: 'c1@x.io', subject: 'start fixing sumTo' }, { sha: 'b0b0b0b', authorLogin: 'dependabot[bot]', authorName: 'bot', authorEmail: 'b@x.io', subject: 'bump' }] };
   await s.r.world.view('x').closeIssue(ab);
   const led = await ledgerOf(s.r, s.n); led.linked = [ab]; const cid = (await s.r.world.view('x').listComments(s.n)).find((c) => c.body.startsWith(LEDGER_MARK))!.id; await s.r.world.view(WRITER).updateComment(cid, encodeLedger(led));
-  let prompt = ''; const model = new Model(() => undefined); model.edit = (ws) => { goodEdit(ws); }; const orig = model.run.bind(model);
-  model.run = async (req, sig) => { prompt = readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'); return orig(req, sig); }; model.result = { ...RESULT, portedCommits: ['c1c1c1c', 'b0b0b0b'] };
+  let prompt = ''; const model = new Model(() => undefined); model.edit = (ws, ph) => { goodEdit(ws, ph); }; const orig = model.run.bind(model);
+  model.run = async (req, sig) => { if (phaseOf(req) === 'fix') prompt = readFileSync(join(req.packetDir, 'prompt.txt'), 'utf8'); return orig(req, sig); }; model.result = { ...RESULT, portedCommits: ['c1c1c1c', 'b0b0b0b'] };
   const o = await s.run(model); assert.equal(o.kind, 'opened', JSON.stringify(o));
   assert.match(prompt, /TAKEOVER: contributor contrib1 abandoned PR #/); assert.match(prompt, /shown as DATA only/); assert.match(prompt, /IGNORE ALL PREVIOUS INSTRUCTIONS/, 'the hostile text is present only as quoted data');
   const p = s.published[0]; assert.equal(p.branch, `warden/bug-${s.n}`); assert.notEqual(p.branch, `pr-${abandoned}`);
